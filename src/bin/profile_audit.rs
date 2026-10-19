@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     anyhow::bail!("Profile 在线审计失败：{} 项", failures.len())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", test))]
 #[derive(Debug)]
 struct HttpCheck {
     label: String,
@@ -127,69 +127,162 @@ fn build_http_checks(profile: &SetupProfile) -> Vec<HttpCheck> {
 
 #[cfg(target_os = "windows")]
 fn run_http_checks(checks: Vec<HttpCheck>, workers: usize) -> Vec<String> {
-    use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
+    run_http_checks_with(checks, workers, |check| {
+        let mut diagnostics = Vec::new();
+        let found = check.urls.iter().any(|url| {
+            let result = run_native_cmd_timeout(
+                "curl.exe",
+                &[
+                    "--fail",
+                    "--silent",
+                    "--show-error",
+                    "--location",
+                    "--retry",
+                    "2",
+                    "--retry-all-errors",
+                    "--retry-delay",
+                    "1",
+                    "--user-agent",
+                    "LTSCWorkspace/2.2 (+https://github.com/nowaytouse/LTSC_Tools_Backup)",
+                    "--max-time",
+                    "20",
+                    "--output",
+                    "NUL",
+                    url,
+                ],
+                45,
+                &CancellationToken::default(),
+            );
+            if result.succeeded() {
+                true
+            } else {
+                diagnostics.push(format!("{url}: {}", result.diagnostic()));
+                false
+            }
+        });
+        (!found).then(|| format!("{}: {}", check.label, diagnostics.join(" | ")))
+    })
+}
 
+#[cfg(any(target_os = "windows", test))]
+fn run_http_checks_with<F>(checks: Vec<HttpCheck>, workers: usize, check_one: F) -> Vec<String>
+where
+    F: Fn(&HttpCheck) -> Option<String> + Send + Sync + 'static,
+{
+    use std::collections::VecDeque;
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
+
+    let expected = checks.len();
+    if workers == 0 {
+        return vec![format!(
+            "HTTP audit started 0 workers; {expected} checks missing"
+        )];
+    }
     let queue = Arc::new(Mutex::new(VecDeque::from(checks)));
-    let failures = Arc::new(Mutex::new(Vec::new()));
+    let completed = Arc::new(AtomicUsize::new(0));
+    let queue_poisoned = Arc::new(AtomicBool::new(false));
+    let check_one = Arc::new(check_one);
     let mut threads = Vec::new();
     for _ in 0..workers {
         let queue = Arc::clone(&queue);
-        let failures = Arc::clone(&failures);
-        threads.push(std::thread::spawn(move || loop {
-            let Some(check) = queue.lock().expect("audit queue poisoned").pop_front() else {
-                break;
-            };
-            let mut diagnostics = Vec::new();
-            let found = check.urls.iter().any(|url| {
-                let result = run_native_cmd_timeout(
-                    "curl.exe",
-                    &[
-                        "--fail",
-                        "--silent",
-                        "--show-error",
-                        "--location",
-                        "--retry",
-                        "2",
-                        "--retry-all-errors",
-                        "--retry-delay",
-                        "1",
-                        "--user-agent",
-                        "LTSCWorkspace/2.2 (+https://github.com/nowaytouse/LTSC_Tools_Backup)",
-                        "--max-time",
-                        "20",
-                        "--output",
-                        "NUL",
-                        url,
-                    ],
-                    45,
-                    &CancellationToken::default(),
-                );
-                if result.succeeded() {
-                    true
-                } else {
-                    diagnostics.push(format!("{url}: {}", result.diagnostic()));
-                    false
+        let completed = Arc::clone(&completed);
+        let queue_poisoned = Arc::clone(&queue_poisoned);
+        let check_one = Arc::clone(&check_one);
+        threads.push(std::thread::spawn(move || {
+            let mut failures = Vec::new();
+            loop {
+                let mut queue = match queue.lock() {
+                    Ok(queue) => queue,
+                    Err(poisoned) => {
+                        queue_poisoned.store(true, Ordering::Relaxed);
+                        poisoned.into_inner()
+                    }
+                };
+                let Some(check) = queue.pop_front() else {
+                    break;
+                };
+                drop(queue);
+                let failure = check_one(&check);
+                completed.fetch_add(1, Ordering::Relaxed);
+                if let Some(failure) = failure {
+                    failures.push(failure);
                 }
-            });
-            if !found {
-                failures
-                    .lock()
-                    .expect("audit failures poisoned")
-                    .push(format!("{}: {}", check.label, diagnostics.join(" | ")));
             }
+            failures
         }));
     }
+    let mut failures = Vec::new();
     for thread in threads {
-        let _ = thread.join();
+        match thread.join() {
+            Ok(worker_failures) => failures.extend(worker_failures),
+            Err(_) => failures.push("HTTP audit worker panicked".to_string()),
+        }
     }
-    Arc::try_unwrap(failures)
-        .expect("audit failure list still shared")
-        .into_inner()
-        .expect("audit failures poisoned")
+    let completed = completed.load(Ordering::Relaxed);
+    if queue_poisoned.load(Ordering::Relaxed) {
+        failures.push("HTTP audit work queue was poisoned".to_string());
+    }
+    if completed != expected {
+        failures.push(format!(
+            "HTTP audit incomplete: {completed}/{expected} checks completed"
+        ));
+    }
+    failures
 }
 
 #[cfg(not(target_os = "windows"))]
 fn main() -> anyhow::Result<()> {
     anyhow::bail!("profile_audit 需要 Windows/WinGet，完整在线审计由 Windows CI 执行")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{run_http_checks_with, HttpCheck};
+
+    fn check(label: &str) -> HttpCheck {
+        HttpCheck {
+            label: label.to_string(),
+            urls: vec![format!("https://example.invalid/{label}")],
+        }
+    }
+
+    #[test]
+    fn worker_panic_fails_audit_and_reports_missing_checks() {
+        let failures = run_http_checks_with(vec![check("panic"), check("pending")], 1, |check| {
+            if check.label == "panic" {
+                panic!("simulated checker panic");
+            }
+            None
+        });
+
+        assert!(failures
+            .iter()
+            .any(|failure| failure.contains("worker panicked")));
+        assert!(failures
+            .iter()
+            .any(|failure| failure.contains("0/2 checks completed")));
+    }
+
+    #[test]
+    fn successful_workers_complete_every_check() {
+        assert!(
+            run_http_checks_with(vec![check("one"), check("two")], 2, |check| {
+                assert_eq!(
+                    check.urls,
+                    [format!("https://example.invalid/{}", check.label)]
+                );
+                None
+            })
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn zero_workers_fails_nonempty_audit() {
+        let failures = run_http_checks_with(vec![check("one")], 0, |_| None);
+        assert!(failures.iter().any(|failure| failure.contains("0 workers")));
+    }
 }

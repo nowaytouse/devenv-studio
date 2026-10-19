@@ -5,11 +5,9 @@ use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-pub const DEFAULT_INVENTORY_URL: &str =
-    "https://raw.githubusercontent.com/nowaytouse/LTSC_Tools_Backup/main/src/assets/macos_inventory.json";
+pub const DEFAULT_INVENTORY_URL: &str = "https://raw.githubusercontent.com/nowaytouse/LTSC_Tools_Backup/main/src/assets/macos_inventory.json";
 #[cfg(any(target_os = "windows", test))]
-const GITHUB_API_INVENTORY_URL: &str =
-    "https://api.github.com/repos/nowaytouse/LTSC_Tools_Backup/contents/src/assets/macos_inventory.json?ref=main";
+const GITHUB_API_INVENTORY_URL: &str = "https://api.github.com/repos/nowaytouse/LTSC_Tools_Backup/contents/src/assets/macos_inventory.json?ref=main";
 const MAX_INVENTORY_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -389,17 +387,14 @@ impl MacosInventory {
     }
 
     pub fn save_atomic(&self, path: &Path) -> anyhow::Result<()> {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             std::fs::create_dir_all(parent)?;
         }
-        let temporary = path.with_extension("json.tmp");
         let bytes = serde_json::to_vec_pretty(self)?;
-        if let Err(error) =
-            std::fs::write(&temporary, bytes).and_then(|()| std::fs::rename(&temporary, path))
-        {
-            let _ = std::fs::remove_file(&temporary);
-            return Err(error.into());
-        }
+        crate::utils::write_atomic(path, &bytes)?;
         Ok(())
     }
 
@@ -717,6 +712,27 @@ mod tests {
             }
             std::fs::remove_dir_all(root).unwrap();
         }
+    }
+
+    #[test]
+    fn inventory_save_preserves_an_existing_staging_file() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "ltsc-inventory-staging-{}-{stamp}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let destination = root.join("inventory.json");
+        let unrelated = destination.with_extension("json.tmp");
+        std::fs::write(&unrelated, b"another writer's data").unwrap();
+        let inventory = MacosInventory::load_embedded().unwrap();
+        inventory.save_atomic(&destination).unwrap();
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"another writer's data");
+        assert_eq!(MacosInventory::load_file(&destination).unwrap(), inventory);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

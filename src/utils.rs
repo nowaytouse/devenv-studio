@@ -1,15 +1,71 @@
 use chrono::Local;
 use std::collections::VecDeque;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 const MAX_CAPTURE_BYTES: usize = 512 * 1024;
+
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    let name = path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "destination has no file name",
+        )
+    })?;
+    for _ in 0..16 {
+        let mut temporary_name = name.to_os_string();
+        temporary_name.push(format!(
+            ".{}-{}.tmp",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let temporary = path.with_file_name(temporary_name);
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = match options.open(&temporary) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        };
+        let result = (|| {
+            file.write_all(bytes)?;
+            file.sync_all()?;
+            drop(file);
+            std::fs::rename(&temporary, path)
+        })();
+        if let Err(error) = result {
+            if let Err(cleanup) = std::fs::remove_file(&temporary) {
+                if cleanup.kind() != std::io::ErrorKind::NotFound {
+                    return Err(std::io::Error::new(
+                        error.kind(),
+                        format!(
+                            "{error}; could not remove {}: {cleanup}",
+                            temporary.display()
+                        ),
+                    ));
+                }
+            }
+            return Err(error);
+        }
+        return Ok(());
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not reserve a staging file after 16 attempts",
+    ))
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct CancellationToken(Arc<AtomicBool>);
@@ -483,7 +539,7 @@ pub fn upsert_ini_values(
 mod tests {
     use super::{
         run_native_cmd_timeout, scoop_shims_path, update_managed_block, upsert_ini_values,
-        CancellationToken, CommandState,
+        write_atomic, CancellationToken, CommandState,
     };
     use std::time::{Duration, SystemTime};
 
@@ -493,6 +549,23 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("ltsc-tools-{name}-{}-{unique}", std::process::id()))
+    }
+
+    #[test]
+    fn atomic_write_replaces_whole_files_and_cleans_up_failed_staging() {
+        let root = test_file("atomic");
+        std::fs::create_dir_all(&root).unwrap();
+        let destination = root.join("state.json");
+        std::fs::write(&destination, b"old").unwrap();
+        write_atomic(&destination, b"new state").unwrap();
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new state");
+
+        let directory = root.join("directory");
+        std::fs::create_dir(&directory).unwrap();
+        assert!(write_atomic(&directory, b"must not replace a directory").is_err());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new state");
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

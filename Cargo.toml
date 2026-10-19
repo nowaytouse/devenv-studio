@@ -13,7 +13,7 @@ anyhow = "1.0"
 include_dir = "0.7"
 
 [target.'cfg(windows)'.dependencies]
-eframe = { version = "0.36.2", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
+eframe = { version = "0.37.0", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
 winreg = "0.56"
 windows = { version = "0.62.2", features = ["Foundation", "Management_Deployment", "Win32_System_WinRT"] }
 # Keep the WinRT projection family compatible with windows 0.62.2.

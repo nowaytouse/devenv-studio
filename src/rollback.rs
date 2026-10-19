@@ -109,18 +109,31 @@ impl RollbackJournal {
             return Ok(false);
         }
         self.actions.push(action);
-        self.save()?;
+        if let Err(error) = self.save() {
+            self.actions.pop();
+            return Err(error);
+        }
         Ok(true)
     }
 
     pub fn finish(&mut self) -> anyhow::Result<()> {
+        let previous = self.completed;
         self.completed = true;
-        self.save()
+        if let Err(error) = self.save() {
+            self.completed = previous;
+            return Err(error);
+        }
+        Ok(())
     }
 
     pub fn mark_restored(&mut self) -> anyhow::Result<()> {
+        let previous = self.restored;
         self.restored = true;
-        self.save()
+        if let Err(error) = self.save() {
+            self.restored = previous;
+            return Err(error);
+        }
+        Ok(())
     }
 
     pub fn path(&self) -> &Path {
@@ -128,9 +141,7 @@ impl RollbackJournal {
     }
 
     fn save(&self) -> anyhow::Result<()> {
-        let temporary = self.path.with_extension("json.tmp");
-        std::fs::write(&temporary, serde_json::to_vec_pretty(self)?)?;
-        std::fs::rename(&temporary, &self.path)?;
+        crate::utils::write_atomic(&self.path, &serde_json::to_vec_pretty(self)?)?;
         Ok(())
     }
 }
@@ -148,6 +159,46 @@ pub fn journal_directory() -> PathBuf {
 mod tests {
     use super::{RollbackAction, RollbackJournal};
     use crate::platform::RegistryHive;
+
+    #[test]
+    fn failed_journal_save_does_not_commit_in_memory_state() {
+        let root = std::env::temp_dir().join(format!(
+            "ltsc-journal-failure-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("journal.json");
+        std::fs::create_dir(&path).unwrap();
+        let mut journal = RollbackJournal {
+            schema_version: 1,
+            created_at: "test".into(),
+            profile_version: "test".into(),
+            completed: false,
+            restored: false,
+            actions: Vec::new(),
+            path: path.clone(),
+        };
+        let action = RollbackAction::RegistryDword {
+            hive: RegistryHive::CurrentUser,
+            path: "Software\\Test".into(),
+            name: "Value".into(),
+            previous: Some(1),
+        };
+        assert!(journal.record(action.clone()).is_err());
+        assert!(journal.actions.is_empty());
+        assert!(journal.finish().is_err());
+        assert!(!journal.completed);
+        assert!(journal.mark_restored().is_err());
+        assert!(!journal.restored);
+        std::fs::remove_dir(&path).unwrap();
+        assert!(journal.record(action.clone()).unwrap());
+        assert_eq!(RollbackJournal::load(&path).unwrap().actions, [action]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn journal_keeps_only_the_first_value_for_each_registry_key() {
