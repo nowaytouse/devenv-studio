@@ -1,6 +1,16 @@
 # Windows 使用与验证状态
 
-核查日期：2026-10-19。当前状态是**已有通过 CI 的 Windows 试用程序，但尚未完成真实 LTSC 设备验收**，不宣称“全部完善”或“任何 LTSC 都即拿即用”。
+核查日期：2026-10-20。当前状态是**已有通过 CI 的 Windows 试用程序，但尚未完成真实 LTSC 设备验收**，不宣称“全部完善”或“任何 LTSC 都即拿即用”。
+
+## 2026-10-20 命令输出可靠性与 CI 复核
+
+按用户请求单次检查 [CI 39227504057](https://github.com/nowaytouse/LTSC_Tools_Backup/actions/runs/39227504057)：提交 `5f79a46ddf5338a732d32e1559b397b8ea91999a` 的 Windows、macOS、依赖审计均成功，包括 Windows 在线软件源审计、发布构建和独立产物检查。该结果不覆盖后续 `bc6cbcd` 或本节源码；推送后的新 CI 不在本轮自动查询或等待。
+
+本轮修复输出读取失败被误当作空输出的问题。命令只有正常退出且输出读取完整，才可以按退出码判断成功；读取错误、线程断开、管道缺失和输出等待超时会明确失败。实际读错时保留部分输出和分管道诊断，读取中断会重试，正常 EOF 的空输出不被误判失败。两条管道共用两秒收尾期限；后代进程一直持有输出管道时，调用方会报错返回，但阻塞读取线程可能要等管道关闭才退出，尚未实现跨平台可取消读取。
+
+保留已有 cc 1.9.0、find-msvc-tools 0.1.15、tokio 1.54.0 更新。单独升级 windows-collections 0.100.0 的组合已复现六项 Windows 类型错误，现保持 windows 0.62.2 / windows-collections 0.3.2 配套。根目录 EXE 未更新，仍以“已确认的产物”一节为准。
+
+本地 Rust stable 1.99.0 的全部测试为 68 项通过、4 个子进程辅助项按原设计忽略，格式和零警告静态检查通过；Windows GNU 的全部目标编译检查和零警告静态检查通过，交叉目标使用本机 nightly。最新 RustSec 数据库仍为下节记录的 `999ec89d`，扫描 366 项锁文件依赖，零项已知漏洞、三条既有维护提示，未忽略公告。本地和交叉目标检查不代替新提交的 Windows MSVC/stable CI，也不代替 LTSC 设备验收。
 
 ## 2026-10-19 可靠性加固与依赖更新
 
@@ -18,7 +28,7 @@ RustSec 数据库核验至 `999ec89d5d3f10f20be14750ec8c2d8b44e0ac9b`：366 项�
 
 [CI 38240426878](https://github.com/nowaytouse/LTSC_Tools_Backup/actions/runs/38240426878) 的唯一失败项为 Scoop `jhead`，三个候选清单均返回 404。官方在 [2026-10-05 撤销该清单](https://github.com/ScoopInstaller/Main/commit/b013317d258c42bb7a06671c2421c0ed14b4cb0f)，不是本项目 raw 下载回退失效。
 
-Mac 清单继续保留 `jhead`；Windows 明确列为手动源码构建项。[上游说明](https://github.com/Matthias-Wandel/jhead/blob/master/readme.txt) 使用 Visual C++ 2022 和 `make.bat`，未核验任何可自动安装的 Windows 发布归档。它不计作已安装，也没有用 ExifTool 冒充等价实现。此次映射修复尚未进入下述根目录 EXE；修复后的新 CI 和真实 LTSC 构建运行仍待验证。
+Mac 清单继续保留 `jhead`；Windows 明确列为手动源码构建项。[上游说明](https://github.com/Matthias-Wandel/jhead/blob/master/readme.txt) 使用 Visual C++ 2022 和 `make.bat`，未核验任何可自动安装的 Windows 发布归档。它不计作已安装，也没有用 ExifTool 冒充等价实现。此次映射修复已通过本轮核对的 `5f79a46` CI，但尚未进入下述根目录 EXE；真实 LTSC 构建运行仍待验证。
 
 ## 已确认的产物
 

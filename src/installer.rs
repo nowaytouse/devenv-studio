@@ -821,7 +821,7 @@ impl SetupEngine {
                 self.stopped();
                 return false;
             }
-            CommandState::TimedOut | CommandState::WaitFailed => {
+            CommandState::TimedOut | CommandState::WaitFailed | CommandState::OutputFailed => {
                 self.log(
                     LogLevel::Error,
                     format!("Git 状态检查未正常完成：{}", git_probe.diagnostic()),

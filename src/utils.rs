@@ -87,6 +87,7 @@ pub enum CommandState {
     Cancelled,
     SpawnFailed,
     WaitFailed,
+    OutputFailed,
 }
 
 #[derive(Debug, Clone)]
@@ -237,31 +238,36 @@ pub fn run_native_cmd_timeout(
         }
     };
 
-    let stdout = stdout
-        .and_then(|reader| reader.recv_timeout(Duration::from_secs(2)).ok())
-        .unwrap_or_default();
-    let stderr = stderr
-        .and_then(|reader| reader.recv_timeout(Duration::from_secs(2)).ok())
-        .unwrap_or_default();
-    let mut output = combine_capture(stdout, stderr);
-    if let Some(error) = wait_error {
-        if !output.is_empty() {
-            output.push('\n');
-        }
-        output.push_str(&error);
-    }
-
-    CommandResult {
-        state,
-        exit_code,
-        output,
-    }
+    // shortcut: inherited pipes can outlive this deadline; use cancellable I/O when supporting persistent descendants.
+    let output_deadline = Instant::now() + Duration::from_secs(2);
+    let stdout = receive_capture(stdout, output_deadline);
+    let stderr = receive_capture(stderr, output_deadline);
+    finish_command(state, exit_code, wait_error, stdout, stderr)
 }
 
 #[derive(Default)]
 struct PipeCapture {
     bytes: Vec<u8>,
     truncated: bool,
+    error: Option<String>,
+}
+
+fn receive_capture(reader: Option<Receiver<PipeCapture>>, deadline: Instant) -> PipeCapture {
+    let result = match reader {
+        Some(reader) => reader
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .map_err(|error| match error {
+                std::sync::mpsc::RecvTimeoutError::Timeout => "等待输出读取超时".to_string(),
+                std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                    "输出读取线程异常退出".to_string()
+                }
+            }),
+        None => Err("无法取得输出管道".to_string()),
+    };
+    result.unwrap_or_else(|error| PipeCapture {
+        error: Some(error),
+        ..PipeCapture::default()
+    })
 }
 
 fn spawn_pipe_reader(mut pipe: impl Read + Send + 'static) -> Receiver<PipeCapture> {
@@ -270,11 +276,17 @@ fn spawn_pipe_reader(mut pipe: impl Read + Send + 'static) -> Receiver<PipeCaptu
         let mut kept = VecDeque::with_capacity(MAX_CAPTURE_BYTES);
         let mut buffer = [0_u8; 8192];
         let mut truncated = false;
+        let mut error = None;
 
         loop {
             let count = match pipe.read(&mut buffer) {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
                 Ok(count) => count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(read_error) => {
+                    error = Some(read_error.to_string());
+                    break;
+                }
             };
             kept.extend(&buffer[..count]);
             if kept.len() > MAX_CAPTURE_BYTES {
@@ -287,12 +299,20 @@ fn spawn_pipe_reader(mut pipe: impl Read + Send + 'static) -> Receiver<PipeCaptu
         let _ = sender.send(PipeCapture {
             bytes: kept.into_iter().collect(),
             truncated,
+            error,
         });
     });
     receiver
 }
 
-fn combine_capture(stdout: PipeCapture, stderr: PipeCapture) -> String {
+fn finish_command(
+    state: CommandState,
+    exit_code: Option<i32>,
+    wait_error: Option<String>,
+    stdout: PipeCapture,
+    stderr: PipeCapture,
+) -> CommandResult {
+    let capture_failed = stdout.error.is_some() || stderr.error.is_some();
     let truncated = stdout.truncated || stderr.truncated;
     let mut bytes = stdout.bytes;
     if !bytes.is_empty() && !stderr.bytes.is_empty() {
@@ -309,7 +329,29 @@ fn combine_capture(stdout: PipeCapture, stderr: PipeCapture) -> String {
             format!("{notice}\n{output}")
         };
     }
-    output
+    for (stream, error) in [("stdout", stdout.error), ("stderr", stderr.error)] {
+        if let Some(error) = error {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&format!("{stream} 读取失败：{error}"));
+        }
+    }
+    if let Some(error) = wait_error {
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&error);
+    }
+    CommandResult {
+        state: if state == CommandState::Exited && capture_failed {
+            CommandState::OutputFailed
+        } else {
+            state
+        },
+        exit_code,
+        output,
+    }
 }
 
 fn terminate_process_tree(child: &mut Child) {
@@ -538,8 +580,9 @@ pub fn upsert_ini_values(
 #[cfg(test)]
 mod tests {
     use super::{
-        run_native_cmd_timeout, scoop_shims_path, update_managed_block, upsert_ini_values,
-        write_atomic, CancellationToken, CommandState,
+        finish_command, receive_capture, run_native_cmd_timeout, scoop_shims_path,
+        spawn_pipe_reader, update_managed_block, upsert_ini_values, write_atomic,
+        CancellationToken, CommandState, PipeCapture,
     };
     use std::time::{Duration, SystemTime};
 
@@ -549,6 +592,121 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("ltsc-tools-{name}-{}-{unique}", std::process::id()))
+    }
+
+    #[test]
+    fn pipe_read_failure_preserves_partial_output_and_reports_error() {
+        struct FailingReader;
+        impl std::io::Read for FailingReader {
+            fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("injected read failure"))
+            }
+        }
+        use std::io::Read;
+        let reader = std::io::Cursor::new(b"partial output").chain(FailingReader);
+        let capture = spawn_pipe_reader(reader)
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        let result = finish_command(
+            CommandState::Exited,
+            Some(0),
+            None,
+            capture,
+            PipeCapture::default(),
+        );
+        assert!(result.output.contains("partial output"));
+        assert!(result
+            .output
+            .contains("stdout 读取失败：injected read failure"));
+        assert_eq!(result.state, CommandState::OutputFailed);
+        assert!(!result.succeeded());
+        assert!(!result.succeeded_or_reboot_required());
+    }
+
+    #[test]
+    fn interrupted_pipe_read_is_retried() {
+        struct InterruptedOnce(bool);
+        impl std::io::Read for InterruptedOnce {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                if !self.0 {
+                    self.0 = true;
+                    Err(std::io::ErrorKind::Interrupted.into())
+                } else {
+                    std::io::Read::read(&mut &b"complete"[..], buffer)
+                }
+            }
+        }
+        let reader = InterruptedOnce(false);
+        use std::io::Read;
+        let capture = spawn_pipe_reader(reader.take(8))
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        let result = finish_command(
+            CommandState::Exited,
+            Some(0),
+            None,
+            capture,
+            PipeCapture::default(),
+        );
+        assert!(result.succeeded(), "{}", result.output);
+        assert_eq!(result.output, "complete");
+    }
+
+    #[test]
+    fn incomplete_output_cannot_be_success_even_with_a_success_exit_code() {
+        for code in [0, 3010] {
+            let (_sender, receiver) = std::sync::mpsc::channel();
+            let capture = receive_capture(Some(receiver), std::time::Instant::now());
+            let result = finish_command(
+                CommandState::Exited,
+                Some(code),
+                None,
+                PipeCapture::default(),
+                capture,
+            );
+            assert_eq!(result.state, CommandState::OutputFailed);
+            assert!(!result.succeeded_or_reboot_required());
+            assert!(result.output.contains("stderr 读取失败：等待输出读取超时"));
+        }
+    }
+
+    #[test]
+    fn disconnected_output_preserves_timeout_and_cancellation_states() {
+        for state in [
+            CommandState::Cancelled,
+            CommandState::TimedOut,
+            CommandState::WaitFailed,
+        ] {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            drop(sender);
+            let capture = receive_capture(Some(receiver), std::time::Instant::now());
+            let result = finish_command(
+                state.clone(),
+                None,
+                Some("primary failure".into()),
+                capture,
+                PipeCapture::default(),
+            );
+            assert_eq!(result.state, state);
+            assert!(result.output.contains("输出读取线程异常退出"));
+            assert_eq!(result.diagnostic(), "primary failure");
+        }
+    }
+
+    #[test]
+    fn empty_output_at_eof_is_still_a_success() {
+        let capture = spawn_pipe_reader(std::io::Cursor::new(Vec::<u8>::new()))
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        let result = finish_command(
+            CommandState::Exited,
+            Some(0),
+            None,
+            capture,
+            PipeCapture::default(),
+        );
+        assert!(result.succeeded(), "{}", result.output);
+        assert!(result.output.is_empty());
     }
 
     #[test]
