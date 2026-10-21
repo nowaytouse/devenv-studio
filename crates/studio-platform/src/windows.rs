@@ -1,5 +1,5 @@
 use crate::{
-    HostInfo, RecoveryPoint, RunReport, data_directory,
+    HostInfo, RecoveryPoint, RunReport, SettingState, data_directory,
     engine::{self, RawValue, Registry},
     journal::{self, FileJournal},
 };
@@ -234,6 +234,62 @@ fn report(operation: &str, outcome: engine::Outcome, journal: PathBuf) -> RunRep
         cancelled: outcome.cancelled,
     }
 }
+pub(super) fn inspect(plan: Plan, cancel: Arc<AtomicBool>) -> Result<Vec<SettingState>> {
+    check_host(plan.target)?;
+    let registry = NativeRegistry;
+    let mut states = Vec::new();
+    for action in plan.actions {
+        if cancel.load(std::sync::atomic::Ordering::Acquire) {
+            anyhow::bail!("Configuration inspection cancelled");
+        }
+        let mut aligned = 0;
+        let mut details = Vec::new();
+        let mut unavailable = false;
+        for change in &action.changes {
+            match registry.read(change) {
+                Ok(Some(value)) if value == RawValue::desired(change) => aligned += 1,
+                Ok(Some(value)) => {
+                    let current = if value.kind == 4 && value.bytes.len() == 4 {
+                        format!(
+                            "REG_DWORD {}",
+                            u32::from_le_bytes(value.bytes.as_slice().try_into()?)
+                        )
+                    } else {
+                        format!("注册表类型 {}，{} 字节", value.kind, value.bytes.len())
+                    };
+                    details.push(format!(
+                        "{} 当前为 {}，方案值为 {}",
+                        change.name, current, change.value
+                    ));
+                }
+                Ok(None) => {
+                    details.push(format!("{} 尚未设置；将写入 {}", change.name, change.value))
+                }
+                Err(error) => {
+                    unavailable = true;
+                    details.push(format!("{} 读取失败：{error:#}", change.name));
+                }
+            }
+        }
+        let state = if unavailable {
+            "unavailable"
+        } else if aligned == action.changes.len() {
+            "aligned"
+        } else {
+            "different"
+        };
+        if state == "aligned" {
+            details.push("所有记录值均与选择一致；组织策略仍可能影响实际效果。".into());
+        }
+        states.push(SettingState {
+            id: action.id,
+            state: state.into(),
+            detail: details.join("\n"),
+        });
+    }
+    Ok(states)
+}
+
 pub(super) fn apply(plan: Plan, cancel: Arc<AtomicBool>) -> Result<RunReport> {
     let plan = studio_core::validate_plan(&plan)?;
     check_host(plan.target)?;

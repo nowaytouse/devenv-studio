@@ -37,6 +37,37 @@ pub struct RecoveryPoint {
     pub actions: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettingState {
+    pub id: String,
+    pub state: String,
+    pub detail: String,
+}
+
+/// Read only; a preview host does not impersonate a Windows registry inspection.
+pub fn inspect(plan: Plan, cancel: Arc<AtomicBool>) -> Result<Vec<SettingState>> {
+    let plan = studio_core::validate_plan(&plan)?;
+    #[cfg(windows)]
+    {
+        windows::inspect(plan, cancel)
+    }
+    #[cfg(not(windows))]
+    {
+        let mut states = Vec::new();
+        for action in plan.actions {
+            if cancel.load(std::sync::atomic::Ordering::Acquire) {
+                anyhow::bail!("Configuration inspection cancelled");
+            }
+            states.push(SettingState {
+                id: action.id,
+                state: "preview".into(),
+                detail: "预览模式；未读取 Windows 当前设置。".into(),
+            });
+        }
+        Ok(states)
+    }
+}
+
 pub fn host() -> HostInfo {
     #[cfg(windows)]
     {
@@ -126,6 +157,16 @@ mod tests {
             .unwrap();
             assert!(apply(p, Arc::new(AtomicBool::new(false))).is_err());
             assert!(restore(PathBuf::new(), Arc::new(AtomicBool::new(false))).is_err());
+            let p = studio_core::build_plan(
+                &studio_core::load_catalog().unwrap(),
+                Target::Win11Ltsc2024,
+                &std::collections::BTreeSet::from(["privacy-advertising-id".into()]),
+            )
+            .unwrap();
+            let states = inspect(p.clone(), Arc::new(AtomicBool::new(false))).unwrap();
+            assert_eq!(states.len(), 1);
+            assert_eq!(states[0].state, "preview");
+            assert!(inspect(p, Arc::new(AtomicBool::new(true))).is_err());
         }
     }
 }

@@ -1785,13 +1785,15 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "ltsc-studio"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "eframe",
  "image",
+ "serde",
  "serde_json",
  "studio-core",
+ "studio-deployment",
  "studio-platform",
 ]
 
@@ -3028,7 +3030,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "studio-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -3036,8 +3038,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-deployment"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "studio-core",
+ "studio-platform",
+ "winreg",
+]
+
+[[package]]
 name = "studio-platform"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "blake3",

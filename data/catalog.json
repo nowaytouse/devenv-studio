@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": "2026-10-21.1",
+  "revision": "2026-10-21.2",
   "sources": [
     {
       "id": "winutil",
@@ -150,7 +150,8 @@
           "name": "HideFileExt",
           "value": 0
         }
-      ]
+      ],
+      "choice_group": "explorer-file-extensions"
     },
     {
       "id": "explorer-hidden",
@@ -179,13 +180,14 @@
           "name": "Hidden",
           "value": 1
         }
-      ]
+      ],
+      "choice_group": "explorer-hidden-items"
     },
     {
       "id": "experience-taskview",
       "title": "隐藏任务视图按钮",
       "description": "隐藏任务栏上的任务视图按钮，Win + Tab 仍可使用。",
-      "category": "experience",
+      "category": "taskbar",
       "sources": [
         "winutil"
       ],
@@ -211,7 +213,7 @@
       "id": "experience-search",
       "title": "隐藏任务栏搜索控件",
       "description": "让任务栏更简洁；仍可通过开始菜单或 Win + S 搜索。",
-      "category": "experience",
+      "category": "taskbar",
       "sources": [
         "winutil",
         "sophia"
@@ -234,13 +236,14 @@
           "name": "SearchboxTaskbarMode",
           "value": 0
         }
-      ]
+      ],
+      "choice_group": "taskbar-search-mode"
     },
     {
       "id": "experience-left-taskbar",
       "title": "任务栏图标靠左",
       "description": "在 Windows 11 中将任务栏图标设为左对齐。Windows 10 不需要此设置。",
-      "category": "experience",
+      "category": "taskbar",
       "sources": [
         "winutil"
       ],
@@ -259,13 +262,14 @@
           "name": "TaskbarAl",
           "value": 0
         }
-      ]
+      ],
+      "choice_group": "taskbar-alignment"
     },
     {
       "id": "privacy-app-launch-tracking",
       "title": "关闭应用启动追踪",
       "description": "不让 Windows 跟踪应用启动来改进开始菜单与搜索结果，常用应用推荐可能减少。",
-      "category": "privacy",
+      "category": "start",
       "sources": [
         "winutil",
         "win11debloat"
@@ -378,6 +382,931 @@
           "name": "SubscribedContent-353696Enabled",
           "value": 0
         }
+      ]
+    },
+    {
+      "id": "explorer-open-this-pc",
+      "title": "资源管理器打开到“此电脑”",
+      "description": "打开资源管理器时显示此电脑；与快速访问选项互斥。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "explorer-launch",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "LaunchTo",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "explorer-open-quick-access",
+      "title": "资源管理器打开到“快速访问”",
+      "description": "打开资源管理器时显示快速访问；与此电脑选项互斥。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "explorer-launch",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "LaunchTo",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "explorer-compact-mode",
+      "title": "资源管理器使用紧凑视图",
+      "description": "减少文件与文件夹行间距；可选择常规视图恢复。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "explorer-density",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "UseCompactMode",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "explorer-comfortable-mode",
+      "title": "资源管理器使用常规间距",
+      "description": "关闭紧凑视图，使用较宽松的文件与文件夹行间距。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "explorer-density",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "UseCompactMode",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "explorer-hide-recent-files",
+      "title": "隐藏快速访问中的最近文件",
+      "description": "不在快速访问中列出最近打开的文件；不删除文件或历史数据。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowRecent",
+          "value": 0
+        }
+      ],
+      "choice_group": "explorer-recent-files"
+    },
+    {
+      "id": "explorer-hide-frequent-folders",
+      "title": "隐藏快速访问中的常用文件夹",
+      "description": "不在快速访问中列出常用文件夹。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowFrequent",
+          "value": 0
+        }
+      ],
+      "choice_group": "explorer-frequent-folders"
+    },
+    {
+      "id": "explorer-hide-sync-notifications",
+      "title": "隐藏资源管理器同步提供程序通知",
+      "description": "关闭资源管理器中同步提供程序的通知横幅；不影响同步本身。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowSyncProviderNotifications",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-search-icon",
+      "title": "任务栏显示搜索图标",
+      "description": "显示搜索图标；与其他任务栏搜索显示模式互斥。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "taskbar-search-mode",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "experience-search-icon-label",
+      "title": "任务栏显示带标签的搜索图标",
+      "description": "显示带文字标签的搜索图标；与其他任务栏搜索显示模式互斥。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "taskbar-search-mode",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "id": "experience-search-box",
+      "title": "任务栏显示搜索框",
+      "description": "显示完整搜索框；与其他任务栏搜索显示模式互斥。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "taskbar-search-mode",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "experience-center-taskbar",
+      "title": "任务栏图标居中",
+      "description": "在 Windows 11 中将任务栏图标设为居中；与左对齐互斥。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "taskbar-alignment",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAl",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "experience-search-highlights-off",
+      "title": "关闭搜索亮点",
+      "description": "隐藏搜索框中的搜索亮点内容；不关闭 Windows Search。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\SearchSettings",
+          "name": "IsDynamicSearchBoxEnabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-disable-silent-app-installs",
+      "title": "关闭建议应用的自动安装",
+      "description": "阻止 Windows 自动安装建议应用；不卸载现有应用。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SilentInstalledAppsEnabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-disable-scoobe",
+      "title": "关闭设置完成建议",
+      "description": "不再提示完成设备设置或“充分利用 Windows”；组织策略可能覆盖。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\UserProfileEngagement",
+          "name": "ScoobeSystemSettingEnabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-start-suggestions",
+      "title": "关闭开始菜单推荐内容",
+      "description": "关闭开始菜单中的提示、快捷方式和新应用推荐；不保证移除推荐区域。",
+      "category": "start",
+      "sources": [
+        "win11debloat"
+      ],
+      "evidence": [
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Disable_Windows_Suggestions.reg"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_IrisRecommendations",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-start-promotions",
+      "title": "关闭开始菜单推荐应用提示",
+      "description": "减少开始菜单中建议安装的应用推荐；不影响 Microsoft Store 搜索或安装。",
+      "category": "start",
+      "sources": [
+        "win11debloat"
+      ],
+      "evidence": [
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Disable_Windows_Suggestions.reg"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-338388Enabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-start-pane-suggestions",
+      "title": "关闭开始菜单应用建议",
+      "description": "隐藏开始菜单中的建议应用内容；不影响应用启动或搜索。",
+      "category": "start",
+      "sources": [
+        "win11debloat"
+      ],
+      "evidence": [
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Disable_Windows_Suggestions.reg"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SystemPaneSuggestionsEnabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "taskbar-clock-seconds",
+      "title": "任务栏时钟显示秒数",
+      "description": "在任务栏时钟中显示秒数；可能略微增加耗电。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowSecondsInSystemClock",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "taskbar-end-task",
+      "title": "启用任务栏右键结束任务",
+      "description": "允许从任务栏右键菜单结束应用任务；请谨慎结束未保存工作。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
+          "name": "TaskbarEndTask",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "personalization-dark-apps",
+      "title": "Windows 与应用使用深色模式",
+      "description": "将 Windows 外观和支持系统主题的应用同时设为深色。",
+      "category": "personalization",
+      "sources": [
+        "winutil",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "system-theme",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "AppsUseLightTheme",
+          "value": 0
+        },
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "SystemUsesLightTheme",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "personalization-light-apps",
+      "title": "Windows 与应用使用浅色模式",
+      "description": "将 Windows 外观和支持系统主题的应用同时设为浅色。",
+      "category": "personalization",
+      "sources": [
+        "winutil",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开相关应用或注销后生效",
+      "risk": "当前用户偏好；保留原值，可恢复",
+      "choice_group": "system-theme",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "AppsUseLightTheme",
+          "value": 1
+        },
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "SystemUsesLightTheme",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "explorer-hide-hidden",
+      "title": "不显示隐藏文件",
+      "description": "不显示标记为隐藏的文件与文件夹；不影响受保护的操作系统文件设置。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "当前用户界面偏好；记录并可恢复原值",
+      "choice_group": "explorer-hidden-items",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Hidden",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "explorer-hide-extensions",
+      "title": "隐藏已知文件扩展名",
+      "description": "隐藏已知文件类型的扩展名；与显示扩展名互斥。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "当前用户界面偏好；记录并可恢复原值",
+      "choice_group": "explorer-file-extensions",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "HideFileExt",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "explorer-checkboxes-on",
+      "title": "使用项目复选框",
+      "description": "在资源管理器项目上显示复选框，便于多选。",
+      "category": "accessibility",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "当前用户界面偏好；记录并可恢复原值",
+      "choice_group": "explorer-item-checkboxes",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "AutoCheckSelect",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "explorer-checkboxes-off",
+      "title": "关闭项目复选框",
+      "description": "关闭资源管理器项目复选框。",
+      "category": "accessibility",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "当前用户界面偏好；记录并可恢复原值",
+      "choice_group": "explorer-item-checkboxes",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "AutoCheckSelect",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "explorer-show-merge-conflicts",
+      "title": "显示文件夹合并冲突提示",
+      "description": "在合并文件夹时显示冲突确认选项。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "当前用户界面偏好；记录并可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "HideMergeConflicts",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "personalization-battery-percent",
+      "title": "显示系统托盘电池百分比",
+      "description": "在支持的 Windows 11 设备上显示数字电池百分比；无电池的设备不适用。",
+      "category": "taskbar",
+      "sources": [
+        "winutil"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "仅适用于有电池且该 Windows 11 UI 功能可用的设备；记录并可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "IsBatteryPercentageEnabled",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "explorer-show-recent-files",
+      "title": "显示快速访问中的最近文件",
+      "description": "在快速访问中列出最近打开的文件；与隐藏选项互斥。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器",
+      "risk": "当前用户界面偏好；记录并可恢复原值",
+      "choice_group": "explorer-recent-files",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer",
+          "name": "ShowRecent",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "explorer-show-frequent-folders",
+      "title": "显示快速访问中的常用文件夹",
+      "description": "在快速访问中列出常用文件夹；与隐藏选项互斥。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器",
+      "risk": "当前用户界面偏好；记录并可恢复原值",
+      "choice_group": "explorer-frequent-folders",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer",
+          "name": "ShowFrequent",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "personalization-thispc-desktop",
+      "title": "在桌面显示“此电脑”图标",
+      "description": "显示此电脑桌面图标；其他桌面图标保持不变。",
+      "category": "personalization",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "刷新桌面或注销后生效",
+      "risk": "此项创建/覆盖当前用户图标显示 DWORD；记录原值以恢复",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel",
+          "name": "{20D04FE0-3AEA-1069-A2D8-08002B30309D}",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "taskbar-group-always",
+      "title": "合并任务栏按钮",
+      "description": "始终合并同一应用的窗口，并隐藏按钮标签。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021"
+      ],
+      "restart": "注销后重新登录",
+      "risk": "仅适用于 Windows 10 LTSC 2021 任务栏；占用空间随未合并窗口增加",
+      "choice_group": "taskbar-grouping",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarGlomLevel",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "taskbar-group-full",
+      "title": "任务栏空间不足时合并按钮",
+      "description": "仅在任务栏空间不足时合并同一应用窗口。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021"
+      ],
+      "restart": "注销后重新登录",
+      "risk": "仅适用于 Windows 10 LTSC 2021 任务栏；占用空间随未合并窗口增加",
+      "choice_group": "taskbar-grouping",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarGlomLevel",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "taskbar-group-never",
+      "title": "从不合并任务栏按钮",
+      "description": "保持每个窗口独立显示并显示标签；可能占用更多任务栏空间。",
+      "category": "taskbar",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021"
+      ],
+      "restart": "注销后重新登录",
+      "risk": "仅适用于 Windows 10 LTSC 2021 任务栏；占用空间随未合并窗口增加",
+      "choice_group": "taskbar-grouping",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarGlomLevel",
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "essentials",
+      "title": "基础用户偏好",
+      "description": "为文件可见性与任务栏提供少量可编辑的起始选项。预设仅用于选择并供你检查，不会自动应用设置。",
+      "actions": [
+        "explorer-extensions",
+        "explorer-hidden",
+        "experience-search"
+      ]
+    },
+    {
+      "id": "privacy",
+      "title": "隐私偏好",
+      "description": "提供广告、个性化体验、反馈请求与快速访问中可见记录的精简可编辑选项。应用前请先检查。",
+      "actions": [
+        "privacy-advertising-id",
+        "privacy-tailored-experiences",
+        "privacy-feedback"
+      ]
+    },
+    {
+      "id": "developer",
+      "title": "开发者便利设置",
+      "description": "为文件扩展名、资源管理器紧凑视图与任务栏结束任务提供少量可编辑选项。应用前请先检查。",
+      "actions": [
+        "explorer-extensions",
+        "explorer-compact-mode",
+        "taskbar-end-task"
       ]
     }
   ]

@@ -1,4 +1,16 @@
-# LTSC Studio — design and first delivery
+# LTSC Studio — design record
+
+## 0.2 workbench extension
+
+The second delivery adds a deployment domain alongside reversible registry preferences. There are 45 setting options in 31 independent setting groups, plus 30 WinGet packages, 7 optional feature-enables and 4 maintenance commands. GUI pages browse these domains separately; v2 workspace profiles and exports preserve one selection. Each domain has its own execution confirmation and recovery boundary.
+
+Registry plans validate mutual-choice groups and selected-address collisions. Read-only inspection returns desired/current alignment; non-Windows inspection returns explicit preview states. Three presets select editable choices only. The first catalog snapshot remains built in for authenticated historical recovery validation; imported catalogs never authorize writes.
+
+studio-deployment owns immutable task definitions, native argv, trusted executable resolution, bounded output/deadlines, cancellation, pre-mutation execution history and readback. It shares the mutation lock with registry apply/restore. Package installation requires configured Microsoft App Installer and source agreements. Feature-enables use DISM without automatic restart. Maintenance command completion is distinct from confirmed repair.
+
+Execution history cannot undo software, components or repairs. Native cancellation reaps the direct child but cannot guarantee Windows servicing or installer descendants stopped. Windows device acceptance remains a separate requirement.
+
+## Original 0.1 design and intent
 
 User intent: a new Rust-first application combining selected capabilities from LTSC_Tools_Backup and mature Windows configuration projects. Every configuration change is chosen by the user. One native desktop GUI runs on macOS and Windows. Repository: nowaytouse/ltsc-studio, private initially.
 

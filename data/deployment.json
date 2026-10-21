@@ -1,0 +1,818 @@
+{
+  "revision": "2026-10-21.2",
+  "tasks": [
+    {
+      "id": "software-7zip-7zip",
+      "title": "7-Zip",
+      "description": "压缩与解压缩工具，用于创建 7z、ZIP 压缩包和打开常见归档文件。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "7zip.7zip",
+      "feature_name": null
+    },
+    {
+      "id": "software-mozilla-firefox",
+      "title": "Firefox",
+      "description": "网页浏览器，适合日常上网、使用网页应用和按需安装浏览器扩展。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Mozilla.Firefox",
+      "feature_name": null
+    },
+    {
+      "id": "software-google-chrome",
+      "title": "Chrome",
+      "description": "Google 网页浏览器，用于浏览网站、运行网页应用及使用 Chrome 扩展。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Google.Chrome",
+      "feature_name": null
+    },
+    {
+      "id": "software-brave-brave",
+      "title": "Brave",
+      "description": "基于 Chromium 的网页浏览器，提供广告与跟踪防护设置，适合希望自行管理浏览隐私的用户。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Brave.Brave",
+      "feature_name": null
+    },
+    {
+      "id": "software-videolan-vlc",
+      "title": "VLC (Video Player)",
+      "description": "音视频播放器，用于播放本地媒体文件、光盘及网络媒体流。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "VideoLAN.VLC",
+      "feature_name": null
+    },
+    {
+      "id": "software-git-git",
+      "title": "Git",
+      "description": "分布式版本控制工具，用于记录代码修改、管理分支，并与 GitHub 等远程仓库协作。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Git.Git",
+      "feature_name": null
+    },
+    {
+      "id": "software-microsoft-visualstudiocode",
+      "title": "VS Code",
+      "description": "代码编辑器，提供语法高亮、扩展和调试集成，适合编写代码与编辑项目文件。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.VisualStudioCode",
+      "feature_name": null
+    },
+    {
+      "id": "software-notepadplusplus",
+      "title": "Notepad++",
+      "description": "文本与代码编辑器，适合查看日志、修改配置文件及进行多文件文本编辑。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Notepad++.Notepad++",
+      "feature_name": null
+    },
+    {
+      "id": "software-microsoft-powertoys",
+      "title": "PowerToys",
+      "description": "Windows 桌面效率工具集，包含窗口布局、快捷启动、批量重命名等可单独配置的工具。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.PowerToys",
+      "feature_name": null
+    },
+    {
+      "id": "software-microsoft-windowsterminal",
+      "title": "Windows Terminal",
+      "description": "多标签终端界面，用于集中打开 PowerShell、命令提示符及已配置的其他命令行环境。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.WindowsTerminal",
+      "feature_name": null
+    },
+    {
+      "id": "software-microsoft-powershell",
+      "title": "PowerShell",
+      "description": "跨平台命令行与脚本环境，用于系统管理、任务自动化和运行 PowerShell 脚本。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.PowerShell",
+      "feature_name": null
+    },
+    {
+      "id": "software-openjs-nodejs-lts",
+      "title": "NodeJS LTS",
+      "description": "JavaScript 运行环境的长期支持版本，用于开发和运行 Node.js 工具、服务及前端构建任务。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OpenJS.NodeJS.LTS",
+      "feature_name": null
+    },
+    {
+      "id": "software-thedocumentfoundation-libreoffice",
+      "title": "LibreOffice",
+      "description": "办公软件套件，用于编辑文本文档、电子表格与演示文稿。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TheDocumentFoundation.LibreOffice",
+      "feature_name": null
+    },
+    {
+      "id": "software-sumatrapdf-sumatrapdf",
+      "title": "Sumatra PDF",
+      "description": "文档阅读器，适合快速打开 PDF，以及受支持的电子书和漫画文档。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "SumatraPDF.SumatraPDF",
+      "feature_name": null
+    },
+    {
+      "id": "software-voidtools-everything",
+      "title": "Everything",
+      "description": "文件名搜索工具，通过建立索引快速查找本地文件与文件夹。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "voidtools.Everything",
+      "feature_name": null
+    },
+    {
+      "id": "software-winscp-winscp",
+      "title": "WinSCP",
+      "description": "图形化文件传输客户端，用于通过 SFTP、SCP 等协议与远程服务器交换文件。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "WinSCP.WinSCP",
+      "feature_name": null
+    },
+    {
+      "id": "software-putty-putty",
+      "title": "PuTTY",
+      "description": "终端连接客户端，用于通过 SSH 登录远程服务器或连接串口设备。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "PuTTY.PuTTY",
+      "feature_name": null
+    },
+    {
+      "id": "software-obsproject-obsstudio",
+      "title": "OBS Studio",
+      "description": "屏幕录制与直播工具，用于组合画面来源、录制演示或向直播服务推流。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OBSProject.OBSStudio",
+      "feature_name": null
+    },
+    {
+      "id": "software-obsidian-obsidian",
+      "title": "Obsidian",
+      "description": "基于本地 Markdown 文件的笔记工具，适合整理个人知识、建立笔记链接与管理资料。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Obsidian.Obsidian",
+      "feature_name": null
+    },
+    {
+      "id": "software-sharex-sharex",
+      "title": "ShareX (Screenshots)",
+      "description": "截图与屏幕录制工具，提供区域捕捉、标注和可自行配置的分享流程。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ShareX.ShareX",
+      "feature_name": null
+    },
+    {
+      "id": "software-keepassxcteam-keepassxc",
+      "title": "KeePassXC",
+      "description": "本地密码数据库管理工具，用于保存、生成和整理密码，并由用户管理加密数据库文件。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "KeePassXCTeam.KeePassXC",
+      "feature_name": null
+    },
+    {
+      "id": "software-gimp-gimp-3",
+      "title": "GIMP (Image Editor)",
+      "description": "图像编辑工具，用于照片修饰、图层合成与位图图像处理。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GIMP.GIMP.3",
+      "feature_name": null
+    },
+    {
+      "id": "software-agilebits-1password",
+      "title": "1Password",
+      "description": "密码与敏感信息管理客户端，用于通过 1Password 账户管理登录凭据和保险库。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "AgileBits.1Password",
+      "feature_name": null
+    },
+    {
+      "id": "software-audacity-audacity",
+      "title": "Audacity",
+      "description": "音频录制与编辑工具，用于剪辑声音、调整音轨及导出音频文件。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Audacity.Audacity",
+      "feature_name": null
+    },
+    {
+      "id": "software-blenderfoundation-blender",
+      "title": "Blender (3D Graphics)",
+      "description": "三维创作软件，用于建模、动画、材质制作和渲染。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "BlenderFoundation.Blender",
+      "feature_name": null
+    },
+    {
+      "id": "software-bitwarden-bitwarden",
+      "title": "Bitwarden",
+      "description": "密码管理客户端，用于通过 Bitwarden 账户保存和生成密码，并访问个人或组织密码库。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Bitwarden.Bitwarden",
+      "feature_name": null
+    },
+    {
+      "id": "software-calibre-calibre",
+      "title": "Calibre",
+      "description": "电子书管理工具，用于整理书库、编辑书籍信息、阅读和转换受支持的电子书格式。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "calibre.calibre",
+      "feature_name": null
+    },
+    {
+      "id": "software-crystaldewworld-crystaldiskinfo",
+      "title": "Crystal Disk Info",
+      "description": "存储设备健康信息工具，用于查看受支持硬盘或固态硬盘的 SMART 状态与温度。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "CrystalDewWorld.CrystalDiskInfo",
+      "feature_name": null
+    },
+    {
+      "id": "software-rufus-rufus",
+      "title": "Rufus Imager",
+      "description": "USB 启动介质制作工具，用于将系统镜像写入 U 盘；实际制作时会改写所选设备的数据。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Rufus.Rufus",
+      "feature_name": null
+    },
+    {
+      "id": "software-digitalscholar-zotero",
+      "title": "Zotero",
+      "description": "文献管理工具，用于收集论文与书目信息、整理研究资料并生成参考文献。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "DigitalScholar.Zotero",
+      "feature_name": null
+    },
+    {
+      "id": "feature-netfx3",
+      "title": ".NET Framework 3.5",
+      "description": "启用 .NET Framework 3.5，供依赖 .NET 2.0、3.0 或 3.5 的旧版应用使用。",
+      "category": "features",
+      "kind": "feature",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "可能需要重启；Enable Pending 将明确报告",
+      "limitations": "需要已有管理员权限。LTSC 映像可能需要匹配版本的安装介质或组件修复源，也可能按策略从 Windows Update 获取文件。此项不安装依赖它的应用；启用结果会读取组件状态确认，注册表恢复无法撤销组件安装。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism?view=windows-11"
+      ],
+      "package_id": null,
+      "feature_name": "NetFx3"
+    },
+    {
+      "id": "feature-wsl",
+      "title": "适用于 Linux 的 Windows 子系统",
+      "description": "启用适用于 Linux 的 Windows 子系统组件，为配置 WSL 环境提供系统基础。",
+      "category": "features",
+      "kind": "feature",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "可能需要重启；Enable Pending 将明确报告",
+      "limitations": "需要已有管理员权限和适用的系统策略；仅启用 WSL 组件，不安装 Linux 发行版或 WSL 内核。使用 WSL 2 还需虚拟机平台及受支持且已启用的硬件虚拟化，可能需要重启。注册表恢复无法撤销组件安装。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism?view=windows-11"
+      ],
+      "package_id": null,
+      "feature_name": "Microsoft-Windows-Subsystem-Linux"
+    },
+    {
+      "id": "feature-virtual-machine-platform",
+      "title": "虚拟机平台",
+      "description": "启用虚拟机平台，为 WSL 2 等使用 Windows 虚拟化基础设施的环境提供支持。",
+      "category": "features",
+      "kind": "feature",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "可能需要重启；Enable Pending 将明确报告",
+      "limitations": "需要已有管理员权限、受支持且在固件中启用的硬件虚拟化；虚拟机内使用还受嵌套虚拟化配置限制。此项不安装 WSL 发行版或创建虚拟机，可能需要重启。注册表恢复无法撤销组件安装。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism?view=windows-11"
+      ],
+      "package_id": null,
+      "feature_name": "VirtualMachinePlatform"
+    },
+    {
+      "id": "feature-hyper-v",
+      "title": "Hyper-V",
+      "description": "启用 Hyper-V 平台及相关管理组件，用于创建和运行本地虚拟机。",
+      "category": "features",
+      "kind": "feature",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "可能需要重启；Enable Pending 将明确报告",
+      "limitations": "需要已有管理员权限、满足 Hyper-V 要求的处理器与内存，以及固件中已启用的硬件虚拟化。组织策略、宿主环境或 LTSC 映像可能限制可用性；会改变系统虚拟化配置并可能需要重启，不会自动创建虚拟机。注册表恢复无法撤销组件安装。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism?view=windows-11"
+      ],
+      "package_id": null,
+      "feature_name": "Microsoft-Hyper-V-All"
+    },
+    {
+      "id": "feature-sandbox",
+      "title": "Windows 沙盒",
+      "description": "启用 Windows 沙盒，为临时运行应用提供可关闭后丢弃内容的独立桌面环境。",
+      "category": "features",
+      "kind": "feature",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "可能需要重启；Enable Pending 将明确报告",
+      "limitations": "需要已有管理员权限、满足沙盒要求的硬件资源及已启用的硬件虚拟化；虚拟机中使用取决于嵌套虚拟化支持。系统策略或 LTSC 映像可能限制可用性，可能需要重启。此项仅启用组件，不启动沙盒或安装测试软件；注册表恢复无法撤销组件安装。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism?view=windows-11"
+      ],
+      "package_id": null,
+      "feature_name": "Containers-DisposableClientVM"
+    },
+    {
+      "id": "feature-print-to-pdf",
+      "title": "Microsoft 打印为 PDF",
+      "description": "启用 Microsoft 打印为 PDF 虚拟打印机，让支持打印的应用可将内容输出为 PDF 文件。",
+      "category": "features",
+      "kind": "feature",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "可能需要重启；Enable Pending 将明确报告",
+      "limitations": "需要已有管理员权限。可用性取决于 LTSC 映像、打印组件和组织策略；此项仅启用虚拟打印组件，不转换现有文档或保证所有应用的打印排版。注册表恢复无法撤销组件安装。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism?view=windows-11"
+      ],
+      "package_id": null,
+      "feature_name": "Printing-PrintToPDFServices-Features"
+    },
+    {
+      "id": "feature-work-folders",
+      "title": "工作文件夹客户端",
+      "description": "启用工作文件夹客户端，用于与组织提供的工作文件夹服务器同步工作文件。",
+      "category": "features",
+      "kind": "feature",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "可能需要重启；Enable Pending 将明确报告",
+      "limitations": "需要已有管理员权限，以及组织已部署的工作文件夹服务器、有效账户和相应网络访问。此项仅启用客户端组件，不配置服务器地址、登录账户或开始同步；组织策略可能限制使用。注册表恢复无法撤销组件安装。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism?view=windows-11"
+      ],
+      "package_id": null,
+      "feature_name": "WorkFolders-Client"
+    },
+    {
+      "id": "maintenance-check-health",
+      "title": "快速检查组件存储",
+      "description": "运行 DISM /CheckHealth，读取已有组件存储损坏标记；不会全面扫描。",
+      "category": "maintenance",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "以命令输出为准；不会自动重启",
+      "limitations": "执行历史仅保存命令结果，不是系统映像或回滚点。命令完成不代表系统无损坏或修复有效；请查看 DISM/CBS 日志和实际输出。取消会终止启动的进程，但 Windows servicing 或安装器子进程可能继续。每个命令最多 90 分钟。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/repair-a-windows-image?view=windows-11",
+        "https://learn.microsoft.com/windows-server/administration/windows-commands/sfc"
+      ],
+      "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "maintenance-scan-health",
+      "title": "扫描组件存储",
+      "description": "运行 DISM /ScanHealth 扫描组件存储，可能需要较长时间。",
+      "category": "maintenance",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "以命令输出为准；不会自动重启",
+      "limitations": "执行历史仅保存命令结果，不是系统映像或回滚点。命令完成不代表系统无损坏或修复有效；请查看 DISM/CBS 日志和实际输出。取消会终止启动的进程，但 Windows servicing 或安装器子进程可能继续。每个命令最多 90 分钟。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/repair-a-windows-image?view=windows-11",
+        "https://learn.microsoft.com/windows-server/administration/windows-commands/sfc"
+      ],
+      "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "maintenance-restore-health",
+      "title": "修复组件存储",
+      "description": "运行 DISM /RestoreHealth 尝试修复组件存储，可能从 Windows Update 读取修复源。",
+      "category": "maintenance",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "以命令输出为准；不会自动重启",
+      "limitations": "执行历史仅保存命令结果，不是系统映像或回滚点。命令完成不代表系统无损坏或修复有效；请查看 DISM/CBS 日志和实际输出。取消会终止启动的进程，但 Windows servicing 或安装器子进程可能继续。每个命令最多 90 分钟。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/repair-a-windows-image?view=windows-11",
+        "https://learn.microsoft.com/windows-server/administration/windows-commands/sfc"
+      ],
+      "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "maintenance-sfc-verify",
+      "title": "验证系统文件",
+      "description": "运行 SFC /verifyonly 验证受保护系统文件；不使用 /scannow 自动修复。",
+      "category": "maintenance",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "以命令输出为准；不会自动重启",
+      "limitations": "执行历史仅保存命令结果，不是系统映像或回滚点。命令完成不代表系统无损坏或修复有效；请查看 DISM/CBS 日志和实际输出。取消会终止启动的进程，但 Windows servicing 或安装器子进程可能继续。每个命令最多 90 分钟。",
+      "evidence": [
+        "https://learn.microsoft.com/windows-hardware/manufacture/desktop/repair-a-windows-image?view=windows-11",
+        "https://learn.microsoft.com/windows-server/administration/windows-commands/sfc"
+      ],
+      "package_id": null,
+      "feature_name": null
+    }
+  ]
+}

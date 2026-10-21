@@ -2,7 +2,7 @@
 use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::{Read, Write},
     path::Path,
@@ -35,6 +35,8 @@ pub struct Catalog {
     pub revision: String,
     pub sources: Vec<Source>,
     pub actions: Vec<Action>,
+    #[serde(default)]
+    pub presets: Vec<Preset>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -59,6 +61,18 @@ pub struct Action {
     pub restart: String,
     pub risk: String,
     pub changes: Vec<RegistryChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub choice_group: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Preset {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    #[serde(deserialize_with = "unique_selection")]
+    pub actions: BTreeSet<String>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -186,7 +200,7 @@ pub fn validate_catalog(catalog: &Catalog) -> Result<()> {
         );
     }
     let mut actions = BTreeSet::new();
-    let mut addresses = BTreeSet::new();
+    let mut addresses = BTreeMap::new();
     for action in &catalog.actions {
         ensure!(
             identifier(&action.id) && actions.insert(&action.id),
@@ -258,18 +272,42 @@ pub fn validate_catalog(catalog: &Catalog) -> Result<()> {
             "Invalid change count for {}",
             action.id
         );
+        if let Some(group) = &action.choice_group {
+            ensure!(identifier(group), "Invalid choice group in {}", action.id);
+        }
+        let mut local_addresses = BTreeSet::new();
         for change in &action.changes {
             validate_address(change)?;
+            let address = (
+                change.hive,
+                change.path.to_lowercase(),
+                change.name.to_lowercase(),
+            );
             ensure!(
-                addresses.insert((
-                    change.hive,
-                    change.path.to_lowercase(),
-                    change.name.to_lowercase()
-                )),
-                "Duplicate registry address in {}",
+                local_addresses.insert(address.clone()),
+                "Repeated registry address in {}",
                 action.id
             );
+            if let Some(previous) = addresses.insert(address, action.choice_group.clone()) {
+                ensure!(
+                    previous.is_some() && previous == action.choice_group,
+                    "Overlapping registry address requires one shared choice group: {}",
+                    action.id
+                );
+            }
         }
+    }
+    let mut preset_ids = BTreeSet::new();
+    for preset in &catalog.presets {
+        ensure!(
+            identifier(&preset.id) && preset_ids.insert(&preset.id),
+            "Invalid or duplicate preset ID"
+        );
+        ensure!(
+            text(&preset.title) && text(&preset.description) && !preset.actions.is_empty(),
+            "Incomplete preset"
+        );
+        validate_selection(catalog, None, &preset.actions)?;
     }
     Ok(())
 }
@@ -300,10 +338,68 @@ pub fn validate_address(change: &RegistryChange) -> Result<()> {
 }
 
 pub fn load_catalog() -> Result<Catalog> {
-    let catalog = serde_json::from_str(include_str!("../../../data/catalog.json"))
-        .context("Embedded catalog is invalid JSON")?;
+    parse_catalog(include_str!("../../../data/catalog.json"))
+}
+
+fn parse_catalog(source: &str) -> Result<Catalog> {
+    let catalog = serde_json::from_str(source).context("Embedded catalog is invalid JSON")?;
     validate_catalog(&catalog)?;
     Ok(catalog)
+}
+
+/// Only shipped, immutable snapshots are eligible for recovery validation.
+/// An exported/imported catalog can never authorize registry writes or restoration.
+pub fn load_catalog_for_revision(revision: &str) -> Result<Catalog> {
+    let current = load_catalog()?;
+    if current.revision == revision {
+        return Ok(current);
+    }
+    if revision == "2026-10-21.1" {
+        return parse_catalog(include_str!("../../../data/catalog-2026-10-21.1.json"));
+    }
+    bail!("Unknown recovery catalog revision: {revision}")
+}
+
+fn validate_selection(
+    catalog: &Catalog,
+    target: Option<Target>,
+    selected: &BTreeSet<String>,
+) -> Result<()> {
+    let mut groups = BTreeSet::new();
+    let mut addresses = BTreeSet::new();
+    for id in selected {
+        let action = catalog
+            .actions
+            .iter()
+            .find(|a| &a.id == id)
+            .with_context(|| format!("Unknown action: {id}"))?;
+        if let Some(target) = target {
+            ensure!(
+                action.targets.contains(&target),
+                "Action {id} does not support {}",
+                target.label()
+            );
+        }
+        if let Some(group) = &action.choice_group {
+            ensure!(
+                groups.insert(group),
+                "Choose only one option in group: {group}"
+            );
+        }
+        for change in &action.changes {
+            ensure!(
+                addresses.insert((
+                    change.hive,
+                    change.path.to_lowercase(),
+                    change.name.to_lowercase()
+                )),
+                "Selected actions overlap at {}\\{}",
+                change.path,
+                change.name
+            );
+        }
+    }
+    Ok(())
 }
 
 pub fn build_plan(catalog: &Catalog, target: Target, selected: &BTreeSet<String>) -> Result<Plan> {
@@ -312,18 +408,7 @@ pub fn build_plan(catalog: &Catalog, target: Target, selected: &BTreeSet<String>
         selected.len() <= catalog.actions.len(),
         "Too many selected actions"
     );
-    for id in selected {
-        let action = catalog
-            .actions
-            .iter()
-            .find(|a| &a.id == id)
-            .with_context(|| format!("Unknown action: {id}"))?;
-        ensure!(
-            action.targets.contains(&target),
-            "Action {id} does not support {}",
-            target.label()
-        );
-    }
+    validate_selection(catalog, Some(target), selected)?;
     Ok(Plan {
         schema_version: SCHEMA_VERSION,
         catalog_revision: catalog.revision.clone(),
@@ -380,6 +465,12 @@ pub fn load_profile(path: &Path, catalog: &Catalog) -> Result<Profile> {
     );
     build_plan(catalog, profile.target, &profile.selected)?;
     Ok(profile)
+}
+
+/// Export an already validated workspace document without replacing an existing file.
+/// This only writes a document; it never imports or executes its contents.
+pub fn export_document(value: &impl Serialize, path: &Path) -> Result<()> {
+    create_json(value, path)
 }
 
 /// Publish a complete, flushed file with an atomic no-replace hard link.

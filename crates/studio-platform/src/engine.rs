@@ -5,7 +5,9 @@ use std::{
     collections::BTreeSet,
     sync::atomic::{AtomicBool, Ordering},
 };
-use studio_core::{Plan, RegistryChange, Target, build_plan, load_catalog};
+#[cfg(test)]
+use studio_core::load_catalog;
+use studio_core::{Plan, RegistryChange, Target, build_plan, load_catalog_for_revision};
 
 pub(crate) const MAX_RAW_BYTES: usize = 65_536;
 pub(crate) const MAX_RECORDS: usize = 512;
@@ -92,7 +94,11 @@ pub(crate) fn validate_header(header: &Header) -> Result<()> {
         ids.len() == header.actions.len(),
         "Duplicate recovery action"
     );
-    let plan = build_plan(&load_catalog()?, header.target, &ids)?;
+    let plan = build_plan(
+        &load_catalog_for_revision(&header.catalog_revision)?,
+        header.target,
+        &ids,
+    )?;
     ensure!(
         plan.catalog_revision == header.catalog_revision,
         "Recovery catalog revision differs; use the originating application version"
@@ -300,6 +306,33 @@ pub(crate) fn restore_backend(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn legacy_recovery_stays_trusted_after_catalog_expansion() {
+        let catalog = studio_core::load_catalog_for_revision("2026-10-21.1").unwrap();
+        let plan = studio_core::build_plan(
+            &catalog,
+            studio_core::Target::Win11Ltsc2024,
+            &std::collections::BTreeSet::from(["privacy-advertising-id".into()]),
+        )
+        .unwrap();
+        let header = super::Header {
+            schema_version: 1,
+            id: "ab-12".into(),
+            started_at: "2026-10-21T00:00:00Z".into(),
+            target: plan.target,
+            catalog_revision: plan.catalog_revision,
+            actions: vec!["privacy-advertising-id".into()],
+            records: vec![super::Record {
+                change: plan.actions[0].changes[0].clone(),
+                original: None,
+            }],
+        };
+        assert!(super::validate_header(&header).is_ok());
+        let mut tampered = header;
+        tampered.records[0].change.value ^= 1;
+        assert!(super::validate_header(&tampered).is_err());
+    }
+
     use super::*;
     use std::{cell::Cell, collections::BTreeMap, sync::Arc};
     #[derive(Default)]

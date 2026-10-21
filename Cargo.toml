@@ -1,9 +1,9 @@
 [workspace]
-members = ["crates/studio-core", "crates/studio-platform", "crates/studio-app"]
+members = ["crates/studio-core", "crates/studio-platform", "crates/studio-deployment", "crates/studio-app"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
@@ -16,6 +16,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 studio-core = { path = "crates/studio-core" }
 studio-platform = { path = "crates/studio-platform" }
+studio-deployment = { path = "crates/studio-deployment" }
 
 [profile.release]
 lto = "thin"
