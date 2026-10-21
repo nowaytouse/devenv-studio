@@ -1,0 +1,9 @@
+/target/
+/dist/
+.DS_Store
+*.log
+/plan*.json
+/profile*.json
+/preview*.png
+/recovery/
+/.local/

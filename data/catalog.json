@@ -1,0 +1,384 @@
+{
+  "schema_version": 1,
+  "revision": "2026-10-21.1",
+  "sources": [
+    {
+      "id": "winutil",
+      "name": "WinUtil",
+      "url": "https://github.com/ChrisTitusTech/winutil",
+      "revision": "7514faf0d0f4bff9b6c5d9213426ab52520cfac4",
+      "license": "MIT",
+      "description": "拆分其配置清单中的独立注册表设置，保留来源；不运行上游捆绑脚本。"
+    },
+    {
+      "id": "sophia",
+      "name": "Sophia Script",
+      "url": "https://github.com/farag2/Sophia-Script-for-Windows",
+      "revision": "eeef532fc5f37129fe77ee58342f112f3bb71d39",
+      "license": "MIT",
+      "description": "参考隐私、资源管理器及 LTSC 版本适配；仅整合已审查的单项设置。"
+    },
+    {
+      "id": "win11debloat",
+      "name": "Win11Debloat",
+      "url": "https://github.com/Raphire/Win11Debloat",
+      "revision": "a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e",
+      "license": "MIT",
+      "description": "整合可独立选择的 Explorer 与用户体验设置；不继承整个精简预设。"
+    },
+    {
+      "id": "ltsc-tools-backup",
+      "name": "LTSC_Tools_Backup",
+      "url": "https://github.com/nowaytouse/LTSC_Tools_Backup",
+      "revision": "a8523abbe08147b4d5de8746f26d99d056057ab0",
+      "license": "设计参考；未复制源码",
+      "description": "沿用用户逐项选择、计划预览与先记录原值的设计经验。旧项目独立保留。"
+    }
+  ],
+  "actions": [
+    {
+      "id": "privacy-advertising-id",
+      "title": "关闭应用广告 ID",
+      "description": "阻止应用使用当前账户的广告 ID 进行个性化广告。不会阻止所有广告。",
+      "category": "privacy",
+      "sources": [
+        "winutil",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo",
+          "name": "Enabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "privacy-tailored-experiences",
+      "title": "关闭诊断数据个性化体验",
+      "description": "不使用诊断数据定制提示、推荐与广告；不会关闭 Windows 诊断服务。 组织策略可能覆盖此用户偏好。",
+      "category": "privacy",
+      "sources": [
+        "winutil",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Privacy",
+          "name": "TailoredExperiencesWithDiagnosticDataEnabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "privacy-feedback",
+      "title": "减少反馈请求",
+      "description": "将当前账户的 Windows 反馈请求频率设置为从不。仍可主动打开反馈中心。",
+      "category": "privacy",
+      "sources": [
+        "winutil",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Siuf\\Rules",
+          "name": "NumberOfSIUFInPeriod",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "explorer-extensions",
+      "title": "显示文件扩展名",
+      "description": "在资源管理器中显示已知文件类型的扩展名，便于分辨真实文件类型。",
+      "category": "explorer",
+      "sources": [
+        "win11debloat",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Show_Extensions_For_Known_File_Types.reg",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "HideFileExt",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "explorer-hidden",
+      "title": "显示隐藏文件",
+      "description": "显示隐藏文件与文件夹；不修改“隐藏受保护的操作系统文件”选项。",
+      "category": "explorer",
+      "sources": [
+        "win11debloat",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Show_Hidden_Folders.reg",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "重新打开资源管理器；必要时注销",
+      "risk": "会显示更多配置文件，请谨慎修改",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Hidden",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "experience-taskview",
+      "title": "隐藏任务视图按钮",
+      "description": "隐藏任务栏上的任务视图按钮，Win + Tab 仍可使用。",
+      "category": "experience",
+      "sources": [
+        "winutil"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowTaskViewButton",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-search",
+      "title": "隐藏任务栏搜索控件",
+      "description": "让任务栏更简洁；仍可通过开始菜单或 Win + S 搜索。",
+      "category": "experience",
+      "sources": [
+        "winutil",
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-left-taskbar",
+      "title": "任务栏图标靠左",
+      "description": "在 Windows 11 中将任务栏图标设为左对齐。Windows 10 不需要此设置。",
+      "category": "experience",
+      "sources": [
+        "winutil"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAl",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "privacy-app-launch-tracking",
+      "title": "关闭应用启动追踪",
+      "description": "不让 Windows 跟踪应用启动来改进开始菜单与搜索结果，常用应用推荐可能减少。",
+      "category": "privacy",
+      "sources": [
+        "winutil",
+        "win11debloat"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json",
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Disable_Telemetry.reg"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_TrackProgs",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-welcome",
+      "title": "关闭更新后的欢迎推荐",
+      "description": "不在更新后或登录时主动展示 Windows 新功能与建议的欢迎体验。",
+      "category": "experience",
+      "sources": [
+        "sophia",
+        "win11debloat"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L784",
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Disable_Windows_Suggestions.reg"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-310093Enabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-tips",
+      "title": "减少 Windows 使用提示",
+      "description": "关闭使用 Windows 时的技巧与建议偏好。组织策略可能覆盖此选项。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L835"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-338389Enabled",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-settings-suggestions",
+      "title": "关闭设置中的建议内容",
+      "description": "关闭设置应用中三项已审查的建议内容偏好，不修改账户通知或安全提醒。",
+      "category": "experience",
+      "sources": [
+        "sophia",
+        "win11debloat"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L886",
+        "https://github.com/Raphire/Win11Debloat/blob/a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e/Regfiles/Disable_Windows_Suggestions.reg"
+      ],
+      "targets": [
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "用户偏好；可恢复原值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-338393Enabled",
+          "value": 0
+        },
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-353694Enabled",
+          "value": 0
+        },
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-353696Enabled",
+          "value": 0
+        }
+      ]
+    }
+  ]
+}

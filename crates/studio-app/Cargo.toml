@@ -1,0 +1,17 @@
+[package]
+name = "ltsc-studio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "A native Rust workbench for user-chosen Windows LTSC configuration"
+
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true
+studio-core.workspace = true
+studio-platform.workspace = true
+eframe = { version = "0.37.0", default-features = false, features = ["accesskit", "default_fonts", "system_fonts", "wgpu", "x11", "wayland", "links", "clipboard"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
