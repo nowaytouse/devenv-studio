@@ -1,5 +1,11 @@
 # LTSC Studio — design record
 
+## 0.7 storage maintenance and notification inspection
+
+Storage reuses the existing maintenance task, workspace v3, shared mutation lock, cancellation and durable execution history. Four exact IDs distinguish analysis/optimization and the Windows volume/all volumes; the Windows volume resolves from the shared OS directory to a validated volume GUID. Only tools actually needed by the selected plan are resolved. No drive-letter guess, shell, parallel defrag or raised priority is introduced. Exit0 means the native command completed, not verified health, performance or coverage of every volume. Optimization has no undo.
+
+Delete-notification inspection is a separate worker and CLI query, never an implicit scan or policy write. Independent NTFS/ReFS states preserve enabled, disabled, not set and unknown; malformed, duplicate or failed output is observable. Preview does not read local disks as Windows evidence. Legacy optimize_storage maps exactly to all-volume optimization, while enable_trim remains manual because a single original value cannot represent independent or unset filesystem policy states. Sources, bounds and device gaps are recorded in STORAGE.md.
+
 ## 0.6 active-scheme AC power domain
 
 Power choices use a separate trusted catalog of16values in5mutually exclusive groups. A native PowrProf adapter captures the active scheme once, reads all original AC values before mutation, persists a keyed and chained original-value journal, then writes, reactivates the same scheme and verifies readback. External scheme/value changes stop the operation; restoration accepts only recorded original or desired values and refuses to activate a different scheme. Power journals share recovery.key and mutation.lock with existing domains, with independent filename/path/content/bounds validation. No scheme creation, DC mutation, CPU or hibernation control is introduced.

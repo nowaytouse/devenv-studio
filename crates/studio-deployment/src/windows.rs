@@ -8,7 +8,11 @@ use std::{
     ffi::{OsString, c_void},
     fs::{self, File, OpenOptions},
     io::Write,
-    os::windows::{ffi::OsStringExt, fs::OpenOptionsExt, io::AsRawHandle},
+    os::windows::{
+        ffi::{OsStrExt, OsStringExt},
+        fs::OpenOptionsExt,
+        io::AsRawHandle,
+    },
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -45,7 +49,9 @@ unsafe extern "system" {
 }
 #[link(name = "kernel32")]
 unsafe extern "system" {
-    fn GetWindowsDirectoryW(buffer: *mut u16, size: u32) -> u32;
+    fn GetSystemWindowsDirectoryW(buffer: *mut u16, size: u32) -> u32;
+    fn GetVolumePathNameW(file: *const u16, volume: *mut u16, size: u32) -> i32;
+    fn GetVolumeNameForVolumeMountPointW(mount: *const u16, name: *mut u16, size: u32) -> i32;
     fn DeviceIoControl(
         handle: *mut c_void,
         code: u32,
@@ -109,10 +115,10 @@ fn known_folder(folder: &Guid) -> Result<PathBuf> {
 }
 fn windows_directory() -> Result<PathBuf> {
     let mut buffer = [0u16; 32768];
-    let len = unsafe { GetWindowsDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) };
+    let len = unsafe { GetSystemWindowsDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) };
     ensure!(
         len > 0 && (len as usize) < buffer.len(),
-        "GetWindowsDirectoryW failed: {}",
+        "GetSystemWindowsDirectoryW failed: {}",
         std::io::Error::last_os_error()
     );
     let path = PathBuf::from(OsString::from_wide(&buffer[..len as usize]));
@@ -121,6 +127,77 @@ fn windows_directory() -> Result<PathBuf> {
         "System Windows directory is not absolute"
     );
     Ok(path)
+}
+fn system_volume() -> Result<String> {
+    let path: Vec<u16> = windows_directory()?
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let mut mount = [0u16; 32768];
+    // SAFETY: both API outputs are bounded, writable UTF-16 buffers.
+    ensure!(
+        unsafe { GetVolumePathNameW(path.as_ptr(), mount.as_mut_ptr(), mount.len() as u32) } != 0,
+        "Resolve Windows system mount point: {}",
+        std::io::Error::last_os_error()
+    );
+    ensure!(
+        mount.contains(&0),
+        "Windows volume mount point is not terminated"
+    );
+    let mut name = [0u16; 50];
+    ensure!(
+        unsafe {
+            GetVolumeNameForVolumeMountPointW(mount.as_ptr(), name.as_mut_ptr(), name.len() as u32)
+        } != 0,
+        "Resolve Windows system volume GUID: {}",
+        std::io::Error::last_os_error()
+    );
+    let len = name
+        .iter()
+        .position(|&unit| unit == 0)
+        .context("Windows volume GUID is not terminated")?;
+    let volume =
+        String::from_utf16(&name[..len]).context("Windows volume GUID is not valid UTF-16")?;
+    ensure!(
+        crate::storage::valid_volume_guid(&volume),
+        "Windows returned an invalid volume GUID path"
+    );
+    Ok(volume)
+}
+fn system_tool(name: &str) -> Result<PathBuf> {
+    let program = windows_directory()?.join("System32").join(name);
+    ensure!(
+        program.is_file(),
+        "Native System32 {name} is unavailable; no PATH fallback is allowed"
+    );
+    Ok(program)
+}
+pub(super) fn storage_status(cancel: Arc<AtomicBool>) -> Result<crate::StorageStatus> {
+    let detected = studio_platform::host();
+    ensure!(
+        detected.can_apply && detected.target.is_some(),
+        "Storage policy inspection requires a supported Windows LTSC host: {}",
+        detected.explanation
+    );
+    ensure!(
+        unsafe { IsUserAnAdmin() } != 0,
+        "Reading fsutil policy requires an already elevated administrator process. No elevation was attempted."
+    );
+    let command = Invocation {
+        program: system_tool("fsutil.exe")?,
+        args: vec![
+            "behavior".into(),
+            "query".into(),
+            "DisableDeleteNotify".into(),
+        ],
+        vscode_node: false,
+        npm_node: false,
+    };
+    let mut runner = DeadlineRunner {
+        deadline: Instant::now() + Duration::from_secs(45),
+    };
+    crate::storage::inspect_with_runner(&command, &mut runner, &cancel)
 }
 fn program_files() -> Result<PathBuf> {
     let key = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(
@@ -424,23 +501,51 @@ pub(super) fn provider_capabilities() -> Vec<ProviderCapability> {
     }
     capabilities
 }
-fn tools(require_winget: bool) -> Result<Tools> {
-    let system = windows_directory()?.join("System32");
-    let dism = system.join("dism.exe");
-    let sfc = system.join("sfc.exe");
-    ensure!(
-        dism.is_file() && sfc.is_file(),
-        "Native System32 DISM/SFC is unavailable; no PATH fallback is allowed"
-    );
-    let winget = if require_winget {
-        Some(winget_path().with_context(|| winget_capability().detail)?)
-    } else {
-        None
-    };
+fn tools(plan: &DeploymentPlan) -> Result<Tools> {
+    let winget = plan
+        .tasks
+        .iter()
+        .any(|task| task.kind == "package")
+        .then(|| winget_path().with_context(|| winget_capability().detail))
+        .transpose()?;
+    let dism = plan
+        .tasks
+        .iter()
+        .any(|task| {
+            task.kind == "feature"
+                || matches!(
+                    task.id.as_str(),
+                    "maintenance-check-health"
+                        | "maintenance-scan-health"
+                        | "maintenance-restore-health"
+                )
+        })
+        .then(|| system_tool("dism.exe"))
+        .transpose()?;
+    let sfc = plan
+        .tasks
+        .iter()
+        .any(|task| task.id == "maintenance-sfc-verify")
+        .then(|| system_tool("sfc.exe"))
+        .transpose()?;
+    let defrag = plan
+        .tasks
+        .iter()
+        .any(|task| crate::storage::is_task(&task.id))
+        .then(|| system_tool("defrag.exe"))
+        .transpose()?;
+    let system_volume = plan
+        .tasks
+        .iter()
+        .any(|task| crate::storage::is_task(&task.id) && task.id.ends_with("-system"))
+        .then(system_volume)
+        .transpose()?;
     Ok(Tools {
         winget,
         dism,
         sfc,
+        defrag,
+        system_volume,
         developer: developer_tool,
     })
 }
@@ -455,11 +560,11 @@ fn host(target: studio_core::Target) -> Result<()> {
 }
 pub(super) fn inspect(plan: DeploymentPlan, cancel: Arc<AtomicBool>) -> Result<Vec<Detection>> {
     host(plan.target)?;
-    let tools = tools(plan.tasks.iter().any(|t| t.kind == "package"))?;
+    let tools = tools(&plan)?;
     if plan.tasks.iter().any(|t| t.requires_admin) {
         ensure!(
             unsafe { IsUserAnAdmin() } != 0,
-            "Inspecting DISM feature state requires an already elevated administrator process. No elevation was attempted."
+            "Inspecting selected features or system maintenance tasks requires an already elevated administrator process. No elevation was attempted."
         );
     }
     let mut runner = DeadlineRunner {
@@ -486,7 +591,16 @@ impl Runner for DeadlineRunner {
             remaining > Duration::ZERO,
             "The 90-minute deployment session limit was reached"
         );
-        crate::process::run_bounded(command, cancel, remaining)
+        let timeout = if command
+            .program
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case("defrag.exe"))
+        {
+            remaining.min(Duration::from_secs(45 * 60))
+        } else {
+            remaining
+        };
+        crate::process::run_bounded(command, cancel, timeout)
     }
 }
 struct FileHistory {
@@ -528,7 +642,7 @@ pub(super) fn execute(
             "Selected features/maintenance require an already elevated administrator process. No elevation was attempted; no task ran."
         );
     }
-    let tools = tools(plan.tasks.iter().any(|t| t.kind == "package"))?;
+    let tools = tools(&plan)?;
     let data = studio_platform::data_directory()?;
     directory(&data)?;
     let lock_path = data.join("mutation.lock");

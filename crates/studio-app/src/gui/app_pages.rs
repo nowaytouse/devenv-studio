@@ -503,12 +503,12 @@ impl Studio {
                     "1. Choose a Windows target. A preview target does not mean that device has been detected.",
                 ),
                 (
-                    "2. 逐项勾选系统设置、电源参数、软件、功能或维护任务，也可先检查一个配置组合。",
-                    "2. Select settings, power values, software, features or maintenance tasks individually, or review a preset first.",
+                    "2. 逐项勾选系统设置、电源参数、存储、软件、功能或维护任务，也可先检查一个配置组合。",
+                    "2. Select settings, power values, storage, software, features or maintenance tasks individually, or review a preset first.",
                 ),
                 (
-                    "3. 检查所选项目状态，进入变更方案核对确切注册表值、AC 参数、包 ID、权限和限制。",
-                    "3. Inspect selected items, then review exact registry values, AC parameters, package IDs, permissions and limits in the plan.",
+                    "3. 检查所选项目状态，进入变更方案核对确切注册表值、AC 参数、磁盘操作范围、包 ID、权限和限制。",
+                    "3. Inspect selected items, then review exact registry values, AC parameters, disk operation scope, package IDs, permissions and limits in the plan.",
                 ),
                 (
                     "4. 可导出完整方案或保存档案；在受支持的 Windows 本机上分别确认系统设置、电源与部署执行。",

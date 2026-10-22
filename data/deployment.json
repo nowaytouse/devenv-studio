@@ -1,5 +1,5 @@
 {
-  "revision": "2026-10-23.1",
+  "revision": "2026-10-23.2",
   "tasks": [
     {
       "id": "software-7zip-7zip",
@@ -810,6 +810,86 @@
       "evidence": [
         "https://learn.microsoft.com/windows-hardware/manufacture/desktop/repair-a-windows-image?view=windows-11",
         "https://learn.microsoft.com/windows-server/administration/windows-commands/sfc"
+      ],
+      "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "storage-analyze-system",
+      "title": "分析 Windows 系统卷",
+      "description": "对运行时解析出的 Windows 系统卷执行 defrag /A /U，只分析，不执行优化；不假定 Windows 位于 C:。",
+      "category": "storage",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "无需重启；不会自动重启",
+      "limitations": "需要已有管理员权限。命令使用默认低优先级并显示进度，不启用正常优先级或多卷并行。执行历史只记录命令结果，不是健康证明、性能保证或回滚点；优化产生的数据布局变化无法由此应用撤销。请审核实际命令输出；取消或失败不撤销已完成的部分。",
+      "evidence": [
+        "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/defrag",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/installer.rs#L1551-L1602"
+      ],
+      "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "storage-optimize-system",
+      "title": "优化 Windows 系统卷",
+      "description": "对运行时解析出的 Windows 系统卷执行 defrag /O /U，由 Windows 按介质类型选择适当操作；不会强制传统碎片整理或改变 TRIM 通知策略。",
+      "category": "storage",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "无需重启；不会自动重启",
+      "limitations": "需要已有管理员权限。命令使用默认低优先级并显示进度，不启用正常优先级或多卷并行。执行历史只记录命令结果，不是健康证明、性能保证或回滚点；优化产生的数据布局变化无法由此应用撤销。请审核实际命令输出；取消或失败不撤销已完成的部分。",
+      "evidence": [
+        "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/defrag",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/installer.rs#L1551-L1602"
+      ],
+      "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "storage-analyze-all",
+      "title": "分析所有卷",
+      "description": "执行 defrag /C /A /U，只分析，不执行优化。/C 请求处理所有卷，可能包括可移动卷；不限制为固定磁盘，Windows 会判定卷是否受支持。",
+      "category": "storage",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "无需重启；不会自动重启",
+      "limitations": "需要已有管理员权限。命令使用默认低优先级并显示进度，不启用正常优先级或多卷并行。执行历史只记录命令结果，不是健康证明、性能保证或回滚点；优化产生的数据布局变化无法由此应用撤销。请审核实际命令输出；取消或失败不撤销已完成的部分。",
+      "evidence": [
+        "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/defrag",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/installer.rs#L1551-L1602"
+      ],
+      "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "storage-optimize-all",
+      "title": "优化所有卷",
+      "description": "执行 defrag /C /O /U，由 Windows 按介质类型选择适当操作。/C 请求处理所有卷，可能包括可移动卷；不限制为固定磁盘，不改变 TRIM 通知策略。",
+      "category": "storage",
+      "kind": "maintenance",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": true,
+      "restart": "无需重启；不会自动重启",
+      "limitations": "需要已有管理员权限。命令使用默认低优先级并显示进度，不启用正常优先级或多卷并行。执行历史只记录命令结果，不是健康证明、性能保证或回滚点；优化产生的数据布局变化无法由此应用撤销。请审核实际命令输出；取消或失败不撤销已完成的部分。",
+      "evidence": [
+        "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/defrag",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/installer.rs#L1551-L1602"
       ],
       "package_id": null,
       "feature_name": null

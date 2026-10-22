@@ -19,6 +19,7 @@ use i18n::{lf, t, tx};
 mod app_pages;
 mod hybrid;
 mod power;
+mod storage;
 mod theme;
 
 use theme::palette;
@@ -52,6 +53,7 @@ enum Page {
     Developer,
     Workbench,
     Power,
+    Storage,
     Software,
     Features,
     Maintenance,
@@ -107,6 +109,7 @@ enum WorkerResult {
     Registry(RunReport),
     Power(RunReport),
     Deployment(studio_deployment::DeploymentReport),
+    StorageStatus(Result<studio_deployment::StorageStatus, String>),
     Inspection {
         settings: Vec<studio_platform::SettingState>,
         power: Vec<studio_platform::SettingState>,
@@ -124,6 +127,7 @@ struct Notice {
 struct Studio {
     hybrid: hybrid::HybridState,
     power: power::PowerUiState,
+    storage_status: Option<Result<studio_deployment::StorageStatus, String>>,
     preferences: Preferences,
     saved_preferences: Preferences,
     preferences_error: Option<String>,
@@ -163,6 +167,7 @@ impl Studio {
         let mut app = Self {
             hybrid: hybrid::HybridState::default(),
             power: power::PowerUiState::default(),
+            storage_status: None,
             saved_preferences: preferences.clone(),
             preferences,
             preferences_error,
@@ -270,6 +275,28 @@ impl Studio {
                     ),
                     error: report.cancelled,
                 },
+                Ok(WorkerResult::StorageStatus(result)) => {
+                    let notice = match &result {
+                        Ok(status) => Notice {
+                            text: if status.preview {
+                                tx(
+                                    "存储状态为预览，未读取 Windows。",
+                                    "Storage status is a preview; Windows was not inspected.",
+                                )
+                                .into()
+                            } else {
+                                tx("已读取删除通知策略；这不验证硬件 TRIM 效果。", "Delete-notification policy read; hardware TRIM operation was not verified.").into()
+                            },
+                            error: false,
+                        },
+                        Err(error) => Notice {
+                            text: error.clone(),
+                            error: true,
+                        },
+                    };
+                    self.storage_status = Some(result);
+                    notice
+                }
                 Ok(WorkerResult::Deployment(report)) => Notice {
                     text: lf!(
                         "{}\n完成 {} 项；失败 {} 项；{}{}执行历史：{}",
@@ -540,6 +567,7 @@ impl Studio {
                                     (Page::Status, tx("状态", "Status")),
                                     (Page::Workbench, t("配置工作台")),
                                     (Page::Power, tx("电源与节能", "Power & energy")),
+                                    (Page::Storage, tx("存储与磁盘", "Storage & disks")),
                                     (Page::Software, t("软件部署")),
                                     (Page::Features, t("Windows 功能")),
                                     (Page::Maintenance, t("系统维护")),
@@ -671,6 +699,7 @@ impl Studio {
                     Page::Developer => tx("开发环境", "Developer tools"),
                     Page::Workbench => t("配置工作台"),
                     Page::Power => tx("电源与节能", "Power & energy"),
+                    Page::Storage => tx("存储与磁盘", "Storage & disks"),
                     Page::Software => t("软件部署"),
                     Page::Features => t("Windows 功能"),
                     Page::Maintenance => t("系统维护"),
@@ -1076,6 +1105,14 @@ impl Studio {
                     "Install tools and extensions with Cargo, uv, NPM and VS Code, using exact identities and recorded outcomes.",
                 ),
             ),
+            Page::Storage => (
+                "storage",
+                tx("存储与磁盘", "Storage & disks"),
+                tx(
+                    "先检查删除通知策略，再明确选择磁盘分析或优化。系统卷与所有卷分别选择，Windows 决定适当的介质优化方式。",
+                    "Inspect delete-notification policy, then explicitly choose disk analysis or optimization. Choose the Windows volume or all volumes; Windows selects the appropriate media operation.",
+                ),
+            ),
             Page::Features => (
                 "features",
                 t("Windows 功能"),
@@ -1102,6 +1139,9 @@ impl Studio {
         self.target_controls(ui);
         if self.page == Page::Developer {
             self.providers_panel(ui);
+        }
+        if self.page == Page::Storage {
+            self.storage_panel(ui);
         }
         if self.page == Page::Software {
             ui.horizontal_wrapped(|ui| {
@@ -1273,8 +1313,8 @@ impl Studio {
                 ui,
                 t("还没有选择项目"),
                 tx(
-                    "从系统设置、电源与节能、软件部署、Windows 功能或系统维护中逐项选择。",
-                    "Choose individual settings, power values, software, Windows features or maintenance tasks.",
+                    "从系统设置、电源与节能、存储与磁盘、软件部署、Windows 功能或系统维护中逐项选择。",
+                    "Choose individual settings, power values, storage operations, software, Windows features or maintenance tasks.",
                 ),
             );
             return;
@@ -1858,6 +1898,7 @@ impl eframe::App for Studio {
                             Page::Software
                             | Page::Developer
                             | Page::Features
+                            | Page::Storage
                             | Page::Maintenance => self.deployment_page(ui),
                             Page::Plan => self.plan(ui),
                             Page::Recovery => self.recovery(ui),
@@ -2129,6 +2170,9 @@ fn registry_details(ui: &mut egui::Ui, action: &studio_core::Action) {
 }
 
 fn task_identity(task: &studio_deployment::Task) -> String {
+    if task.category == "storage" {
+        return storage::task_command(&task.id).unwrap_or_else(|| task.id.clone());
+    }
     if let Some(id) = &task.package_id {
         if task.kind == "package" {
             lf!("WinGet 软件包：{id}", "WinGet package: {id}", id = id)
@@ -2276,6 +2320,7 @@ mod tests {
         Studio {
             hybrid: hybrid::HybridState::default(),
             power: power::PowerUiState::default(),
+            storage_status: None,
             preferences: Preferences::default(),
             saved_preferences: Preferences::default(),
             preferences_error: None,
@@ -2547,6 +2592,7 @@ mod tests {
             Page::Developer,
             Page::Workbench,
             Page::Power,
+            Page::Storage,
             Page::Software,
             Page::Features,
             Page::Maintenance,
@@ -2588,6 +2634,8 @@ mod tests {
                     .find(|task| task.targets.contains(&app.target))
                     .unwrap();
                 app.deployment_selected.insert(task.id.clone());
+                app.deployment_selected
+                    .insert("storage-analyze-system".into());
                 app.power_selected
                     .insert(studio_platform::power::catalog().unwrap()[0].id.clone());
                 let selection = (
@@ -2621,6 +2669,7 @@ mod tests {
                                     Page::Software
                                     | Page::Developer
                                     | Page::Features
+                                    | Page::Storage
                                     | Page::Maintenance => app.deployment_page(ui),
                                     Page::Plan => app.plan(ui),
                                     Page::Recovery => app.recovery(ui),
@@ -2810,7 +2859,8 @@ mod tests {
     }
 
     #[test]
-    fn power_gui_profile_roundtrip_export_and_legacy_load_are_exact() -> anyhow::Result<()> {
+    fn power_and_storage_gui_profile_roundtrip_export_and_legacy_load_are_exact()
+    -> anyhow::Result<()> {
         struct TestDirectory(PathBuf);
         impl Drop for TestDirectory {
             fn drop(&mut self) {
@@ -2830,6 +2880,8 @@ mod tests {
         app.catalog = Ok(studio_core::load_catalog()?);
         let power_id = studio_platform::power::catalog()?[0].id.clone();
         app.power_selected.insert(power_id.clone());
+        app.deployment_selected
+            .insert("storage-analyze-system".into());
         let settings = studio_core::Profile {
             schema_version: studio_core::SCHEMA_VERSION,
             target: app.target,
@@ -2844,11 +2896,19 @@ mod tests {
         let document: serde_json::Value = serde_json::from_slice(&std::fs::read(export_path)?)?;
         assert_eq!(document["schema_version"], 3);
         assert_eq!(document["power"]["choices"][0]["id"], power_id);
+        assert_eq!(
+            document["deployment"]["tasks"][0]["id"],
+            "storage-analyze-system"
+        );
         app.clear_selection();
         app.file_operation(FileOperation::Load, profile_path)
             .map_err(anyhow::Error::msg)?;
         assert_eq!(app.power_selected, BTreeSet::from([power_id.clone()]));
-        assert_eq!(app.selection_count(), 1);
+        assert_eq!(
+            app.deployment_selected,
+            BTreeSet::from(["storage-analyze-system".into()])
+        );
+        assert_eq!(app.selection_count(), 2);
         for (name, legacy) in [
             ("v1.json", serde_json::to_value(&settings)?),
             (
@@ -2862,9 +2922,40 @@ mod tests {
             app.file_operation(FileOperation::Load, path)
                 .map_err(anyhow::Error::msg)?;
             assert!(app.power_selected.is_empty());
+            assert!(app.deployment_selected.is_empty());
         }
         assert!(app.worker.is_none());
         Ok(())
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn storage_inspection_preview_is_retained_after_worker_completion() {
+        let mut app = preview();
+        app.start_storage_status();
+        app.worker
+            .as_mut()
+            .unwrap()
+            .thread
+            .take()
+            .unwrap()
+            .join()
+            .unwrap();
+        app.poll_worker(&egui::Context::default());
+        assert!(app.worker.is_none());
+        assert!(
+            app.storage_status
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .preview
+        );
+        assert!(app.selected.is_empty());
+        assert!(app.deployment_selected.is_empty());
+        assert!(!app.mutation_available());
+        app.notice = None;
+        assert!(app.storage_status.is_some());
     }
 
     #[test]

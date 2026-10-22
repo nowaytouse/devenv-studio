@@ -15,8 +15,10 @@ use std::{
 
 pub(crate) struct Tools {
     pub winget: Option<PathBuf>,
-    pub dism: PathBuf,
-    pub sfc: PathBuf,
+    pub dism: Option<PathBuf>,
+    pub sfc: Option<PathBuf>,
+    pub defrag: Option<PathBuf>,
+    pub system_volume: Option<String>,
     pub developer: fn(&str) -> Result<DeveloperTool>,
 }
 pub(crate) struct DeveloperTool {
@@ -79,13 +81,13 @@ fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
             if !inspect {
                 args.extend(["/All".into(), "/NoRestart".into()]);
             }
-            (tools.dism.clone(), args)
+            (tools.dism.clone().context("DISM is unavailable")?, args)
         }
         "maintenance" => {
             ensure!(!inspect, "Maintenance detection does not run scans");
             match task.id.as_str() {
                 "maintenance-check-health" => (
-                    tools.dism.clone(),
+                    tools.dism.clone().context("DISM is unavailable")?,
                     vec![
                         "/English".into(),
                         "/Online".into(),
@@ -95,7 +97,7 @@ fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
                     ],
                 ),
                 "maintenance-scan-health" => (
-                    tools.dism.clone(),
+                    tools.dism.clone().context("DISM is unavailable")?,
                     vec![
                         "/English".into(),
                         "/Online".into(),
@@ -105,7 +107,7 @@ fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
                     ],
                 ),
                 "maintenance-restore-health" => (
-                    tools.dism.clone(),
+                    tools.dism.clone().context("DISM is unavailable")?,
                     vec![
                         "/English".into(),
                         "/Online".into(),
@@ -114,7 +116,17 @@ fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
                         "/NoRestart".into(),
                     ],
                 ),
-                "maintenance-sfc-verify" => (tools.sfc.clone(), vec!["/verifyonly".into()]),
+                "maintenance-sfc-verify" => (
+                    tools.sfc.clone().context("SFC is unavailable")?,
+                    vec!["/verifyonly".into()],
+                ),
+                id if crate::storage::is_task(id) => (
+                    tools
+                        .defrag
+                        .clone()
+                        .context("Native defrag is unavailable")?,
+                    crate::storage::arguments(id, tools.system_volume.as_deref())?,
+                ),
                 _ => anyhow::bail!("Unsupported maintenance task"),
             }
         }
@@ -439,7 +451,7 @@ pub(crate) fn detect(
         return Ok(Detection {
             id: task.id.clone(),
             state: "ready".into(),
-            detail: "尚未运行维护命令；检查状态不会自动启动扫描或修复。".into(),
+            detail: "尚未运行维护命令；检查状态不会自动启动扫描、修复、分析或磁盘优化。".into(),
         });
     }
     let command = invocation(tools, task, true)?;
@@ -520,7 +532,9 @@ fn checked_success(task: &Task, output: &Output) -> Result<bool> {
     Ok(reboot)
 }
 fn completed_with_reboot(task: &Task, code: u32) -> bool {
-    (matches!(task.kind.as_str(), "package" | "feature" | "maintenance") && code == 3010)
+    (matches!(task.kind.as_str(), "package" | "feature" | "maintenance")
+        && !crate::storage::is_task(&task.id)
+        && code == 3010)
         || (task.kind == "package" && code == 0x8a150109)
 }
 fn any_reboot_required(task: &Task, code: u32) -> bool {
@@ -607,6 +621,15 @@ pub(crate) fn run_plan(
             )?;
             let mut reboot = checked_success(task, &output)?;
             if task.kind == "maintenance" {
+                if crate::storage::is_task(&task.id) {
+                    return Ok((
+                        false,
+                        format!(
+                            "存储维护命令完成，退出码 {}；请查看 Windows 输出。此结果不代表所有卷均已优化、磁盘健康或性能改善；不提供优化回滚。",
+                            output.code
+                        ),
+                    ));
+                }
                 return Ok((
                     reboot,
                     format!(
@@ -733,8 +756,10 @@ mod tests {
     fn tools() -> Tools {
         Tools {
             winget: Some("/trusted/winget.exe".into()),
-            dism: "/trusted/dism.exe".into(),
-            sfc: "/trusted/sfc.exe".into(),
+            dism: Some("/trusted/dism.exe".into()),
+            sfc: Some("/trusted/sfc.exe".into()),
+            defrag: Some("/trusted/defrag.exe".into()),
+            system_volume: Some(r"\\?\Volume{928842df-5a01-11de-a85c-806e6f6e6963}\".into()),
             developer: fake_developer,
         }
     }
@@ -980,6 +1005,108 @@ mod tests {
         assert!(invocation(&tools(), &task, false).is_err());
         task.kind = "shell".into();
         assert!(invocation(&tools(), &task, false).is_err());
+    }
+    #[test]
+    fn storage_maintenance_is_opt_in_and_does_not_claim_optimization_verification() {
+        for id in [
+            "storage-analyze-system",
+            "storage-optimize-system",
+            "storage-analyze-all",
+            "storage-optimize-all",
+        ] {
+            let mut p = plan("maintenance");
+            p.tasks[0].id = id.into();
+            p.tasks[0].category = "storage".into();
+            let cancel = Arc::new(AtomicBool::new(false));
+            let mut fake = Fake {
+                outputs: VecDeque::from([output(0, "Windows report")]),
+                calls: vec![],
+                cancel: None,
+            };
+            let mut chosen_tools = tools();
+            chosen_tools.dism = None;
+            chosen_tools.sfc = None;
+            let detection = detect(&p.tasks[0], &chosen_tools, &mut fake, &cancel).unwrap();
+            assert_eq!(detection.state, "ready");
+            assert!(fake.calls.is_empty());
+            let mut history = Log::default();
+            let out = run_plan(&p, &chosen_tools, &mut fake, &mut history, &cancel, None).unwrap();
+            assert_eq!(
+                (out.completed, out.failed, out.restart_required),
+                (1, 0, false)
+            );
+            assert_eq!(fake.calls.len(), 1);
+            assert_eq!(fake.calls[0].program, PathBuf::from("/trusted/defrag.exe"));
+            assert!(
+                !fake.calls[0]
+                    .args
+                    .iter()
+                    .any(|arg| matches!(arg.as_str(), "/H" | "/M" | "/D"))
+            );
+            let intent = history
+                .values
+                .iter()
+                .find(|event| event["event"] == "intent")
+                .unwrap();
+            assert_eq!(intent["program"], "/trusted/defrag.exe");
+            assert_eq!(
+                intent["args"],
+                serde_json::to_value(&fake.calls[0].args).unwrap()
+            );
+            assert!(out.detail.contains("不代表"));
+            assert!(
+                history
+                    .values
+                    .iter()
+                    .all(|event| event["event"] != "verification")
+            );
+            for result in [
+                output(3010, "unexpected status"),
+                output(5, "denied"),
+                Ok(Output {
+                    timed_out: true,
+                    ..output(0, "").unwrap()
+                }),
+                Err(anyhow::anyhow!("incomplete output capture")),
+            ] {
+                let mut fake = Fake {
+                    outputs: VecDeque::from([result]),
+                    calls: vec![],
+                    cancel: None,
+                };
+                let out = run_plan(
+                    &p,
+                    &chosen_tools,
+                    &mut fake,
+                    &mut Log::default(),
+                    &cancel,
+                    None,
+                )
+                .unwrap();
+                assert_eq!(
+                    (out.completed, out.failed, out.restart_required),
+                    (0, 1, false)
+                );
+            }
+            let cancelled = Arc::new(AtomicBool::new(true));
+            let mut fake = Fake {
+                outputs: VecDeque::new(),
+                calls: vec![],
+                cancel: None,
+            };
+            let outcome = run_plan(
+                &p,
+                &chosen_tools,
+                &mut fake,
+                &mut Log::default(),
+                &cancelled,
+                None,
+            )
+            .unwrap();
+            assert!(outcome.cancelled);
+            assert_eq!(outcome.completed, 0);
+            assert!(fake.calls.is_empty());
+        }
     }
     fn developer_task(kind: &str, id: &str) -> Task {
         let mut task = plan("package").tasks.remove(0);

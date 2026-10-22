@@ -709,6 +709,34 @@
       "restart": "Follow command output; no automatic restart.",
       "limitations": "Execution history stores command results; it is not a system image or rollback point. Command completion does not prove the system is healthy or that repair succeeded. Review DISM/CBS logs and actual output. Cancellation terminates the launched process, but Windows servicing or installer descendants may continue. Each command has a 90-minute limit."
     },
+    "storage-analyze-system": {
+      "title": "Analyze Windows system volume",
+      "description": "Run defrag /A /U on the Windows system volume resolved at runtime. Analysis only; no optimization. Does not assume Windows is on C:.",
+      "category": "Storage",
+      "restart": "No restart required; no automatic restart.",
+      "limitations": "Requires existing administrator access. Uses the default low priority and reports progress without normal-priority or parallel-volume switches. Execution history records command results, not proof of health, a performance guarantee or a rollback point. This app cannot undo optimization layout changes. Review actual command output; cancellation or failure does not undo completed work."
+    },
+    "storage-optimize-system": {
+      "title": "Optimize Windows system volume",
+      "description": "Run defrag /O /U on the Windows system volume resolved at runtime. Windows chooses the proper operation for each media type; does not force traditional defragmentation or change TRIM notification policy.",
+      "category": "Storage",
+      "restart": "No restart required; no automatic restart.",
+      "limitations": "Requires existing administrator access. Uses the default low priority and reports progress without normal-priority or parallel-volume switches. Execution history records command results, not proof of health, a performance guarantee or a rollback point. This app cannot undo optimization layout changes. Review actual command output; cancellation or failure does not undo completed work."
+    },
+    "storage-analyze-all": {
+      "title": "Analyze all volumes",
+      "description": "Run defrag /C /A /U for analysis only. /C requests all volumes, which may include removable volumes; it is not limited to fixed drives. Windows determines volume support.",
+      "category": "Storage",
+      "restart": "No restart required; no automatic restart.",
+      "limitations": "Requires existing administrator access. Uses the default low priority and reports progress without normal-priority or parallel-volume switches. Execution history records command results, not proof of health, a performance guarantee or a rollback point. This app cannot undo optimization layout changes. Review actual command output; cancellation or failure does not undo completed work."
+    },
+    "storage-optimize-all": {
+      "title": "Optimize all volumes",
+      "description": "Run defrag /C /O /U and let Windows choose the proper operation for each media type. /C requests all volumes and may include removable volumes, not only fixed drives. Does not change TRIM notification policy.",
+      "category": "Storage",
+      "restart": "No restart required; no automatic restart.",
+      "limitations": "Requires existing administrator access. Uses the default low priority and reports progress without normal-priority or parallel-volume switches. Execution history records command results, not proof of health, a performance guarantee or a rollback point. This app cannot undo optimization layout changes. Review actual command output; cancellation or failure does not undo completed work."
+    },
     "software-winutil-abdownloadmanager": {
       "title": "AB Download Manager",
       "description": "WinUtil lists this under utilities. Installs AB Download Manager through WinGet; review the publisher's terms, setup, and suitability before proceeding.",

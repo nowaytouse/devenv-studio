@@ -2,7 +2,7 @@
 
 用 Rust 构建的 Windows LTSC 配置工作台。自己选择配置，先看清变更，再应用；macOS 与 Linux 可以使用同一个原生界面预览和保存方案。
 
-当前为 0.6.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、26 个开发工具/扩展、7 个 Windows 可选功能、4 个维护任务，以及五组16个插电电源选项。所有选择默认关闭。
+当前为 0.7.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、26 个开发工具/扩展、7 个 Windows 可选功能、4 个系统维护任务、4 个存储分析/优化任务，以及五组16个插电电源选项。所有选择默认关闭。
 
 ## 配置覆盖
 
@@ -15,6 +15,7 @@
 | 开发环境 | 8个Cargo工具、4个uv工具、6个NPM工具、8个VS Code扩展；通过现有执行器检查、安装并回查 |
 | Windows 功能 | .NET 3.5、WSL 系统组件、虚拟机平台、Hyper-V、Windows 沙盒、打印为 PDF、工作文件夹 |
 | 电源与节能 | 当前活动方案的插电显示器、睡眠、磁盘空闲、USB和PCIe节能参数；独立原值记录、回查与冲突保护恢复 |
+| 存储与磁盘 | Windows系统卷/所有卷的分析与按介质优化；独立NTFS/ReFS删除通知策略检查，不修改通知策略 |
 | 系统维护 | DISM 快速检查、完整扫描、组件存储修复，以及 SFC 只读验证 |
 
 58 是可选方案数量，包含同一设置的不同取值，对应 40 组独立设置。各项按实际 LTSC 版本开放；同组的不同取值互斥。三个起步预设可显式载入并继续修改，不会自动应用。
@@ -38,6 +39,12 @@ NPM仅使用官方Node.js安装中的node.exe与随附npm-cli.js，以固定的�
 电源页提供五组16个AC选项，同组取值互斥。修改当前活动方案前捕获方案GUID与实际原值，持久化认证日志后写入，再重新应用同一方案并回查。电源恢复独立显示；若活动方案切换、参数被外部修改或原生调用失败，会停止并保留日志。它不创建卓越性能方案，不改电池DC参数或CPU/休眠设置。Windows硬件与组织策略可能限制实际效果；详见[电源范围与恢复](docs/POWER.md)。
 
 新的v3工作区可一起保存系统设置、部署任务与电源选择，并继续读取v1/v2旧档案（电源为空）。旧工具创建/切换卓越性能方案的字段不会被自动替换为局部AC修改。
+
+## 存储与磁盘
+
+磁盘分析与优化各有系统卷、所有卷两个明确范围。系统卷在Windows执行时解析为真实卷GUID，不假定C盘；所有卷使用原生`defrag /C`，范围可能包含可移动卷。`/A`只进行分析，`/O`让Windows选择适当的介质优化方式，不自行推断SSD/HDD；所有操作默认低优先级、无并行参数。完成仅表示命令成功退出，不能证明磁盘健康、性能提升或每个卷都优化完成；优化没有通用撤销，结果与原始输出保存在执行历史。
+
+页面的独立只读检查通过`fsutil behavior query DisableDeleteNotify`分别呈现NTFS/ReFS通知策略，未知或本地化未识别内容不会被推定为开启。删除通知开启不等于设备已执行TRIM。当前不改TRIM策略；旧档案的`enable_trim`仍需手动处理，`optimize_storage`只映射全部卷优化，不隐含启用TRIM。详见[存储范围与执行证据](docs/STORAGE.md)。
 
 ## 应用界面与偏好
 
@@ -89,6 +96,8 @@ cargo run -p ltsc-studio
 cargo run -p ltsc-studio -- catalog
 cargo run -p ltsc-studio -- tasks
 cargo run -p ltsc-studio -- power
+cargo run -p ltsc-studio -- storage-status
+cargo run -p ltsc-studio -- plan --profile examples/storage-workspace.json
 cargo run -p ltsc-studio -- plan --profile examples/power-workspace.json
 cargo run -p ltsc-studio -- plan --target win11-ltsc-2024 --recipe rust
 cargo run -p ltsc-studio -- migrate --target win11-ltsc-2024 --input examples/migration-profile.json

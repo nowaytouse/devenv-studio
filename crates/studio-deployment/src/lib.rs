@@ -14,10 +14,12 @@ mod engine;
 mod history;
 #[cfg(any(windows, test))]
 mod process;
+mod storage;
 #[cfg(windows)]
 mod windows;
 
 pub use history::{HistoryEvidence, HistoryRecord, HistoryTask, history};
+pub use storage::{NotificationState, StorageStatus};
 
 pub const MAX_SESSION_TASKS: usize = 128;
 
@@ -198,17 +200,18 @@ pub fn catalog() -> Result<Catalog> {
             }
             "maintenance" => {
                 ensure!(
-                    task.category == "maintenance"
-                        && task.requires_admin
-                        && task.package_id.is_none()
-                        && task.feature_name.is_none()
+                    ((task.category == "maintenance"
                         && matches!(
                             task.id.as_str(),
                             "maintenance-check-health"
                                 | "maintenance-scan-health"
                                 | "maintenance-restore-health"
                                 | "maintenance-sfc-verify"
-                        ),
+                        ))
+                        || (task.category == "storage" && storage::is_task(&task.id)))
+                        && task.requires_admin
+                        && task.package_id.is_none()
+                        && task.feature_name.is_none(),
                     "Unsupported maintenance task"
                 );
             }
@@ -289,6 +292,26 @@ pub fn provider_capabilities() -> Vec<ProviderCapability> {
         ["winget","cargo","uv","vscode","npm"].into_iter().map(|provider|ProviderCapability{provider:provider.into(),available:false,detail:"Windows deployment provider discovery is unavailable in preview. No local developer tools or Windows installations were inspected.".into()}).collect()
     }
 }
+/// Reads filesystem notification policy only; never scans, optimizes or changes a volume.
+pub fn storage_status(cancel: Arc<AtomicBool>) -> Result<StorageStatus> {
+    ensure!(
+        !cancel.load(std::sync::atomic::Ordering::Acquire),
+        "Storage inspection cancelled"
+    );
+    #[cfg(windows)]
+    {
+        windows::storage_status(cancel)
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(StorageStatus {
+            preview: true,
+            ntfs: NotificationState::Unknown,
+            refs: NotificationState::Unknown,
+            detail: "Preview only. No Windows filesystem, device TRIM support or optimization state was inspected.".into(),
+        })
+    }
+}
 pub fn inspect(
     target: Target,
     selected: &BTreeSet<String>,
@@ -351,6 +374,19 @@ pub fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn storage_preview_does_not_invent_a_windows_policy() {
+        #[cfg(not(windows))]
+        {
+            let status = storage_status(Arc::new(AtomicBool::new(false))).unwrap();
+            assert!(status.preview);
+            assert_eq!(
+                (status.ntfs, status.refs),
+                (NotificationState::Unknown, NotificationState::Unknown)
+            );
+            assert!(storage_status(Arc::new(AtomicBool::new(true))).is_err());
+        }
+    }
     #[test]
     fn catalog_tasks_rebuild_exactly_without_default_selection() {
         let c = catalog().unwrap();

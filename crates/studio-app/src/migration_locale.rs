@@ -4,6 +4,18 @@ use crate::prefs::Language;
 
 const DETAIL_PHRASES: &[(&str, &str)] = &[
     (
+        "Matches the legacy defrag /C /O /U operation: Windows chooses optimization for all volumes, potentially including removable volumes, not only fixed drives. This is a review suggestion; no analysis or TRIM-notification policy change is selected. Optimization has no rollback.",
+        "精确对应旧版 defrag /C /O /U：由 Windows 为所有卷选择适当优化，可能包括可移动卷，并非只处理固定磁盘。这只是审核建议，未选择额外分析或 TRIM 通知策略更改；优化无法回滚。",
+    ),
+    (
+        "No exact reviewed storage-optimization task supports this Windows target. No storage operation was selected.",
+        "没有支持此 Windows 目标且经过审核的精确存储优化任务，未选择任何存储操作。",
+    ),
+    (
+        "TRIM-notification policy requires separate NTFS and ReFS state capture, exact parsing and verified restoration. No fsutil policy write or approximate optimization mapping was selected.",
+        "TRIM 通知策略需要分别记录 NTFS 与 ReFS 状态、精确解析并验证恢复。未选择 fsutil 策略写入，也未近似映射为优化操作。",
+    ),
+    (
         "Legacy power setup creates or switches an Ultimate Performance scheme and may also change CPU and hibernation parameters. Current AC choices modify only the active scheme; no partial or approximate mapping was selected.",
         "旧版电源流程会创建或切换卓越性能方案，还可能修改 CPU 和休眠参数。当前插电选项只修改活动方案，未选择部分或近似映射。",
     ),
@@ -202,6 +214,29 @@ mod tests {
             "PRIVATE_PACKAGE_ID",
             super::requested("PRIVATE_PACKAGE_ID", Language::ZhCn)
         );
+    }
+
+    #[test]
+    fn storage_migration_details_have_chinese_explanations() {
+        let mut profile: serde_json::Value =
+            serde_json::from_slice(include_bytes!("../../../examples/migration-profile.json"))
+                .unwrap();
+        profile["system_tweaks"] =
+            serde_json::json!({"optimize_storage": true, "enable_trim": true});
+        let report = crate::migration::analyze(
+            &serde_json::to_vec(&profile).unwrap(),
+            Target::Win11Ltsc2024,
+        )
+        .unwrap();
+        for item in report
+            .items
+            .iter()
+            .filter(|item| item.origin.starts_with("system_tweaks."))
+        {
+            let translated = super::detail(&item.detail, Language::ZhCn);
+            assert!(contains_cjk(&translated), "{}", item.origin);
+            assert_eq!(super::detail(&item.detail, Language::EnUs), item.detail);
+        }
     }
 
     #[test]

@@ -1,0 +1,16 @@
+{
+  "schema_version": 3,
+  "settings": {
+    "schema_version": 1,
+    "target": "win11_ltsc2024",
+    "selected": [
+      "explorer-extensions"
+    ]
+  },
+  "deployment": [
+    "storage-analyze-system"
+  ],
+  "power": [
+    "power-display-15"
+  ]
+}

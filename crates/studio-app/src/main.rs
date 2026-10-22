@@ -14,6 +14,7 @@ const HELP: &str = concat!("LTSC Studio ", env!("CARGO_PKG_VERSION"), "\nNative 
 List reviewed settings and presets: ltsc-studio catalog
 List software/features/maintenance: ltsc-studio tasks
 List reviewed AC power choices: ltsc-studio power
+Read delete-notification policy only: ltsc-studio storage-status
 Add opt-in AC choices to a plan: ltsc-studio plan --target win11-ltsc-2024 --power <choice-id>
 Build mixed plan: ltsc-studio plan --target win11-ltsc-2024 --select explorer-extensions --tasks software-git-git
 Mixed workspace recipe: ltsc-studio plan --target win11-ltsc-2024 --recipe rust
@@ -205,6 +206,12 @@ fn execute(args: &[String]) -> Result<()> {
                     choice.id, choice.group, choice.value, choice.title[0]
                 );
             }
+        }
+        "storage-status" if args.len() == 1 => {
+            let status = studio_deployment::storage_status(std::sync::Arc::new(
+                std::sync::atomic::AtomicBool::new(false),
+            ))?;
+            println!("{}", serde_json::to_string_pretty(&status)?);
         }
         "migrate" => {
             let (target, input, output) = parse_migration_args(&args[1..])?;

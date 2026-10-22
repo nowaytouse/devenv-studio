@@ -299,6 +299,28 @@ impl Analyzer {
                 } else {
                     self.item(&origin,"false","manual","In the old tool, false skips this tweak; it does not restore or request the opposite value. No opposite setting was selected.",Vec::new(),Vec::new());
                 }
+            } else if key == "optimize_storage" {
+                let enabled = value
+                    .as_bool()
+                    .context("Legacy boolean system tweak has an invalid type")?;
+                if !enabled {
+                    self.item(&origin, "false", "manual", "False means the old operation was skipped, not that an inverse operation should run. No changes were selected.", Vec::new(), Vec::new());
+                } else if let Some(id) = self
+                    .deployment_catalog
+                    .tasks
+                    .iter()
+                    .find(|task| {
+                        task.id == "storage-optimize-all"
+                            && task.kind == "maintenance"
+                            && task.category == "storage"
+                            && task.targets.contains(&self.target)
+                    })
+                    .map(|task| task.id.clone())
+                {
+                    self.item(&origin, "true", "mapped", "Matches the legacy defrag /C /O /U operation: Windows chooses optimization for all volumes, potentially including removable volumes, not only fixed drives. This is a review suggestion; no analysis or TRIM-notification policy change is selected. Optimization has no rollback.", Vec::new(), vec![id]);
+                } else {
+                    self.item(&origin, "true", "manual", "No exact reviewed storage-optimization task supports this Windows target. No storage operation was selected.", Vec::new(), Vec::new());
+                }
             } else if safe_known_tweak(key).is_some() {
                 if matches!(
                     key.as_str(),
@@ -322,6 +344,8 @@ impl Analyzer {
                         .context("Legacy boolean system tweak has an invalid type")?;
                     self.item(&origin,if enabled {"true"} else {"false"},"manual",if matches!(key.as_str(), "activate_ultimate_performance" | "extreme_ac_power_settings") && enabled {
                         "Legacy power setup creates or switches an Ultimate Performance scheme and may also change CPU and hibernation parameters. Current AC choices modify only the active scheme; no partial or approximate mapping was selected."
+                    } else if key == "enable_trim" && enabled {
+                        "TRIM-notification policy requires separate NTFS and ReFS state capture, exact parsing and verified restoration. No fsutil policy write or approximate optimization mapping was selected."
                     } else if key == "create_rollback_journal" {
                         "Legacy rollback-journal preference is not imported. New registry execution always uses its own durable journal and does not consume old rollback files."
                     } else if enabled {
@@ -854,6 +878,58 @@ mod tests {
         assert!(report.settings.contains("privacy-advertising-id"));
         assert!(report.settings.contains("explorer-extensions"));
     }
+    #[test]
+    fn storage_optimization_maps_exact_scope_and_preserves_false_and_trim() {
+        for target in [Target::Win10Ltsc2021, Target::Win11Ltsc2024] {
+            for enabled in [true, false] {
+                let mut value = profile();
+                value["system_tweaks"] =
+                    serde_json::json!({"optimize_storage": enabled, "enable_trim": true});
+                let report = analyze(&serde_json::to_vec(&value).unwrap(), target).unwrap();
+                let optimization = report
+                    .items
+                    .iter()
+                    .find(|item| item.origin == "system_tweaks.optimize_storage")
+                    .unwrap();
+                if enabled {
+                    assert_eq!(optimization.status, "mapped");
+                    assert_eq!(optimization.deployment, ["storage-optimize-all"]);
+                    assert!(optimization.detail.contains("/C /O /U"));
+                    assert!(optimization.detail.contains("including removable volumes"));
+                } else {
+                    assert_eq!(optimization.status, "manual");
+                    assert!(optimization.deployment.is_empty());
+                }
+                let storage: Vec<_> = report
+                    .deployment
+                    .iter()
+                    .filter(|id| id.starts_with("storage-"))
+                    .map(String::as_str)
+                    .collect();
+                assert_eq!(
+                    storage,
+                    if enabled {
+                        vec!["storage-optimize-all"]
+                    } else {
+                        vec![]
+                    }
+                );
+                let trim = report
+                    .items
+                    .iter()
+                    .find(|item| item.origin == "system_tweaks.enable_trim")
+                    .unwrap();
+                assert_eq!(trim.status, "manual");
+                assert!(trim.settings.is_empty() && trim.deployment.is_empty());
+                assert!(trim.detail.contains("NTFS and ReFS"));
+                assert!(report.settings.is_empty());
+            }
+        }
+        let mut value = profile();
+        value["system_tweaks"]["optimize_storage"] = "true".into();
+        assert!(analyze_value(&value).is_err());
+    }
+
     #[test]
     fn wsl2_maps_both_components_atomically_not_a_distribution() {
         let report = analyze_value(&profile()).unwrap();
