@@ -320,7 +320,9 @@ impl Analyzer {
                     let enabled = value
                         .as_bool()
                         .context("Legacy boolean system tweak has an invalid type")?;
-                    self.item(&origin,if enabled {"true"} else {"false"},"manual",if key == "create_rollback_journal" {
+                    self.item(&origin,if enabled {"true"} else {"false"},"manual",if matches!(key.as_str(), "activate_ultimate_performance" | "extreme_ac_power_settings") && enabled {
+                        "Legacy power setup creates or switches an Ultimate Performance scheme and may also change CPU and hibernation parameters. Current AC choices modify only the active scheme; no partial or approximate mapping was selected."
+                    } else if key == "create_rollback_journal" {
                         "Legacy rollback-journal preference is not imported. New registry execution always uses its own durable journal and does not consume old rollback files."
                     } else if enabled {
                         "No exact reviewed equivalent exists in the current settings catalog. Power, storage, networking, security and broad performance changes are not approximated."
@@ -973,6 +975,26 @@ mod tests {
             BTreeSet::from(["developer-npm-prettier".to_owned()])
         );
         assert!(inventory.settings.is_empty());
+    }
+
+    #[test]
+    fn legacy_ultimate_setup_is_not_silently_replaced_by_active_scheme_choices() {
+        let mut value = profile();
+        for field in ["activate_ultimate_performance", "extreme_ac_power_settings"] {
+            value["system_tweaks"][field] = true.into();
+        }
+        let report = analyze_value(&value).unwrap();
+        for field in ["activate_ultimate_performance", "extreme_ac_power_settings"] {
+            let origin = format!("system_tweaks.{field}");
+            let item = report
+                .items
+                .iter()
+                .find(|item| item.origin == origin)
+                .unwrap();
+            assert_eq!(item.status, "manual");
+            assert!(item.settings.is_empty() && item.deployment.is_empty());
+            assert!(item.detail.contains("active scheme"));
+        }
     }
 
     #[test]

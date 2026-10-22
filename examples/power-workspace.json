@@ -1,0 +1,20 @@
+{
+  "schema_version": 3,
+  "settings": {
+    "schema_version": 1,
+    "target": "win11_ltsc2024",
+    "selected": [
+      "explorer-extensions"
+    ]
+  },
+  "deployment": [
+    "software-git-git"
+  ],
+  "power": [
+    "power-display-15",
+    "power-sleep-30",
+    "power-disk-20",
+    "power-usb-enabled",
+    "power-pcie-moderate"
+  ]
+}

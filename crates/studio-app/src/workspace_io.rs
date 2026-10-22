@@ -12,6 +12,8 @@ pub struct WorkspaceProfile {
     pub settings: Profile,
     #[serde(deserialize_with = "unique_deployment")]
     pub deployment: BTreeSet<String>,
+    #[serde(default, deserialize_with = "unique_deployment")]
+    pub power: BTreeSet<String>,
 }
 
 #[derive(Serialize)]
@@ -20,6 +22,7 @@ pub struct WorkspacePlan {
     pub schema_version: u32,
     pub settings: Plan,
     pub deployment: DeploymentPlan,
+    pub power: studio_platform::power::PowerPlan,
 }
 
 fn unique_deployment<'de, D: serde::Deserializer<'de>>(
@@ -29,7 +32,7 @@ fn unique_deployment<'de, D: serde::Deserializer<'de>>(
     let mut ids = BTreeSet::new();
     for value in values {
         if !ids.insert(value) {
-            return Err(serde::de::Error::custom("Duplicate deployment task ID"));
+            return Err(serde::de::Error::custom("Duplicate workspace selection ID"));
         }
     }
     Ok(ids)
@@ -40,11 +43,13 @@ pub fn plan(
     target: Target,
     settings: &BTreeSet<String>,
     deployment: &BTreeSet<String>,
+    power: &BTreeSet<String>,
 ) -> Result<WorkspacePlan> {
     Ok(WorkspacePlan {
-        schema_version: 2,
+        schema_version: 3,
         settings: studio_core::build_plan(catalog, target, settings)?,
         deployment: studio_deployment::build_plan(target, deployment)?,
+        power: studio_platform::power::build_plan(target, power)?,
     })
 }
 
@@ -53,18 +58,20 @@ pub fn save(
     target: Target,
     settings: &BTreeSet<String>,
     deployment: &BTreeSet<String>,
+    power: &BTreeSet<String>,
     path: &Path,
 ) -> Result<()> {
-    plan(catalog, target, settings, deployment)?;
+    plan(catalog, target, settings, deployment, power)?;
     studio_core::export_document(
         &WorkspaceProfile {
-            schema_version: 2,
+            schema_version: 3,
             settings: Profile {
                 schema_version: studio_core::SCHEMA_VERSION,
                 target,
                 selected: settings.clone(),
             },
             deployment: deployment.clone(),
+            power: power.clone(),
         },
         path,
     )
@@ -97,15 +104,20 @@ fn parse(bytes: &[u8], catalog: &Catalog) -> Result<WorkspaceProfile> {
     {
         Document::Current(profile) => {
             ensure!(
-                profile.schema_version == 2,
+                matches!(profile.schema_version, 2 | 3),
                 "Unsupported workspace profile schema"
+            );
+            ensure!(
+                profile.schema_version == 3 || profile.power.is_empty(),
+                "Power choices require workspace profile schema 3"
             );
             profile
         }
         Document::Legacy(settings) => WorkspaceProfile {
-            schema_version: 2,
+            schema_version: 3,
             settings,
             deployment: BTreeSet::new(),
+            power: BTreeSet::new(),
         },
     };
     ensure!(
@@ -117,6 +129,7 @@ fn parse(bytes: &[u8], catalog: &Catalog) -> Result<WorkspaceProfile> {
         profile.settings.target,
         &profile.settings.selected,
         &profile.deployment,
+        &profile.power,
     )?;
     Ok(profile)
 }
@@ -135,6 +148,7 @@ mod tests {
         };
         let loaded = parse(&serde_json::to_vec(&legacy).unwrap(), &catalog).unwrap();
         assert!(loaded.deployment.is_empty());
+        assert!(loaded.power.is_empty());
         assert_eq!(loaded.settings, legacy);
     }
 
@@ -144,10 +158,38 @@ mod tests {
         for document in [
             r#"{"schema_version":2,"settings":{"schema_version":1,"target":"win11_ltsc2024","selected":[]},"deployment":["same","same"]}"#,
             r#"{"schema_version":2,"settings":{"schema_version":1,"target":"win11_ltsc2024","selected":[]},"deployment":[],"surprise":true}"#,
-            r#"{"schema_version":3,"settings":{"schema_version":1,"target":"win11_ltsc2024","selected":[]},"deployment":[]}"#,
+            r#"{"schema_version":4,"settings":{"schema_version":1,"target":"win11_ltsc2024","selected":[]},"deployment":[]}"#,
         ] {
             assert!(parse(document.as_bytes(), &catalog).is_err());
         }
+    }
+
+    #[test]
+    fn v2_profiles_never_gain_power_and_v3_rejects_untrusted_or_duplicate_choices() {
+        let catalog = studio_core::load_catalog().unwrap();
+        let legacy = include_bytes!("../../../examples/web-workspace.json");
+        assert!(parse(legacy, &catalog).unwrap().power.is_empty());
+        let choice = studio_platform::power::catalog().unwrap().remove(0).id;
+        let mut value: serde_json::Value = serde_json::from_slice(legacy).unwrap();
+        value["power"] = serde_json::json!([choice]);
+        assert!(parse(&serde_json::to_vec(&value).unwrap(), &catalog).is_err());
+        value["schema_version"] = 3.into();
+        let loaded = parse(&serde_json::to_vec(&value).unwrap(), &catalog).unwrap();
+        assert_eq!(loaded.power, BTreeSet::from([choice.clone()]));
+        let bundle = plan(
+            &catalog,
+            loaded.settings.target,
+            &loaded.settings.selected,
+            &loaded.deployment,
+            &loaded.power,
+        )
+        .unwrap();
+        assert_eq!(bundle.power.choices.len(), 1);
+        assert_eq!(bundle.power.choices[0].id, choice);
+        value["power"] = serde_json::json!([choice, choice]);
+        assert!(parse(&serde_json::to_vec(&value).unwrap(), &catalog).is_err());
+        value["power"] = serde_json::json!(["unreviewed-power-choice"]);
+        assert!(parse(&serde_json::to_vec(&value).unwrap(), &catalog).is_err());
     }
 
     #[test]
@@ -158,10 +200,12 @@ mod tests {
             Target::Win11Ltsc2024,
             &BTreeSet::new(),
             &BTreeSet::new(),
+            &BTreeSet::new(),
         )
         .unwrap();
         let value = serde_json::to_value(bundle).unwrap();
-        assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["schema_version"], 3);
+        assert!(value["power"]["choices"].is_array());
         assert!(value["settings"]["actions"].is_array());
         assert!(value["deployment"]["tasks"].is_array());
         assert!(
@@ -169,7 +213,8 @@ mod tests {
                 &catalog,
                 Target::Win11Ltsc2024,
                 &BTreeSet::new(),
-                &BTreeSet::from(["unknown-task".into()])
+                &BTreeSet::from(["unknown-task".into()]),
+                &BTreeSet::new(),
             )
             .is_err()
         );

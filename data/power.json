@@ -1,0 +1,242 @@
+[
+  {
+    "id": "power-display-5",
+    "title": [
+      "5 分钟后关闭显示器",
+      "Turn off display after 5 minutes"
+    ],
+    "description": [
+      "插电空闲超时，单位为秒；只修改活动方案，保留电池设置。",
+      "AC idle timeout in seconds, in the active scheme only. Battery values are preserved."
+    ],
+    "group": "display",
+    "subgroup": "7516b95f-f776-4464-8c53-06167f40cc99",
+    "setting": "3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e",
+    "value": 300
+  },
+  {
+    "id": "power-display-15",
+    "title": [
+      "15 分钟后关闭显示器",
+      "Turn off display after 15 minutes"
+    ],
+    "description": [
+      "插电空闲超时，单位为秒；只修改活动方案，保留电池设置。",
+      "AC idle timeout in seconds, in the active scheme only. Battery values are preserved."
+    ],
+    "group": "display",
+    "subgroup": "7516b95f-f776-4464-8c53-06167f40cc99",
+    "setting": "3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e",
+    "value": 900
+  },
+  {
+    "id": "power-display-30",
+    "title": [
+      "30 分钟后关闭显示器",
+      "Turn off display after 30 minutes"
+    ],
+    "description": [
+      "插电空闲超时，单位为秒；只修改活动方案，保留电池设置。",
+      "AC idle timeout in seconds, in the active scheme only. Battery values are preserved."
+    ],
+    "group": "display",
+    "subgroup": "7516b95f-f776-4464-8c53-06167f40cc99",
+    "setting": "3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e",
+    "value": 1800
+  },
+  {
+    "id": "power-display-never",
+    "title": [
+      "不因空闲超时关闭显示器",
+      "Disable display idle timeout"
+    ],
+    "description": [
+      "禁用插电时的显示器空闲关闭计时器；锁屏、合盖和系统睡眠仍可能关闭显示器。",
+      "Disables the AC display idle timer. Locking, lid closure and system sleep may still turn the display off."
+    ],
+    "group": "display",
+    "subgroup": "7516b95f-f776-4464-8c53-06167f40cc99",
+    "setting": "3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e",
+    "value": 0
+  },
+  {
+    "id": "power-sleep-15",
+    "title": [
+      "15 分钟后睡眠",
+      "Sleep after 15 minutes"
+    ],
+    "description": [
+      "插电空闲睡眠超时，单位为秒；实际效果取决于硬件和系统策略。",
+      "AC sleep idle timeout in seconds. Actual behavior depends on hardware and system policy."
+    ],
+    "group": "sleep",
+    "subgroup": "238c9fa8-0aad-41ed-83f4-97be242c8f20",
+    "setting": "29f6c1db-86da-48c5-9fdb-f2b67b1f44da",
+    "value": 900
+  },
+  {
+    "id": "power-sleep-30",
+    "title": [
+      "30 分钟后睡眠",
+      "Sleep after 30 minutes"
+    ],
+    "description": [
+      "插电空闲睡眠超时，单位为秒；实际效果取决于硬件和系统策略。",
+      "AC sleep idle timeout in seconds. Actual behavior depends on hardware and system policy."
+    ],
+    "group": "sleep",
+    "subgroup": "238c9fa8-0aad-41ed-83f4-97be242c8f20",
+    "setting": "29f6c1db-86da-48c5-9fdb-f2b67b1f44da",
+    "value": 1800
+  },
+  {
+    "id": "power-sleep-60",
+    "title": [
+      "60 分钟后睡眠",
+      "Sleep after 60 minutes"
+    ],
+    "description": [
+      "插电空闲睡眠超时，单位为秒；实际效果取决于硬件和系统策略。",
+      "AC sleep idle timeout in seconds. Actual behavior depends on hardware and system policy."
+    ],
+    "group": "sleep",
+    "subgroup": "238c9fa8-0aad-41ed-83f4-97be242c8f20",
+    "setting": "29f6c1db-86da-48c5-9fdb-f2b67b1f44da",
+    "value": 3600
+  },
+  {
+    "id": "power-sleep-never",
+    "title": [
+      "不因空闲超时睡眠",
+      "Disable sleep idle timeout"
+    ],
+    "description": [
+      "禁用插电空闲睡眠计时器；手动操作、合盖、临界电量或其他系统策略仍可能触发睡眠或休眠。",
+      "Disables the AC sleep idle timer. Manual actions, lid closure, critical battery and other policies can still trigger sleep or hibernation."
+    ],
+    "group": "sleep",
+    "subgroup": "238c9fa8-0aad-41ed-83f4-97be242c8f20",
+    "setting": "29f6c1db-86da-48c5-9fdb-f2b67b1f44da",
+    "value": 0
+  },
+  {
+    "id": "power-disk-10",
+    "title": [
+      "10 分钟后关闭空闲磁盘",
+      "Turn off idle disk after 10 minutes"
+    ],
+    "description": [
+      "插电磁盘空闲超时，单位为秒，0禁用该计时器。Modern Standby 客户端不使用此策略。",
+      "AC disk idle timeout in seconds; 0 disables this timer. Modern Standby clients do not use this policy."
+    ],
+    "group": "disk",
+    "subgroup": "0012ee47-9041-4b5d-9b77-535fba8b1442",
+    "setting": "6738e2c4-e8a5-4a42-b16a-e040e769756e",
+    "value": 600
+  },
+  {
+    "id": "power-disk-20",
+    "title": [
+      "20 分钟后关闭空闲磁盘",
+      "Turn off idle disk after 20 minutes"
+    ],
+    "description": [
+      "插电磁盘空闲超时，单位为秒，0禁用该计时器。Modern Standby 客户端不使用此策略。",
+      "AC disk idle timeout in seconds; 0 disables this timer. Modern Standby clients do not use this policy."
+    ],
+    "group": "disk",
+    "subgroup": "0012ee47-9041-4b5d-9b77-535fba8b1442",
+    "setting": "6738e2c4-e8a5-4a42-b16a-e040e769756e",
+    "value": 1200
+  },
+  {
+    "id": "power-disk-never",
+    "title": [
+      "从不关闭空闲磁盘",
+      "Never turn off idle disk"
+    ],
+    "description": [
+      "插电磁盘空闲超时，单位为秒，0禁用该计时器。Modern Standby 客户端不使用此策略。",
+      "AC disk idle timeout in seconds; 0 disables this timer. Modern Standby clients do not use this policy."
+    ],
+    "group": "disk",
+    "subgroup": "0012ee47-9041-4b5d-9b77-535fba8b1442",
+    "setting": "6738e2c4-e8a5-4a42-b16a-e040e769756e",
+    "value": 0
+  },
+  {
+    "id": "power-usb-enabled",
+    "title": [
+      "开启 USB 选择性挂起",
+      "Enable USB selective suspend"
+    ],
+    "description": [
+      "插电枚举值1，启用USB选择性挂起。Microsoft建议保持启用以减少耗电。",
+      "AC enum 1 enables USB selective suspend. Microsoft recommends keeping it enabled to reduce power use."
+    ],
+    "group": "usb",
+    "subgroup": "2a737441-1930-4402-8d77-b2bebba308a3",
+    "setting": "48e6b7a6-50f5-4782-a5d4-53bb8f07e226",
+    "value": 1
+  },
+  {
+    "id": "power-usb-disabled",
+    "title": [
+      "关闭 USB 选择性挂起",
+      "Disable USB selective suspend"
+    ],
+    "description": [
+      "插电枚举值0，禁用USB选择性挂起，可能增加耗电。仅在确认设备兼容性需求时选择。",
+      "AC enum 0 disables USB selective suspend and may increase power use. Select only for a confirmed device compatibility need."
+    ],
+    "group": "usb",
+    "subgroup": "2a737441-1930-4402-8d77-b2bebba308a3",
+    "setting": "48e6b7a6-50f5-4782-a5d4-53bb8f07e226",
+    "value": 0
+  },
+  {
+    "id": "power-pcie-off",
+    "title": [
+      "关闭 PCIe 链路省电",
+      "Disable PCIe link power saving"
+    ],
+    "description": [
+      "插电枚举：0关闭、1适度、2最大链路节能；实际效果取决于设备和系统支持。",
+      "AC enum: 0 off, 1 moderate, 2 maximum link power saving. Actual behavior depends on device and system support."
+    ],
+    "group": "pcie",
+    "subgroup": "501a4d13-42af-4429-9fd1-a8218c268e20",
+    "setting": "ee12f906-d277-404b-b6da-e5fa1a576df5",
+    "value": 0
+  },
+  {
+    "id": "power-pcie-moderate",
+    "title": [
+      "PCIe 链路适度省电",
+      "Moderate PCIe link power saving"
+    ],
+    "description": [
+      "插电枚举：0关闭、1适度、2最大链路节能；实际效果取决于设备和系统支持。",
+      "AC enum: 0 off, 1 moderate, 2 maximum link power saving. Actual behavior depends on device and system support."
+    ],
+    "group": "pcie",
+    "subgroup": "501a4d13-42af-4429-9fd1-a8218c268e20",
+    "setting": "ee12f906-d277-404b-b6da-e5fa1a576df5",
+    "value": 1
+  },
+  {
+    "id": "power-pcie-max",
+    "title": [
+      "PCIe 链路最大省电",
+      "Maximum PCIe link power saving"
+    ],
+    "description": [
+      "插电枚举：0关闭、1适度、2最大链路节能；实际效果取决于设备和系统支持。",
+      "AC enum: 0 off, 1 moderate, 2 maximum link power saving. Actual behavior depends on device and system support."
+    ],
+    "group": "pcie",
+    "subgroup": "501a4d13-42af-4429-9fd1-a8218c268e20",
+    "setting": "ee12f906-d277-404b-b6da-e5fa1a576df5",
+    "value": 2
+  }
+]

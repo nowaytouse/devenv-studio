@@ -18,6 +18,7 @@ mod i18n;
 use i18n::{lf, t, tx};
 mod app_pages;
 mod hybrid;
+mod power;
 mod theme;
 
 use theme::palette;
@@ -50,6 +51,7 @@ enum Page {
     Migration,
     Developer,
     Workbench,
+    Power,
     Software,
     Features,
     Maintenance,
@@ -87,6 +89,8 @@ enum Dialog {
     },
     Apply,
     Deploy,
+    ApplyPower,
+    RestorePower(PathBuf),
     Preset(String),
     Restore(PathBuf),
 }
@@ -101,9 +105,11 @@ struct Worker {
 
 enum WorkerResult {
     Registry(RunReport),
+    Power(RunReport),
     Deployment(studio_deployment::DeploymentReport),
     Inspection {
         settings: Vec<studio_platform::SettingState>,
+        power: Vec<studio_platform::SettingState>,
         deployment: Vec<studio_deployment::Detection>,
         cancelled: bool,
     },
@@ -117,6 +123,7 @@ struct Notice {
 
 struct Studio {
     hybrid: hybrid::HybridState,
+    power: power::PowerUiState,
     preferences: Preferences,
     saved_preferences: Preferences,
     preferences_error: Option<String>,
@@ -129,6 +136,7 @@ struct Studio {
     target: Target,
     selected: BTreeSet<String>,
     deployment_selected: BTreeSet<String>,
+    power_selected: BTreeSet<String>,
     setting_states: BTreeMap<String, (String, String)>,
     deployment_states: BTreeMap<String, (String, String)>,
     last_event: Option<String>,
@@ -154,6 +162,7 @@ impl Studio {
         };
         let mut app = Self {
             hybrid: hybrid::HybridState::default(),
+            power: power::PowerUiState::default(),
             saved_preferences: preferences.clone(),
             preferences,
             preferences_error,
@@ -166,6 +175,7 @@ impl Studio {
             target,
             selected: BTreeSet::new(),
             deployment_selected: BTreeSet::new(),
+            power_selected: BTreeSet::new(),
             setting_states: BTreeMap::new(),
             deployment_states: BTreeMap::new(),
             last_event: None,
@@ -186,6 +196,7 @@ impl Studio {
 
     fn refresh_recovery(&mut self) {
         self.history = studio_deployment::history().map_err(|error| format!("{error:#}"));
+        self.refresh_power_recovery();
         match studio_platform::recovery_points() {
             Ok(points) => {
                 self.recovery = points;
@@ -243,7 +254,7 @@ impl Studio {
                 result = Err(t("后台任务发生异常；请检查已有恢复记录。").into());
             }
             self.notice = Some(match result {
-                Ok(WorkerResult::Registry(report)) => Notice {
+                Ok(WorkerResult::Registry(report) | WorkerResult::Power(report)) => Notice {
                     text: lf!(
                         "{}{}\n已变更 {} 项；原值已符合 {} 项。恢复日志：{}",
                         "{}{}\nChanged: {}; already matched: {}. Recovery journal: {}",
@@ -282,10 +293,16 @@ impl Studio {
                 },
                 Ok(WorkerResult::Inspection {
                     settings,
+                    power,
                     deployment,
                     cancelled,
                 }) => {
-                    let count = settings.len() + deployment.len();
+                    let count = settings.len() + deployment.len() + power.len();
+                    for state in power {
+                        self.power
+                            .states
+                            .insert(state.id, (state.state, state.detail));
+                    }
                     for state in settings {
                         self.setting_states
                             .insert(state.id, (state.state, state.detail));
@@ -417,8 +434,11 @@ impl Studio {
             .catalog
             .as_ref()
             .map_err(|error| anyhow::anyhow!(error.clone()))
-            .and_then(|catalog| studio_core::build_plan(catalog, self.target, &self.selected))
-        {
+            .and_then(|catalog| {
+                let settings = studio_core::build_plan(catalog, self.target, &self.selected)?;
+                let power = studio_platform::power::build_plan(self.target, &self.power_selected)?;
+                Ok((settings, power))
+            }) {
             Ok(plan) => plan,
             Err(error) => {
                 self.notice = Some(Notice {
@@ -430,8 +450,16 @@ impl Studio {
         };
         let target = self.target;
         let selected = self.deployment_selected.clone();
+        self.setting_states.clear();
+        self.deployment_states.clear();
+        self.power.states.clear();
         self.start_worker("正在只读检查所选项目", move |cancel| {
-            let settings = studio_platform::inspect(plan, Arc::clone(&cancel))?;
+            let settings = studio_platform::inspect(plan.0, Arc::clone(&cancel))?;
+            let power = if cancel.load(Ordering::Relaxed) {
+                Vec::new()
+            } else {
+                studio_platform::power::inspect(plan.1, Arc::clone(&cancel))?
+            };
             let deployment = if cancel.load(Ordering::Relaxed) {
                 Vec::new()
             } else {
@@ -439,6 +467,7 @@ impl Studio {
             };
             Ok(WorkerResult::Inspection {
                 settings,
+                power,
                 deployment,
                 cancelled: cancel.load(Ordering::Relaxed),
             })
@@ -510,6 +539,7 @@ impl Studio {
                                     (Page::Developer, tx("开发环境", "Developer tools")),
                                     (Page::Status, tx("状态", "Status")),
                                     (Page::Workbench, t("配置工作台")),
+                                    (Page::Power, tx("电源与节能", "Power & energy")),
                                     (Page::Software, t("软件部署")),
                                     (Page::Features, t("Windows 功能")),
                                     (Page::Maintenance, t("系统维护")),
@@ -599,9 +629,10 @@ impl Studio {
                     );
                     ui.label(
                         RichText::new(lf!(
-                            "设置 {} / 部署、功能、维护 {}",
-                            "Settings {} / Other tasks {}",
+                            "设置 {} / 电源 {} / 其他 {}",
+                            "Settings {} / Power {} / Other {}",
                             self.selected.len(),
+                            self.power_selected.len(),
                             self.deployment_selected.len()
                         ))
                         .size(13.0)
@@ -624,8 +655,7 @@ impl Studio {
                             )
                             .clicked()
                         {
-                            self.selected.clear();
-                            self.deployment_selected.clear();
+                            self.clear_selection();
                         }
                     });
                 });
@@ -640,6 +670,7 @@ impl Studio {
                     Page::Migration => tx("迁移与映射", "Migration & mapping"),
                     Page::Developer => tx("开发环境", "Developer tools"),
                     Page::Workbench => t("配置工作台"),
+                    Page::Power => tx("电源与节能", "Power & energy"),
                     Page::Software => t("软件部署"),
                     Page::Features => t("Windows 功能"),
                     Page::Maintenance => t("系统维护"),
@@ -780,6 +811,7 @@ impl Studio {
                             self.target = target;
                             self.setting_states.clear();
                             self.deployment_states.clear();
+                            self.power.states.clear();
                         }
                     }
                 });
@@ -820,7 +852,13 @@ impl Studio {
     }
 
     fn selection_count(&self) -> usize {
-        self.selected.len() + self.deployment_selected.len()
+        self.selected.len() + self.deployment_selected.len() + self.power_selected.len()
+    }
+
+    fn clear_selection(&mut self) {
+        self.selected.clear();
+        self.deployment_selected.clear();
+        self.power_selected.clear();
     }
 
     fn request_close(&mut self, ctx: &egui::Context) {
@@ -1234,7 +1272,10 @@ impl Studio {
             empty(
                 ui,
                 t("还没有选择项目"),
-                t("从系统设置、软件部署、Windows 功能或系统维护中逐项选择。"),
+                tx(
+                    "从系统设置、电源与节能、软件部署、Windows 功能或系统维护中逐项选择。",
+                    "Choose individual settings, power values, software, Windows features or maintenance tasks.",
+                ),
             );
             return;
         }
@@ -1247,6 +1288,7 @@ impl Studio {
         };
         let settings_plan = studio_core::build_plan(catalog, self.target, &self.selected);
         let deployment_plan = studio_deployment::build_plan(self.target, &self.deployment_selected);
+        let power_plan = studio_platform::power::build_plan(self.target, &self.power_selected);
         if let Err(error) = &settings_plan {
             ui.colored_label(
                 palette().danger,
@@ -1267,7 +1309,17 @@ impl Studio {
                 ),
             );
         }
-        let valid = settings_plan.is_ok() && deployment_plan.is_ok();
+        if let Err(error) = &power_plan {
+            ui.colored_label(
+                palette().danger,
+                lf!(
+                    "电源项目校验失败：{error:#}",
+                    "Power validation failed: {error:#}",
+                    error = error
+                ),
+            );
+        }
+        let valid = settings_plan.is_ok() && deployment_plan.is_ok() && power_plan.is_ok();
         if self.deployment_limit_exceeded() {
             ui.colored_label(palette().danger, self.deployment_limit_message());
         }
@@ -1305,6 +1357,17 @@ impl Studio {
                 .clicked()
             {
                 self.dialog = Some(Dialog::Deploy);
+            }
+            if ui
+                .add_enabled(
+                    self.mutation_available()
+                        && power_plan.is_ok()
+                        && !self.power_selected.is_empty(),
+                    egui::Button::new(tx("应用电源参数…", "Apply power values…")),
+                )
+                .clicked()
+            {
+                self.dialog = Some(Dialog::ApplyPower);
             }
         });
         ui.add_space(14.0);
@@ -1370,8 +1433,20 @@ impl Studio {
                 }
             }
         });
+        egui::CollapsingHeader::new(lf!(
+            "电源与节能 · {} 项 · 独立原值日志",
+            "Power & energy · {} items · Separate original-value journal",
+            self.power_selected.len()
+        ))
+        .default_open(true)
+        .id_salt("plan-power")
+        .show(ui, |ui| {
+            if let Ok(plan) = &power_plan {
+                power::plan_preview(ui, plan);
+            }
+        });
         ui.add_space(12.0);
-        ui.label(RichText::new(t("两类执行分别确认。注册表恢复只覆盖日志中的原值；软件安装、功能启用及维护没有通用回滚。不会自动接受外部安装器的许可协议。")).size(12.0).color(palette().muted));
+        ui.label(RichText::new(tx("系统设置、电源参数与部署任务分别确认。注册表与电源各有独立恢复日志；软件安装、功能启用及维护没有通用回滚。不会自动接受外部安装器的许可协议。", "Settings, power values and deployment tasks are confirmed separately. Registry and power have separate recovery journals; software, features and maintenance have no general rollback. External installer licenses are not automatically accepted.")).size(12.0).color(palette().muted));
     }
 
     fn recovery(&mut self, ui: &mut egui::Ui) {
@@ -1551,6 +1626,8 @@ impl Studio {
         let mut close = false;
         let mut apply = false;
         let mut deploy = false;
+        let mut power_apply = false;
+        let mut power_restore = None;
         let mut preset = None;
         let mut restore = None;
         let response = egui::Modal::new(egui::Id::unique("studio-dialog"))
@@ -1620,6 +1697,18 @@ impl Studio {
                             if ui.button(t("返回检查")).clicked() { close = true; }
                         });
                     }
+                    Dialog::ApplyPower => {
+                        if self.power_confirmation(ui) { power_apply = true; close = true; }
+                        if ui.button(t("返回检查")).clicked() { close = true; }
+                    }
+                    Dialog::RestorePower(path) => {
+                        ui.heading(tx("确认恢复这条电源记录", "Confirm this power recovery"));
+                        ui.label(lf!("实际主机：{}", "Actual host: {}", self.host.name));
+                        ui.label(path.display().to_string());
+                        ui.label(tx("只恢复这条日志的电源方案与 AC 原值。执行前检查当前活动方案与参数冲突，遇到外部变更停止；不会切换电源方案或修改 DC。", "Restore only this journal's scheme and original AC values. The active scheme and parameter conflicts are checked before execution; external changes stop recovery. No scheme is switched and DC values are untouched."));
+                        if primary(ui, tx("确认检查并恢复电源", "Review and restore power values"), self.mutation_available()).clicked() { power_restore = Some(path.clone()); close = true; }
+                        if ui.button(t("取消")).clicked() { close = true; }
+                    }
                     Dialog::Preset(id) => {
                         ui.heading(t("选用配置组合"));
                         if let Ok(catalog) = &self.catalog && let Some(item) = catalog.presets.iter().find(|item| &item.id == id) {
@@ -1657,6 +1746,12 @@ impl Studio {
         if deploy {
             self.start_deploy();
         }
+        if power_apply {
+            self.start_power_apply();
+        }
+        if let Some(path) = power_restore {
+            self.start_power_restore(path);
+        }
         if let Some(selection) = preset {
             self.selected = selection;
         }
@@ -1681,6 +1776,7 @@ impl Studio {
                     self.target,
                     &self.selected,
                     &self.deployment_selected,
+                    &self.power_selected,
                 )
                 .map_err(|e| format!("{e:#}"))?;
                 studio_core::export_document(&plan, &path).map_err(|e| format!("{e:#}"))?;
@@ -1692,6 +1788,7 @@ impl Studio {
                     self.target,
                     &self.selected,
                     &self.deployment_selected,
+                    &self.power_selected,
                     &path,
                 )
                 .map_err(|e| format!("{e:#}"))?;
@@ -1706,6 +1803,8 @@ impl Studio {
                 self.target = profile.settings.target;
                 self.selected = profile.settings.selected;
                 self.deployment_selected = profile.deployment;
+                self.power_selected = profile.power;
+                self.power.states.clear();
                 self.setting_states.clear();
                 self.deployment_states.clear();
                 Ok(lf!(
@@ -1755,6 +1854,7 @@ impl eframe::App for Studio {
                             Page::Recipes => self.recipes_page(ui),
                             Page::Migration => self.migration_page(ui),
                             Page::Workbench => self.workbench(ui),
+                            Page::Power => self.power_page(ui),
                             Page::Software
                             | Page::Developer
                             | Page::Features
@@ -2175,6 +2275,7 @@ mod tests {
     fn preview() -> Studio {
         Studio {
             hybrid: hybrid::HybridState::default(),
+            power: power::PowerUiState::default(),
             preferences: Preferences::default(),
             saved_preferences: Preferences::default(),
             preferences_error: None,
@@ -2195,6 +2296,7 @@ mod tests {
             target: Target::Win11Ltsc2024,
             selected: BTreeSet::new(),
             deployment_selected: BTreeSet::new(),
+            power_selected: BTreeSet::new(),
             setting_states: BTreeMap::new(),
             deployment_states: BTreeMap::new(),
             last_event: None,
@@ -2216,6 +2318,7 @@ mod tests {
         let app = preview();
         assert!(app.selected.is_empty());
         assert!(app.deployment_selected.is_empty());
+        assert!(app.power_selected.is_empty());
         assert!(!app.mutation_available());
     }
 
@@ -2443,6 +2546,7 @@ mod tests {
             Page::Migration,
             Page::Developer,
             Page::Workbench,
+            Page::Power,
             Page::Software,
             Page::Features,
             Page::Maintenance,
@@ -2484,7 +2588,13 @@ mod tests {
                     .find(|task| task.targets.contains(&app.target))
                     .unwrap();
                 app.deployment_selected.insert(task.id.clone());
-                let selection = (app.selected.clone(), app.deployment_selected.clone());
+                app.power_selected
+                    .insert(studio_platform::power::catalog().unwrap()[0].id.clone());
+                let selection = (
+                    app.selected.clone(),
+                    app.deployment_selected.clone(),
+                    app.power_selected.clone(),
+                );
                 for page in pages {
                     app.page = page;
                     let context = egui::Context::default();
@@ -2507,6 +2617,7 @@ mod tests {
                                     Page::Recipes => app.recipes_page(ui),
                                     Page::Migration => app.migration_page(ui),
                                     Page::Workbench => app.workbench(ui),
+                                    Page::Power => app.power_page(ui),
                                     Page::Software
                                     | Page::Developer
                                     | Page::Features
@@ -2528,8 +2639,8 @@ mod tests {
                     assert!(app.host.target.is_none());
                     assert!(app.worker.is_none());
                     assert_eq!(
-                        (&app.selected, &app.deployment_selected),
-                        (&selection.0, &selection.1)
+                        (&app.selected, &app.deployment_selected, &app.power_selected),
+                        (&selection.0, &selection.1, &selection.2)
                     );
                     assert!(app.dialog.is_none());
                 }
@@ -2538,6 +2649,11 @@ mod tests {
                 assert!(app.notice.as_ref().is_some_and(|notice| notice.error));
                 app.start_deploy();
                 assert!(app.worker.is_none());
+                app.start_power_apply();
+                assert!(app.worker.is_none());
+                app.start_power_restore(PathBuf::from("/synthetic/power-journal.json"));
+                assert!(app.worker.is_none());
+                assert!(app.notice.as_ref().is_some_and(|notice| notice.error));
             }
         }
         i18n::set_language(Language::ZhCn);
@@ -2615,9 +2731,16 @@ mod tests {
         std::fs::create_dir(&path)?;
         let directory = TestDirectory(path);
         let profile_path = directory.0.join("reviewed-profile.json");
-        workspace_io::save(catalog, app.target, &settings, &tasks, &profile_path)?;
+        workspace_io::save(
+            catalog,
+            app.target,
+            &settings,
+            &tasks,
+            &app.power_selected,
+            &profile_path,
+        )?;
         let loaded = workspace_io::load(&profile_path, catalog)?;
-        assert_eq!(loaded.schema_version, 2);
+        assert_eq!(loaded.schema_version, 3);
         assert_eq!(loaded.settings.selected, settings);
         assert_eq!(loaded.deployment, tasks);
         assert!(app.worker.is_none());
@@ -2642,7 +2765,8 @@ mod tests {
                 app.catalog.as_ref().unwrap(),
                 app.target,
                 &app.selected,
-                &app.deployment_selected
+                &app.deployment_selected,
+                &app.power_selected,
             )
             .is_ok()
         );
@@ -2654,6 +2778,93 @@ mod tests {
         app.start_deploy();
         assert!(app.worker.is_none());
         assert!(app.notice.as_ref().unwrap().text.contains("128"));
+    }
+
+    #[test]
+    fn power_groups_replace_only_alternatives_and_clear_all_domains() {
+        let mut app = preview();
+        let catalog = studio_platform::power::catalog().unwrap();
+        let first = &catalog[0];
+        let second = catalog
+            .iter()
+            .find(|choice| choice.id != first.id && choice.group == first.group)
+            .unwrap();
+        let unrelated = catalog
+            .iter()
+            .find(|choice| choice.group != first.group)
+            .unwrap();
+        app.power_selected.insert(unrelated.id.clone());
+        power::select_power(&catalog, &mut app.power_selected, &first.id, true);
+        power::select_power(&catalog, &mut app.power_selected, &second.id, true);
+        assert!(!app.power_selected.contains(&first.id));
+        assert!(app.power_selected.contains(&second.id));
+        assert!(app.power_selected.contains(&unrelated.id));
+        power::select_power(&catalog, &mut app.power_selected, &second.id, false);
+        assert_eq!(app.power_selected, BTreeSet::from([unrelated.id.clone()]));
+        app.selected.insert("synthetic-setting".into());
+        app.deployment_selected.insert("synthetic-task".into());
+        assert_eq!(app.selection_count(), 3);
+        app.clear_selection();
+        assert_eq!(app.selection_count(), 0);
+        assert!(app.power_selected.is_empty());
+    }
+
+    #[test]
+    fn power_gui_profile_roundtrip_export_and_legacy_load_are_exact() -> anyhow::Result<()> {
+        struct TestDirectory(PathBuf);
+        impl Drop for TestDirectory {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let path = std::env::temp_dir().join(format!(
+            "ltsc-power-gui-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&path)?;
+        let directory = TestDirectory(path);
+        let mut app = preview();
+        app.catalog = Ok(studio_core::load_catalog()?);
+        let power_id = studio_platform::power::catalog()?[0].id.clone();
+        app.power_selected.insert(power_id.clone());
+        let settings = studio_core::Profile {
+            schema_version: studio_core::SCHEMA_VERSION,
+            target: app.target,
+            selected: BTreeSet::new(),
+        };
+        let profile_path = directory.0.join("profile.json");
+        let export_path = directory.0.join("plan.json");
+        app.file_operation(FileOperation::Save, profile_path.clone())
+            .map_err(anyhow::Error::msg)?;
+        app.file_operation(FileOperation::Export, export_path.clone())
+            .map_err(anyhow::Error::msg)?;
+        let document: serde_json::Value = serde_json::from_slice(&std::fs::read(export_path)?)?;
+        assert_eq!(document["schema_version"], 3);
+        assert_eq!(document["power"]["choices"][0]["id"], power_id);
+        app.clear_selection();
+        app.file_operation(FileOperation::Load, profile_path)
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(app.power_selected, BTreeSet::from([power_id.clone()]));
+        assert_eq!(app.selection_count(), 1);
+        for (name, legacy) in [
+            ("v1.json", serde_json::to_value(&settings)?),
+            (
+                "v2.json",
+                serde_json::json!({"schema_version": 2, "settings": settings, "deployment": []}),
+            ),
+        ] {
+            let path = directory.0.join(name);
+            studio_core::export_document(&legacy, &path)?;
+            app.power_selected.insert(power_id.clone());
+            app.file_operation(FileOperation::Load, path)
+                .map_err(anyhow::Error::msg)?;
+            assert!(app.power_selected.is_empty());
+        }
+        assert!(app.worker.is_none());
+        Ok(())
     }
 
     #[test]

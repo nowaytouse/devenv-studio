@@ -1,5 +1,11 @@
 # LTSC Studio — design record
 
+## 0.6 active-scheme AC power domain
+
+Power choices use a separate trusted catalog of16values in5mutually exclusive groups. A native PowrProf adapter captures the active scheme once, reads all original AC values before mutation, persists a keyed and chained original-value journal, then writes, reactivates the same scheme and verifies readback. External scheme/value changes stop the operation; restoration accepts only recorded original or desired values and refuses to activate a different scheme. Power journals share recovery.key and mutation.lock with existing domains, with independent filename/path/content/bounds validation. No scheme creation, DC mutation, CPU or hibernation control is introduced.
+
+Workspace schema3 adds explicit power IDs. v1/v2 load with an empty power selection, and v2 cannot carry power changes. UI and CLI build the same canonical power plan, while import analysis retains legacy Ultimate Performance setup as manual because changing only selected AC settings is not equivalent. macOS/Linux remain preview-only and never read or modify a Windows power scheme.
+
 ## 0.5 NPM and policy continuity
 
 NPM reuses the developer task and history protocol, with a fixed official Node installation, explicit per-user global prefix and registry, configuration isolation and lifecycle scripts disabled. Installation success requires exact JSON package identity/version readback; it does not prove CLI functionality. Exact trusted IDs from SetupProfile or Mac inventory can join the same workflow; imported commands and arbitrary package specifications remain non-executable. The Web recipe explicitly selects Node prerequisites and NPM tools. Large profiles stay exportable while GUI inspection/execution uses the same session bound as the backend.

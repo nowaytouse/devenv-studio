@@ -75,6 +75,8 @@ pub(super) fn t(source: &str) -> &str {
             "Plan validation failed. Review the selected items."
         }
         "正在应用变更" => "Applying settings",
+        "正在应用电源参数" => "Applying power parameters",
+        "正在恢复电源参数" => "Restoring power parameters",
         "当前主机不允许恢复 Windows 配置。" => {
             "This host cannot restore Windows settings."
         }

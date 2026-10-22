@@ -10,10 +10,11 @@ use anyhow::{Context, Result, bail};
 use std::{collections::BTreeSet, path::PathBuf, process::ExitCode};
 use studio_core::{Profile, Target, load_catalog};
 
-const HELP: &str = "LTSC Studio 0.4
-Native desktop: ltsc-studio
+const HELP: &str = concat!("LTSC Studio ", env!("CARGO_PKG_VERSION"), "\nNative desktop: ltsc-studio
 List reviewed settings and presets: ltsc-studio catalog
 List software/features/maintenance: ltsc-studio tasks
+List reviewed AC power choices: ltsc-studio power
+Add opt-in AC choices to a plan: ltsc-studio plan --target win11-ltsc-2024 --power <choice-id>
 Build mixed plan: ltsc-studio plan --target win11-ltsc-2024 --select explorer-extensions --tasks software-git-git
 Mixed workspace recipe: ltsc-studio plan --target win11-ltsc-2024 --recipe rust
 Review legacy migration: ltsc-studio migrate --target win11-ltsc-2024 --input legacy.json --output migration-report.json
@@ -26,13 +27,14 @@ Capture native preview: ltsc-studio --screenshot preview.png
 
 Targets: win10-ltsc-2021, win11-ltsc-2024
 All changes are opt-in. CLI commands only inspect/export; apply and recovery use the desktop review flow.
-An existing output file is never overwritten.";
+An existing output file is never overwritten.");
 
 #[derive(Debug, PartialEq, Eq)]
 struct PlanArgs {
     target: Option<Target>,
     selected: BTreeSet<String>,
     tasks: BTreeSet<String>,
+    power: BTreeSet<String>,
     preset: Option<String>,
     recipe: Option<String>,
     profile: Option<PathBuf>,
@@ -52,6 +54,7 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
         target: None,
         selected: BTreeSet::new(),
         tasks: BTreeSet::new(),
+        power: BTreeSet::new(),
         preset: None,
         recipe: None,
         profile: None,
@@ -66,6 +69,7 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
             "--target"
                 | "--select"
                 | "--tasks"
+                | "--power"
                 | "--preset"
                 | "--recipe"
                 | "--profile"
@@ -98,6 +102,13 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
                     }
                 }
             }
+            "--power" => {
+                for id in value.split(',') {
+                    if id.is_empty() || id.trim() != id || !result.power.insert(id.to_owned()) {
+                        bail!("Power IDs must be nonempty, unique and separated by commas.");
+                    }
+                }
+            }
             "--preset" => result.preset = Some(value.to_owned()),
             "--recipe" => result.recipe = Some(value.to_owned()),
             "--profile" => result.profile = Some(PathBuf::from(value)),
@@ -110,6 +121,7 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
         && (result.target.is_some()
             || !result.selected.is_empty()
             || !result.tasks.is_empty()
+            || !result.power.is_empty()
             || result.preset.is_some()
             || result.recipe.is_some())
     {
@@ -186,6 +198,14 @@ fn execute(args: &[String]) -> Result<()> {
                 );
             }
         }
+        "power" if args.len() == 1 => {
+            for choice in studio_platform::power::catalog()? {
+                println!(
+                    "{}\t{}\tAC={}\t{}",
+                    choice.id, choice.group, choice.value, choice.title[0]
+                );
+            }
+        }
         "migrate" => {
             let (target, input, output) = parse_migration_args(&args[1..])?;
             let report = migration::load(&input, target)?;
@@ -222,13 +242,14 @@ fn execute(args: &[String]) -> Result<()> {
                         selected.extend(preset.actions.iter().cloned());
                     }
                     workspace_io::WorkspaceProfile {
-                        schema_version: 2,
+                        schema_version: 3,
                         settings: Profile {
                             schema_version: 1,
                             target: options.target.context("Missing target")?,
                             selected,
                         },
                         deployment: tasks,
+                        power: options.power,
                     }
                 }
             };
@@ -237,6 +258,7 @@ fn execute(args: &[String]) -> Result<()> {
                 profile.settings.target,
                 &profile.settings.selected,
                 &profile.deployment,
+                &profile.power,
             )?;
             if command == "inspect" {
                 if options.output.is_some() {
@@ -245,6 +267,11 @@ fn execute(args: &[String]) -> Result<()> {
                 let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 for state in
                     studio_platform::inspect(plan.settings, std::sync::Arc::clone(&cancel))?
+                {
+                    println!("{}\t{}\t{}", state.id, state.state, state.detail);
+                }
+                for state in
+                    studio_platform::power::inspect(plan.power, std::sync::Arc::clone(&cancel))?
                 {
                     println!("{}\t{}\t{}", state.id, state.state, state.detail);
                 }
@@ -262,9 +289,10 @@ fn execute(args: &[String]) -> Result<()> {
                     Some(path) => {
                         studio_core::export_document(&plan, &path)?;
                         println!(
-                            "Saved {} settings and {} deployment tasks to {}",
+                            "Saved {} settings, {} deployment tasks and {} power choices to {}",
                             plan.settings.actions.len(),
                             plan.deployment.tasks.len(),
+                            plan.power.choices.len(),
                             path.display()
                         );
                     }
@@ -409,6 +437,42 @@ mod tests {
             .as_deref(),
             Some("rust")
         );
+    }
+
+    #[test]
+    fn power_arguments_are_explicit_and_do_not_override_a_loaded_profile() {
+        let args = parse_plan_args(&strings(&[
+            "--target",
+            "win11-ltsc-2024",
+            "--power",
+            "choice-a,choice-b",
+        ]))
+        .unwrap();
+        assert_eq!(
+            args.power,
+            BTreeSet::from(["choice-a".into(), "choice-b".into()])
+        );
+        for args in [
+            vec!["--profile", "saved.json", "--power", "choice-a"],
+            vec![
+                "--target",
+                "win11-ltsc-2024",
+                "--power",
+                "choice-a,choice-a",
+            ],
+            vec!["--target", "win11-ltsc-2024", "--power", "choice-a,"],
+            vec![
+                "--target",
+                "win11-ltsc-2024",
+                "--power",
+                "choice-a",
+                "--power",
+                "choice-b",
+            ],
+        ] {
+            assert!(parse_plan_args(&strings(&args)).is_err());
+        }
+        assert!(HELP.contains(env!("CARGO_PKG_VERSION")));
     }
 
     #[test]

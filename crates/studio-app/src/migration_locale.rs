@@ -4,6 +4,10 @@ use crate::prefs::Language;
 
 const DETAIL_PHRASES: &[(&str, &str)] = &[
     (
+        "Legacy power setup creates or switches an Ultimate Performance scheme and may also change CPU and hibernation parameters. Current AC choices modify only the active scheme; no partial or approximate mapping was selected.",
+        "旧版电源流程会创建或切换卓越性能方案，还可能修改 CPU 和休眠参数。当前插电选项只修改活动方案，未选择部分或近似映射。",
+    ),
+    (
         " Requires official Node.js and bundled npm on Windows. Uses the fixed current-user npm prefix and official registry with lifecycle scripts disabled; no PATH, mirror or project configuration is imported.",
         " 需要 Windows 上官方安装的 Node.js 及随附 npm。使用固定的当前用户 npm 前缀和官方源，禁用生命周期脚本；不导入 PATH、镜像或项目配置。",
     ),

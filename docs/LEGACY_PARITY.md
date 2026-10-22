@@ -1,6 +1,6 @@
 # Legacy capability parity checkpoint
 
-This is a read-only comparison of the LTSC_Tools_Backup source tree with LTSC Studio 0.5. The setting catalog now includes the legacy diagnostic-data and consumer-experience policies; shipped historical snapshots remain available for recovery. A matching label does not mean the old and new implementations behave identically.
+This is a read-only comparison of the LTSC_Tools_Backup source tree with LTSC Studio 0.6. The setting catalog now includes the legacy diagnostic-data and consumer-experience policies; shipped historical snapshots remain available for recovery. A matching label does not mean the old and new implementations behave identically.
 
 ## What the legacy application actually provides
 
@@ -12,7 +12,7 @@ Evidence: the legacy `src/app.rs` target-specific workspace controls and `src/co
 
 ## What Studio covers in the current catalogs
 
-The 0.5 registry catalog has 58 DWORD setting options in 40 independent settings/choice groups, with privacy, Explorer, Start, taskbar, general experience, personalization, and accessibility categories. These are user-selected, target-gated, reviewable preferences with original-value recovery. They are not a replacement for the legacy system-tuning profile: they do not cover TCP/network profiles, TRIM/storage optimization or power plans. The two exact legacy diagnostic-data and consumer-experience registry policies now map into the trusted catalog; this does not claim all Windows telemetry has stopped.
+The 0.5 registry catalog has 58 DWORD setting options in 40 independent settings/choice groups, with privacy, Explorer, Start, taskbar, general experience, personalization, and accessibility categories. These are user-selected, target-gated, reviewable preferences with original-value recovery. They are not a replacement for the legacy system-tuning profile: they do not cover TCP/network profiles or TRIM/storage optimization. A separate active-scheme AC power domain now provides16choices across5groups with its own authenticated originals and recovery; it does not create or switch Ultimate Performance schemes or change CPU/hibernation/DC values. The two exact legacy diagnostic-data and consumer-experience registry policies now map into the trusted catalog; this does not claim all Windows telemetry has stopped.
 
 The 0.5 deployment catalog contains 234 WinGet package tasks, 8 Cargo tools, 4 uv tools, 6 NPM tools, 8 Microsoft VS Code extensions, 7 opt-in Windows feature enables, and 4 maintenance commands. Five mixed recipes combine these domains. Legacy SetupProfile2.2.0 and MacInventory1 JSON imports propose exact trusted mappings for explicit review, retaining manual and unsupported items. The desktop workbench keeps settings and deployment in separate pages and execution confirmations; selected tasks remain explicit. Feature enablement and repair commands have separate effect boundaries from registry recovery.
 
@@ -23,7 +23,7 @@ Evidence: `data/catalog.json`, `data/deployment.json`, and `docs/DESIGN.md`. Cat
 - Local Mac inventory JSON analysis and24curated formula/cask mappings now exist; automatic inventory collection, network refresh and broad name-level equivalence remain unmigrated.
 - Cargo, uv and NPM tool execution now exist for trusted catalog entries. Scoop and Pip remain manual; arbitrary imported packages are never converted into executable tasks.
 - Microsoft VS Code extension deployment now exists for reviewed IDs. Cursor/editor settings merge, agent-skill/plugin payload provisioning, Git or shell profile merge, NPM mirror configuration and Ollama model setup remain unmigrated.
-- No network/TCP profile, storage/TRIM optimization workflow or power-plan tuning. The legacy device policies now map exactly, while numeric tuning and other unsupported changes remain explicit report items.
+- No network/TCP profile or storage/TRIM optimization workflow. Active-scheme AC power choices now exist; legacy Ultimate Performance setup remains manual because it has different scheme/CPU/hibernation semantics. The legacy device policies now map exactly, while numeric tuning and other unsupported changes remain explicit report items.
 - The new setting journal restores its recorded registry values; it does not undo installed packages, Windows components, or completed maintenance. The legacy journal also does not uninstall software or turn off enabled Windows features, but it records additional TCP, TRIM, and power state.
 - Windows host behavior, applicable LTSC builds, network prerequisites, administrator prompts, and recovery still need the documented device acceptance. macOS preview and compilation are not Windows execution proof.
 

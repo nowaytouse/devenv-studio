@@ -297,6 +297,24 @@ impl Studio {
                     ui.label(error);
                 }
             }
+            match &self.power.catalog {
+                Ok(catalog) => property(
+                    ui,
+                    tx("电源参数目录", "Power catalog"),
+                    &lf!(
+                        "{} 个 AC 选项 / 5 组",
+                        "{} AC choices / 5 groups",
+                        catalog.len()
+                    ),
+                ),
+                Err(error) => {
+                    ui.colored_label(
+                        palette().danger,
+                        tx("电源目录校验失败", "Power catalog validation failed"),
+                    );
+                    ui.label(error);
+                }
+            }
             match crate::catalog_locale::validate() {
                 Ok(()) => property(
                     ui,
@@ -318,8 +336,12 @@ impl Studio {
                 ui,
                 tx("已选择", "Selected"),
                 &format!(
-                    "{} / {}",
+                    "{} {} / {} {} / {} {}",
+                    tx("设置", "Settings"),
                     self.selected.len(),
+                    tx("电源", "Power"),
+                    self.power_selected.len(),
+                    tx("其他", "Other"),
                     self.deployment_selected.len()
                 ),
             );
@@ -481,16 +503,16 @@ impl Studio {
                     "1. Choose a Windows target. A preview target does not mean that device has been detected.",
                 ),
                 (
-                    "2. 逐项勾选系统设置、软件、功能或维护任务，也可先检查一个配置组合。",
-                    "2. Select settings, software, features or maintenance tasks individually, or review a preset first.",
+                    "2. 逐项勾选系统设置、电源参数、软件、功能或维护任务，也可先检查一个配置组合。",
+                    "2. Select settings, power values, software, features or maintenance tasks individually, or review a preset first.",
                 ),
                 (
-                    "3. 检查所选项目状态，进入变更方案核对确切注册表值、包 ID、权限和限制。",
-                    "3. Inspect selected items, then review exact registry values, package IDs, permissions and limits in the plan.",
+                    "3. 检查所选项目状态，进入变更方案核对确切注册表值、AC 参数、包 ID、权限和限制。",
+                    "3. Inspect selected items, then review exact registry values, AC parameters, package IDs, permissions and limits in the plan.",
                 ),
                 (
-                    "4. 可导出完整方案或保存档案；在受支持的 Windows 本机上分别确认两类执行。",
-                    "4. Export a complete plan or save a profile. On supported Windows, confirm settings and other tasks separately.",
+                    "4. 可导出完整方案或保存档案；在受支持的 Windows 本机上分别确认系统设置、电源与部署执行。",
+                    "4. Export a complete plan or save a profile. On supported Windows, confirm settings, power and deployment separately.",
                 ),
             ] {
                 ui.label(tx(zh, en));
@@ -506,6 +528,7 @@ impl Studio {
             tx("恢复与历史有什么区别", "Recovery versus history"),
             |ui| {
                 ui.label(tx("系统设置先记录原始注册表值，再写入并验证。恢复会检查后来发生的外部修改，遇到冲突停止覆盖。恢复不是完整系统映像，新增空键可能保留。","Settings journal original registry values before verified writes. Recovery checks later external changes and stops on conflicts. It is not a system image; newly created empty keys can remain."));
+                ui.label(tx("电源页只修改执行时活动方案的插电 AC 参数，不修改电池 DC，不创建卓越性能方案，也不保证睡眠或休眠硬件能力。电源原值与恢复记录独立保存；恢复会检查活动方案和参数冲突。", "Power changes only the active scheme's plugged-in AC values at execution time. Battery DC values are untouched, no Ultimate Performance scheme is created, and sleep or hibernation support is not guaranteed. Power originals and recovery journals are separate; recovery checks the active scheme and parameter conflicts."));
                 ui.label(tx("软件安装、功能启用及系统维护只有实际执行历史，没有通用回滚。请通过应用卸载器、Windows 功能管理或相应系统工具处理。","Software, optional features and maintenance have execution history, without general rollback. Use the application's uninstaller, Windows feature management or the appropriate system tool."));
             },
         );

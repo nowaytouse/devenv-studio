@@ -6,6 +6,8 @@ use std::{
 };
 use studio_core::{Plan, Target};
 
+pub mod power;
+
 #[cfg(any(windows, test))]
 mod engine;
 #[cfg(any(windows, test))]
