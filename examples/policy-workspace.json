@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "settings": {
+    "schema_version": 1,
+    "target": "win11_ltsc2024",
+    "selected": [
+      "privacy-diagnostic-data-off",
+      "experience-consumer-features-off"
+    ]
+  },
+  "deployment": []
+}

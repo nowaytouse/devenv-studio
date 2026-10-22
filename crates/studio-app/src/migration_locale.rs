@@ -4,6 +4,10 @@ use crate::prefs::Language;
 
 const DETAIL_PHRASES: &[(&str, &str)] = &[
     (
+        " Requires official Node.js and bundled npm on Windows. Uses the fixed current-user npm prefix and official registry with lifecycle scripts disabled; no PATH, mirror or project configuration is imported.",
+        " 需要 Windows 上官方安装的 Node.js 及随附 npm。使用固定的当前用户 npm 前缀和官方源，禁用生命周期脚本；不导入 PATH、镜像或项目配置。",
+    ),
+    (
         "The source list is empty. It requests no installation or removal.",
         "来源列表为空，不请求安装或移除任何项目。",
     ),

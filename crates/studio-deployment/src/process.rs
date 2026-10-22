@@ -20,6 +20,7 @@ pub(crate) struct Invocation {
     pub program: PathBuf,
     pub args: Vec<String>,
     pub vscode_node: bool,
+    pub npm_node: bool,
 }
 #[derive(Debug, Clone)]
 pub(crate) struct Output {
@@ -39,6 +40,18 @@ impl Output {
 }
 pub(crate) trait Runner {
     fn run(&mut self, invocation: &Invocation, cancel: &Arc<AtomicBool>) -> Result<Output>;
+}
+fn configure_npm(command: &mut Command) {
+    // npm CLI options pin behavior; remove environment overrides, credentials and Node preloads.
+    for (name, _) in std::env::vars_os() {
+        if npm_environment_override(&name.to_string_lossy()) {
+            command.env_remove(name);
+        }
+    }
+}
+fn npm_environment_override(name: &str) -> bool {
+    let name = name.to_ascii_uppercase();
+    name.starts_with("NPM_CONFIG_") || matches!(name.as_str(), "NODE_OPTIONS" | "NODE_PATH")
 }
 fn capture(mut reader: impl Read) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
@@ -122,6 +135,17 @@ fn run_configured(
             .env("ELECTRON_RUN_AS_NODE", "1")
             .env_remove("VSCODE_DEV")
             .env_remove("VSCODE_PORTABLE");
+    }
+    if invocation.npm_node {
+        ensure!(
+            !invocation.vscode_node
+                && invocation
+                    .program
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("node.exe")),
+            "npm environment is restricted to node.exe"
+        );
+        configure_npm(&mut command);
     }
     if let Some(parent) = invocation.program.parent() {
         command.current_dir(parent);
@@ -251,6 +275,7 @@ mod tests {
         let exe = std::env::current_exe().unwrap();
         let inv = Invocation {
             vscode_node: false,
+            npm_node: false,
             program: exe,
             args: vec![
                 "--exact".into(),
@@ -273,6 +298,7 @@ mod tests {
         assert!(out.stderr.contains("err-complete"));
         let invalid = Invocation {
             vscode_node: false,
+            npm_node: false,
             program: std::env::temp_dir().join("ltsc-does-not-exist.exe"),
             args: vec![],
         };
@@ -289,6 +315,7 @@ mod tests {
     fn cancelled_before_spawn_and_relative_paths_fail() {
         let inv = Invocation {
             vscode_node: false,
+            npm_node: false,
             program: std::env::current_exe().unwrap(),
             args: vec![],
         };
@@ -305,6 +332,7 @@ mod tests {
             run_bounded(
                 &Invocation {
                     vscode_node: false,
+                    npm_node: false,
                     program: "dism.exe".into(),
                     args: vec![]
                 },
@@ -318,6 +346,7 @@ mod tests {
     fn actual_child_timeout_and_cancellation_are_reaped() {
         let inv = Invocation {
             vscode_node: false,
+            npm_node: false,
             program: std::env::current_exe().unwrap(),
             args: vec![
                 "--exact".into(),
@@ -349,6 +378,21 @@ mod tests {
         thread.join().unwrap();
         assert!(output.cancelled);
         assert!(!output.timed_out);
+    }
+    #[test]
+    fn npm_configuration_removes_case_insensitive_overrides_and_node_preloads() {
+        for name in [
+            "npm_config_registry",
+            "NPM_CONFIG_PREFIX",
+            "npm_config_@scope:registry",
+            "NODE_OPTIONS",
+            "node_path",
+        ] {
+            assert!(npm_environment_override(name));
+        }
+        for name in ["PATH", "APPDATA", "USERPROFILE", "NODE_ENV"] {
+            assert!(!npm_environment_override(name));
+        }
     }
     #[test]
     fn utf16_dism_output_is_decoded() {

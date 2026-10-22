@@ -1,6 +1,6 @@
 # Legacy capability parity checkpoint
 
-This is a read-only comparison of the LTSC_Tools_Backup source tree with LTSC Studio 0.4. The setting catalog remains at its 0.2 revision; deployment and migration now use the 0.4 integration. A matching label does not mean the old and new implementations behave identically.
+This is a read-only comparison of the LTSC_Tools_Backup source tree with LTSC Studio 0.5. The setting catalog now includes the legacy diagnostic-data and consumer-experience policies; shipped historical snapshots remain available for recovery. A matching label does not mean the old and new implementations behave identically.
 
 ## What the legacy application actually provides
 
@@ -12,18 +12,18 @@ Evidence: the legacy `src/app.rs` target-specific workspace controls and `src/co
 
 ## What Studio covers in the current catalogs
 
-The 0.2 registry catalog has 45 DWORD setting options in 31 independent settings/choice groups, with privacy, Explorer, Start, taskbar, general experience, personalization, and accessibility categories. These are user-selected, target-gated, reviewable preferences with original-value recovery. They are not a replacement for the legacy system-tuning profile: they do not cover TCP/network profiles, TRIM/storage optimization, power plans, broad telemetry policy, or the legacy consumer-features switch.
+The 0.5 registry catalog has 58 DWORD setting options in 40 independent settings/choice groups, with privacy, Explorer, Start, taskbar, general experience, personalization, and accessibility categories. These are user-selected, target-gated, reviewable preferences with original-value recovery. They are not a replacement for the legacy system-tuning profile: they do not cover TCP/network profiles, TRIM/storage optimization or power plans. The two exact legacy diagnostic-data and consumer-experience registry policies now map into the trusted catalog; this does not claim all Windows telemetry has stopped.
 
-The 0.4 deployment catalog contains 234 WinGet package tasks, 8 Cargo tools, 4 uv tools, 8 Microsoft VS Code extensions, 7 opt-in Windows feature enables, and 4 maintenance commands. Five mixed recipes combine these domains. Legacy SetupProfile2.2.0 and MacInventory1 JSON imports propose exact trusted mappings for explicit review, retaining manual and unsupported items. The desktop workbench keeps settings and deployment in separate pages and execution confirmations; selected tasks remain explicit. Feature enablement and repair commands have separate effect boundaries from registry recovery.
+The 0.5 deployment catalog contains 234 WinGet package tasks, 8 Cargo tools, 4 uv tools, 6 NPM tools, 8 Microsoft VS Code extensions, 7 opt-in Windows feature enables, and 4 maintenance commands. Five mixed recipes combine these domains. Legacy SetupProfile2.2.0 and MacInventory1 JSON imports propose exact trusted mappings for explicit review, retaining manual and unsupported items. The desktop workbench keeps settings and deployment in separate pages and execution confirmations; selected tasks remain explicit. Feature enablement and repair commands have separate effect boundaries from registry recovery.
 
 Evidence: `data/catalog.json`, `data/deployment.json`, and `docs/DESIGN.md`. Catalog presence documents available choices, not successful execution on a Windows device. The task runner and UI still require the release's Windows and LTSC acceptance checks.
 
 ## Functional gaps that remain
 
 - Local Mac inventory JSON analysis and24curated formula/cask mappings now exist; automatic inventory collection, network refresh and broad name-level equivalence remain unmigrated.
-- Cargo and uv tool execution now exist for trusted catalog entries. Scoop, NPM and Pip remain manual; arbitrary imported packages are never converted into executable tasks.
+- Cargo, uv and NPM tool execution now exist for trusted catalog entries. Scoop and Pip remain manual; arbitrary imported packages are never converted into executable tasks.
 - Microsoft VS Code extension deployment now exists for reviewed IDs. Cursor/editor settings merge, agent-skill/plugin payload provisioning, Git or shell profile merge, NPM mirror configuration and Ollama model setup remain unmigrated.
-- No network/TCP profile, storage/TRIM optimization workflow, power-plan tuning, or legacy broad telemetry/consumer-content profile.
+- No network/TCP profile, storage/TRIM optimization workflow or power-plan tuning. The legacy device policies now map exactly, while numeric tuning and other unsupported changes remain explicit report items.
 - The new setting journal restores its recorded registry values; it does not undo installed packages, Windows components, or completed maintenance. The legacy journal also does not uninstall software or turn off enabled Windows features, but it records additional TCP, TRIM, and power state.
 - Windows host behavior, applicable LTSC builds, network prerequisites, administrator prompts, and recovery still need the documented device acceptance. macOS preview and compilation are not Windows execution proof.
 

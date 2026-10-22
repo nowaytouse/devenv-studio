@@ -389,7 +389,27 @@ impl Studio {
         self.last_event = None;
     }
 
+    fn deployment_limit_exceeded(&self) -> bool {
+        self.deployment_selected.len() > studio_deployment::MAX_SESSION_TASKS
+    }
+
+    fn deployment_limit_message(&self) -> String {
+        lf!(
+            "已选 {} 项部署任务，单次检查或执行最多 {} 项。可保存或导出完整档案，执行前请拆分选择。",
+            "{} deployment tasks selected; a session can inspect or execute at most {}. Save or export the complete profile, then split the selection before execution.",
+            self.deployment_selected.len(),
+            studio_deployment::MAX_SESSION_TASKS
+        )
+    }
+
     fn start_inspect(&mut self) {
+        if self.deployment_limit_exceeded() {
+            self.notice = Some(Notice {
+                text: self.deployment_limit_message(),
+                error: true,
+            });
+            return;
+        }
         if self.worker.is_some() {
             return;
         }
@@ -426,6 +446,13 @@ impl Studio {
     }
 
     fn start_deploy(&mut self) {
+        if self.deployment_limit_exceeded() {
+            self.notice = Some(Notice {
+                text: self.deployment_limit_message(),
+                error: true,
+            });
+            return;
+        }
         if !self.mutation_available() {
             return;
         }
@@ -1007,8 +1034,8 @@ impl Studio {
                 "developer",
                 tx("开发环境", "Developer tools"),
                 tx(
-                    "通过 Cargo、uv 与 VS Code 安装工具及扩展，固定包标识并记录执行结果。",
-                    "Install tools and extensions with Cargo, uv and VS Code, using exact identities and recorded outcomes.",
+                    "通过 Cargo、uv、NPM 与 VS Code 安装工具及扩展，固定包标识并记录执行结果。",
+                    "Install tools and extensions with Cargo, uv, NPM and VS Code, using exact identities and recorded outcomes.",
                 ),
             ),
             Page::Features => (
@@ -1241,6 +1268,9 @@ impl Studio {
             );
         }
         let valid = settings_plan.is_ok() && deployment_plan.is_ok();
+        if self.deployment_limit_exceeded() {
+            ui.colored_label(palette().danger, self.deployment_limit_message());
+        }
         ui.horizontal_wrapped(|ui| {
             if primary(ui, t("导出完整 JSON 方案"), valid && self.worker.is_none()).clicked()
             {
@@ -1268,6 +1298,7 @@ impl Studio {
                 .add_enabled(
                     self.mutation_available()
                         && deployment_plan.is_ok()
+                        && !self.deployment_limit_exceeded()
                         && !self.deployment_selected.is_empty(),
                     egui::Button::new(t("执行部署 / 功能 / 维护…")),
                 )
@@ -1574,7 +1605,8 @@ impl Studio {
                         ui.label(lf!("实际主机：{}", "Actual host: {}", self.host.name));
                         ui.label(lf!("方案目标：{}", "Plan target: {}", self.target.label()));
                         let plan = studio_deployment::build_plan(self.target, &self.deployment_selected);
-                        let valid = plan.is_ok();
+                        let valid = plan.is_ok() && !self.deployment_limit_exceeded();
+                        if self.deployment_limit_exceeded() { ui.colored_label(palette().danger, self.deployment_limit_message()); }
                         egui::ScrollArea::vertical().id_salt("confirm-deployment").max_height(260.0).show(ui, |ui| {
                             match &plan {
                                 Ok(plan) => for task in &plan.tasks { ui.label(RichText::new(crate::catalog_locale::text(i18n::language(), "tasks", &task.id, "title", &task.title)).strong()); deployment_details(ui, task); ui.separator(); },
@@ -2591,6 +2623,37 @@ mod tests {
         assert!(app.worker.is_none());
         assert!(app.deployment_selected.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn oversized_deployment_is_reviewable_but_never_starts_a_worker() {
+        let mut app = preview();
+        app.catalog = Ok(studio_core::load_catalog().unwrap());
+        app.deployment_selected = studio_deployment::catalog()
+            .unwrap()
+            .tasks
+            .into_iter()
+            .take(studio_deployment::MAX_SESSION_TASKS + 1)
+            .map(|task| task.id)
+            .collect();
+        assert!(app.deployment_limit_exceeded());
+        assert!(
+            workspace_io::plan(
+                app.catalog.as_ref().unwrap(),
+                app.target,
+                &app.selected,
+                &app.deployment_selected
+            )
+            .is_ok()
+        );
+        app.start_inspect();
+        assert!(app.worker.is_none());
+        assert!(app.notice.as_ref().is_some_and(|notice| notice.error));
+        app.host.can_apply = true;
+        app.host.target = Some(app.target);
+        app.start_deploy();
+        assert!(app.worker.is_none());
+        assert!(app.notice.as_ref().unwrap().text.contains("128"));
     }
 
     #[test]

@@ -1,15 +1,15 @@
 # 来源与集成范围
 
-审查日期：2026-10-22。以下为源码行为审查，不是 LTSC 设备运行验收。当前清单版本仍为 `2026-10-22.1`：45 个注册表选项（31 组独立设置）、234 个 WinGet 软件包、20 个开发工具任务、7 个可选功能及 4 个维护任务；所有项目默认不选。
+审查日期：2026-10-23。以下为源码行为审查，不是 LTSC 设备运行验收。当前两类清单版本为 `2026-10-23.1`：58 个注册表选项（40 组独立设置）、234 个 WinGet 软件包、26 个开发工具任务、7 个可选功能及 4 个维护任务；所有项目默认不选。
 
 ## 固定来源
 
 - **[WinUtil](https://github.com/ChrisTitusTech/winutil)**：`7514faf0d0f4bff9b6c5d9213426ab52520cfac4`。拆分其配置清单中的独立注册表设置，保留来源；不运行上游捆绑脚本。 许可证：MIT。
 - **[Sophia Script](https://github.com/farag2/Sophia-Script-for-Windows)**：`eeef532fc5f37129fe77ee58342f112f3bb71d39`。参考隐私、资源管理器及 LTSC 版本适配；仅整合已审查的单项设置。 许可证：MIT。
 - **[Win11Debloat](https://github.com/Raphire/Win11Debloat)**：`a2d63c7c1b9c7cb6554d4fce3aa7f377567f7f9e`。整合可独立选择的 Explorer 与用户体验设置；不继承整个精简预设。 许可证：MIT。
-- **[LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup)**：`a8523abbe08147b4d5de8746f26d99d056057ab0`。沿用用户逐项选择、计划预览与先记录原值的设计经验。旧项目独立保留。 许可证：设计参考；未复制源码。
+- **[LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup)**：`a8523abbe08147b4d5de8746f26d99d056057ab0`。整合精确的诊断数据/消费者体验策略和旧档案映射，沿用逐项选择及记录原值的设计。旧项目独立保留，未复制源文件或个人配置。
 
-旧 LTSC_Tools_Backup 的提交用于设计来源与历史对应；未复制其源文件或个人工具清单。旧仓库存在未提交改动，保持原样。当前融合发生在同一配置清单、计划和 Rust 执行引擎中，而不是启动三个上游脚本。
+旧 LTSC_Tools_Backup 的提交用于设计来源、精确策略地址与历史对应；未复制其源文件或个人工具清单。旧仓库存在未提交改动，保持原样。当前融合发生在同一配置清单、计划和 Rust 执行引擎中，而不是启动三个上游脚本。
 
 ## 首批映射与后续扩展
 
@@ -17,11 +17,11 @@
 
 软件清单见 [deployment.json](../data/deployment.json)：234 个唯一的软件包 ID 对应 WinUtil 固定提交中全部符合项目 ID 字符规则的原生 WinGet 条目（保留原有 30 项并新增 204 项）。两个 `msstore:` 条目使用 Microsoft Store 源标识，未纳入原生 WinGet 包目录。新增的 204 项各自链接到 WinUtil JSON 中对应源键行，原有 30 项的任务 ID、包 ID 与既有证据保持不变；执行时使用已安装的官方 WinGet 与精确 ID。实际安装版本由执行时来源决定，不固定，也不保证跨设备版本一致。固定文件 SHA-256 为 `5072ff3f3b4c689db313000c8ef7ff93c655f5cea55c5990192ead87789ecf41`；`scripts/update_catalog.py --source <本地固定源文件> --check` 可用已保存的源文件离线校验摘要、目录 ID 与英文覆盖率，不写入文件。
 
-开发工具包含 8 个 Cargo crate、4 个 uv 工具和 8 个 VS Code 扩展。它们是独立的用户级任务，需有对应工具链或编辑器；如果同时选择目录中提供的 WinGet 前置软件，执行引擎会先安装所选软件，再运行开发工具任务。Cargo/PyPI/Marketplace 的版本取执行时来源，不固定。Cargo 构建、Python 包安装后端或 VS Code 扩展可能执行其发布者提供的代码；用户应先审阅来源、许可与权限。本功能不提升这些任务的权限，也不写入系统 PATH。各任务链接对应的 crates.io、PyPI 或 Marketplace 项目页。
+开发工具包含 8 个 Cargo crate、4 个 uv 工具、6 个 NPM 工具和 8 个 VS Code 扩展。NPM使用官方Node及用户全局前缀，禁用生命周期脚本，不修改项目或PATH；精确身份回查不代表CLI已运行，详情见[NPM集成](NPM.md)。它们是独立的用户级任务，需有对应工具链或编辑器；如果同时选择目录中提供的 WinGet 前置软件，执行引擎会先安装所选软件，再运行开发工具任务。Cargo/PyPI/Marketplace 的版本取执行时来源，不固定。Cargo 构建、Python 包安装后端或 VS Code 扩展可能执行其发布者提供的代码；用户应先审阅来源、许可与权限。本功能不提升这些任务的权限，也不写入系统 PATH。各任务链接对应的 crates.io、PyPI 或 Marketplace 项目页。
 
 7 项 Windows 功能通过本机 DISM 查询、启用和回读，4 项维护通过 DISM/SFC 运行固定参数。相关微软文档链接保存在每项证据中；没有将 PowerShell 上游整体包装为 Rust 功能。
 
-首版的不可变清单副本保存在 [catalog-2026-10-21.1.json](../data/catalog-2026-10-21.1.json)，仅用于验证其历史恢复记录，不能借导入文件扩张执行权限。
+不可变历史清单副本保存在 [catalog-2026-10-21.1.json](../data/catalog-2026-10-21.1.json) 和 [catalog-2026-10-21.2.json](../data/catalog-2026-10-21.2.json)，仅用于验证对应历史恢复记录，不能借导入文件扩张执行权限。新增13个设置保留固定上游证据；诊断数据与消费者体验策略还核对了微软的适用版本、组织策略与作用范围。
 
 ## 首批逐项映射
 

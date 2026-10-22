@@ -19,6 +19,8 @@ mod windows;
 
 pub use history::{HistoryEvidence, HistoryRecord, HistoryTask, history};
 
+pub const MAX_SESSION_TASKS: usize = 128;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
@@ -176,7 +178,7 @@ pub fn catalog() -> Result<Catalog> {
                     "Invalid feature task"
                 );
             }
-            "cargo" | "uv" | "vscode" => {
+            "cargo" | "uv" | "vscode" | "npm" => {
                 let id = task
                     .package_id
                     .as_deref()
@@ -249,7 +251,7 @@ pub fn build_plan(target: Target, selected: &BTreeSet<String>) -> Result<Deploym
 fn task_order(kind: &str) -> u8 {
     match kind {
         "package" => 0,
-        "cargo" | "uv" | "vscode" => 1,
+        "cargo" | "uv" | "vscode" | "npm" => 1,
         "feature" => 2,
         _ => 3,
     }
@@ -284,7 +286,7 @@ pub fn provider_capabilities() -> Vec<ProviderCapability> {
     }
     #[cfg(not(windows))]
     {
-        ["winget","cargo","uv","vscode"].into_iter().map(|provider|ProviderCapability{provider:provider.into(),available:false,detail:"Windows deployment provider discovery is unavailable in preview. No local developer tools or Windows installations were inspected.".into()}).collect()
+        ["winget","cargo","uv","vscode","npm"].into_iter().map(|provider|ProviderCapability{provider:provider.into(),available:false,detail:"Windows deployment provider discovery is unavailable in preview. No local developer tools or Windows installations were inspected.".into()}).collect()
     }
 }
 pub fn inspect(
@@ -294,7 +296,7 @@ pub fn inspect(
 ) -> Result<Vec<Detection>> {
     let plan = build_plan(target, selected)?;
     ensure!(
-        plan.tasks.len() <= 128,
+        plan.tasks.len() <= MAX_SESSION_TASKS,
         "An inspection session supports at most 128 tasks; split the selection into separate runs"
     );
     #[cfg(windows)]
@@ -326,7 +328,7 @@ pub fn execute(
 ) -> Result<DeploymentReport> {
     validate_plan(&plan)?;
     ensure!(
-        plan.tasks.len() <= 128,
+        plan.tasks.len() <= MAX_SESSION_TASKS,
         "A deployment session supports at most 128 tasks; split the selection into separate reviewed runs"
     );
     ensure!(
@@ -368,7 +370,7 @@ mod tests {
             }
             assert!(matches!(
                 task.kind.as_str(),
-                "package" | "feature" | "maintenance" | "cargo" | "uv" | "vscode"
+                "package" | "feature" | "maintenance" | "cargo" | "uv" | "vscode" | "npm"
             ));
         }
     }
@@ -407,7 +409,7 @@ mod tests {
         let original = catalog
             .tasks
             .iter()
-            .find(|task| matches!(task.kind.as_str(), "cargo" | "uv" | "vscode"))
+            .find(|task| matches!(task.kind.as_str(), "cargo" | "uv" | "vscode" | "npm"))
             .unwrap();
         let mut plan =
             build_plan(original.targets[0], &BTreeSet::from([original.id.clone()])).unwrap();

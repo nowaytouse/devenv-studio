@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SHA256 = "5072ff3f3b4c689db313000c8ef7ff93c655f5cea55c5990192ead87789ecf41"
 SOURCE_URL = "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json"
 WINGET_HELP = "https://learn.microsoft.com/windows/package-manager/winget/install"
-REVISION = "2026-10-22.1"
+REVISION = "2026-10-23.1"
+NPM_IDS = {"typescript", "typescript-language-server", "prettier", "npm-check-updates", "http-server", "serve"}
 TARGETS = ["win10_ltsc2021", "win11_ltsc2024"]
 PACKAGE_LIMITATIONS = (
     "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，"
@@ -172,22 +173,22 @@ def main() -> None:
             developer_task(provider, package, description, "https://placeholder.invalid")[0]["id"]
             for provider, entries in [("cargo", CARGO), ("uv", UV), ("vscode", VSCODE)]
             for package, _, description in entries
-        }
+        } | {f"developer-npm-{slug(package)}" for package in NPM_IDS}
         if (
             catalog.get("revision") != REVISION
-            or len(tasks) != 265
+            or len(tasks) != 271
             or len(set(task_ids)) != len(task_ids)
             or len(source_ids) != 234
             or len(set(source_ids)) != 234
             or len(package_ids) != 234
             or set(package_ids) != set(source_ids)
             or len(preserved) != 41
-            or len(developer) != 20
+            or len(developer) != 26
             or {task["id"] for task in developer} != expected_dev
             or set(locale["tasks"]) != set(task_ids)
         ):
             raise SystemExit("Imported catalog IDs, counts, revision, or English overlay do not match the pinned source.")
-        print("Catalog check passed: 234 pinned WinGet IDs, 20 developer tasks, 41 preserved tasks, 265 English task entries; no files changed.")
+        print("Catalog check passed: 234 pinned WinGet IDs, 26 developer tasks, 41 preserved tasks, 271 English task entries; no files changed.")
         return
     if catalog.get("revision") != REVISION:
         raise SystemExit("Catalog revision changed; review and update this importer explicitly.")

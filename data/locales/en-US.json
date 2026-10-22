@@ -314,6 +314,97 @@
       "category": "Taskbar",
       "restart": "Sign out and back in.",
       "risk": "Windows 10 LTSC 2021 only. Uncombined windows use more taskbar space."
+    },
+    "privacy-diagnostic-data-off": {
+      "title": "Use the Enterprise diagnostic-data minimum",
+      "description": "Set the Windows diagnostic-data policy to AllowTelemetry=0, matching the legacy tool. This controls Windows diagnostic data and does not block every Microsoft or third-party connection.",
+      "category": "Privacy",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Device policy requiring administrator rights. The minimum is edition-dependent and organization policy may override it. Diagnostic, security, and update services are not stopped."
+    },
+    "experience-consumer-features-off": {
+      "title": "Turn off Microsoft consumer experiences",
+      "description": "Use the Enterprise device policy to turn off consumer experiences such as suggested apps, membership notifications, and promotional installs after setup. Existing apps are not uninstalled.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Device policy requiring administrator rights. Applies to Enterprise, Education, and IoT Enterprise. Some LTSC installations may already omit this content."
+    },
+    "privacy-online-speech-off": {
+      "title": "Turn off online speech recognition",
+      "description": "Turn off this user's online speech-recognition preference. Cloud-based dictation or voice typing may become unavailable; local speech features are unchanged.",
+      "category": "Privacy",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "May affect voice typing and apps that require online recognition. Microphone permissions are unchanged. The prior registry value is recorded."
+    },
+    "privacy-activity-publishing-off": {
+      "title": "Prevent publishing user activities",
+      "description": "Prevent apps from publishing new user activities to the system. Existing activity records are not deleted; some cross-device continuation features may be reduced.",
+      "category": "Privacy",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Device policy requiring administrator rights. Organization policy may override it. Activity history is not cleared; restoration only restores the recorded policy value."
+    },
+    "privacy-activity-upload-off": {
+      "title": "Prevent uploading user activities",
+      "description": "Prevent published user activities from being uploaded without deleting existing records. Windows versions that have removed this upload feature may show no observable change.",
+      "category": "Privacy",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Device policy requiring administrator rights. Organization policy may override it. Activity history is not cleared; restoration only restores the recorded policy value."
+    },
+    "explorer-expand-current-folder": {
+      "title": "Expand navigation to the current folder",
+      "description": "Automatically expand the File Explorer navigation tree to the folder currently open.",
+      "category": "File Explorer",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
+    },
+    "explorer-collapse-current-folder": {
+      "title": "Do not automatically expand the navigation tree",
+      "description": "Turn off automatic navigation-tree expansion to the current folder. Folders can still be expanded manually.",
+      "category": "File Explorer",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
+    },
+    "experience-snap-assist-off": {
+      "title": "Turn off Snap Assist suggestions",
+      "description": "Stop suggesting other windows to fill remaining space after snapping a window. Window snapping itself remains available.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
+    },
+    "experience-snap-assist-on": {
+      "title": "Show Snap Assist suggestions",
+      "description": "Suggest other open windows to fill the remaining space after snapping a window.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
+    },
+    "experience-autoplay-off": {
+      "title": "Turn off AutoPlay prompts",
+      "description": "Do not offer AutoPlay actions when removable media or devices are connected. This changes the AutoPlay preference, not AutoRun policy.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
+    },
+    "experience-autoplay-on": {
+      "title": "Allow AutoPlay prompts",
+      "description": "Allow Windows to offer AutoPlay actions according to existing device preferences. Per-media defaults and AutoRun policy are unchanged.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
+    },
+    "experience-window-shake-off": {
+      "title": "Turn off title-bar window shake",
+      "description": "Do not minimize other windows when the current window's title bar is shaken.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
+    },
+    "experience-window-shake-on": {
+      "title": "Allow title-bar window shake",
+      "description": "Allow shaking the current window's title bar to minimize other windows.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior raw value is recorded for restoration."
     }
   },
   "presets": {
@@ -2185,6 +2276,48 @@
       "category": "Developer tools",
       "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
       "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-npm-typescript": {
+      "title": "TypeScript (NPM)",
+      "description": "TypeScript compiler for standalone CLI use. Projects should keep their own pinned TypeScript dependency.",
+      "category": "Developer tools",
+      "restart": "No restart required. If a command is unavailable, check whether PATH already includes the user npm prefix.",
+      "limitations": "Requires the official Node.js Windows installation and bundled npm. Uses the fixed current-user %APPDATA%\\npm prefix and registry.npmjs.org, preserving already installed tools. Does not change PATH, mirrors or project dependencies; user npm configuration is ignored and lifecycle scripts are disabled. Packages requiring build scripts may not work. Readback verifies exact installed identity and version, not runtime functionality. Versions follow the registry; registry recovery cannot uninstall packages."
+    },
+    "developer-npm-typescript-language-server": {
+      "title": "TypeScript Language Server (NPM)",
+      "description": "TypeScript/JavaScript language server. Select TypeScript separately; editor integration remains explicit.",
+      "category": "Developer tools",
+      "restart": "No restart required. If a command is unavailable, check whether PATH already includes the user npm prefix.",
+      "limitations": "Requires the official Node.js Windows installation and bundled npm. Uses the fixed current-user %APPDATA%\\npm prefix and registry.npmjs.org, preserving already installed tools. Does not change PATH, mirrors or project dependencies; user npm configuration is ignored and lifecycle scripts are disabled. Packages requiring build scripts may not work. Readback verifies exact installed identity and version, not runtime functionality. Versions follow the registry; registry recovery cannot uninstall packages."
+    },
+    "developer-npm-prettier": {
+      "title": "Prettier (NPM)",
+      "description": "Standalone code formatter. Does not rewrite project formatting configuration or dependencies.",
+      "category": "Developer tools",
+      "restart": "No restart required. If a command is unavailable, check whether PATH already includes the user npm prefix.",
+      "limitations": "Requires the official Node.js Windows installation and bundled npm. Uses the fixed current-user %APPDATA%\\npm prefix and registry.npmjs.org, preserving already installed tools. Does not change PATH, mirrors or project dependencies; user npm configuration is ignored and lifecycle scripts are disabled. Packages requiring build scripts may not work. Readback verifies exact installed identity and version, not runtime functionality. Versions follow the registry; registry recovery cannot uninstall packages."
+    },
+    "developer-npm-npm-check-updates": {
+      "title": "npm-check-updates (NPM)",
+      "description": "Checks for newer project dependency versions. Installing this tool does not update any project.",
+      "category": "Developer tools",
+      "restart": "No restart required. If a command is unavailable, check whether PATH already includes the user npm prefix.",
+      "limitations": "Requires the official Node.js Windows installation and bundled npm. Uses the fixed current-user %APPDATA%\\npm prefix and registry.npmjs.org, preserving already installed tools. Does not change PATH, mirrors or project dependencies; user npm configuration is ignored and lifecycle scripts are disabled. Packages requiring build scripts may not work. Readback verifies exact installed identity and version, not runtime functionality. Versions follow the registry; registry recovery cannot uninstall packages."
+    },
+    "developer-npm-http-server": {
+      "title": "http-server (NPM)",
+      "description": "Static-file HTTP development server. Installs the tool without starting a server or opening a port.",
+      "category": "Developer tools",
+      "restart": "No restart required. If a command is unavailable, check whether PATH already includes the user npm prefix.",
+      "limitations": "Requires the official Node.js Windows installation and bundled npm. Uses the fixed current-user %APPDATA%\\npm prefix and registry.npmjs.org, preserving already installed tools. Does not change PATH, mirrors or project dependencies; user npm configuration is ignored and lifecycle scripts are disabled. Packages requiring build scripts may not work. Readback verifies exact installed identity and version, not runtime functionality. Versions follow the registry; registry recovery cannot uninstall packages."
+    },
+    "developer-npm-serve": {
+      "title": "serve (NPM)",
+      "description": "Static-site preview server. Installs the tool without starting a service or changing the firewall.",
+      "category": "Developer tools",
+      "restart": "No restart required. If a command is unavailable, check whether PATH already includes the user npm prefix.",
+      "limitations": "Requires the official Node.js Windows installation and bundled npm. Uses the fixed current-user %APPDATA%\\npm prefix and registry.npmjs.org, preserving already installed tools. Does not change PATH, mirrors or project dependencies; user npm configuration is ignored and lifecycle scripts are disabled. Packages requiring build scripts may not work. Readback verifies exact installed identity and version, not runtime functionality. Versions follow the registry; registry recovery cannot uninstall packages."
     }
   }
 }

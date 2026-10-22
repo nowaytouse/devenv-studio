@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "settings": {
+    "schema_version": 1,
+    "target": "win11_ltsc2024",
+    "selected": [
+      "explorer-extensions",
+      "privacy-advertising-id"
+    ]
+  },
+  "deployment": [
+    "software-git-git",
+    "software-microsoft-visualstudiocode",
+    "software-openjs-nodejs-lts",
+    "developer-npm-typescript",
+    "developer-npm-typescript-language-server",
+    "developer-npm-prettier",
+    "developer-vscode-esbenp-prettier-vscode",
+    "developer-vscode-dbaeumer-vscode-eslint"
+  ]
+}

@@ -380,21 +380,39 @@ impl Studio {
                 self.hybrid.providers = studio_deployment::provider_capabilities();
             }
         });
-        for provider in &self.hybrid.providers {
-            egui::CollapsingHeader::new(format!(
-                "{} · {}",
-                provider.provider,
-                if provider.available {
+        ui.label(RichText::new(tx("NPM 使用当前用户的 %APPDATA%\\npm，禁用生命周期脚本，不修改 PATH、镜像或项目依赖。安装后核对包身份；工具可运行性需另行验证。", "NPM uses the current user’s %APPDATA%\\npm, disables lifecycle scripts and leaves PATH, mirrors and project dependencies unchanged. Readback checks package identity; verify tool functionality separately.")).size(12.0).color(palette().muted));
+        ui.horizontal_wrapped(|ui| {
+            for provider in &self.hybrid.providers {
+                let state = if provider.available {
                     tx("已找到", "Located")
+                } else if cfg!(windows) {
+                    tx("未找到", "Unavailable")
                 } else {
-                    tx("不可用 / 预览", "Unavailable / preview")
-                }
-            ))
-            .id_salt(("provider", &provider.provider))
-            .show(ui, |ui| {
+                    tx("预览", "Preview")
+                };
+                badge(
+                    ui,
+                    &format!("{} · {state}", provider.provider),
+                    palette().wash,
+                    if provider.available {
+                        palette().accent
+                    } else {
+                        palette().muted
+                    },
+                );
+            }
+        });
+        egui::CollapsingHeader::new(tx(
+            "提供程序详情与安装前提",
+            "Provider details and prerequisites",
+        ))
+        .id_salt("developer-provider-details")
+        .show(ui, |ui| {
+            for provider in &self.hybrid.providers {
+                ui.label(RichText::new(&provider.provider).strong());
                 ui.label(&provider.detail);
-            });
-        }
-        ui.label(RichText::new(tx("可在软件部署中选择 Rust MSVC、uv 和 VS Code，再勾选对应开发工具。Rust 链接器、SDK 及兼容的 Python 运行时仍需自行准备。", "Select Rust MSVC, uv and VS Code in Software, then choose developer tasks. Prepare the Rust linker, SDK and compatible Python runtime as required.")).size(12.0).color(palette().muted));
+            }
+        });
+        ui.label(RichText::new(tx("可在软件部署中选择 Rust MSVC、uv、Node.js LTS 和 VS Code，再勾选对应开发工具。Rust 链接器、SDK 及兼容的 Python 运行时仍需自行准备。", "Select Rust MSVC, uv, Node.js LTS and VS Code in Software, then choose developer tasks. Prepare the Rust linker, SDK and compatible Python runtime as required.")).size(12.0).color(palette().muted));
     }
 }

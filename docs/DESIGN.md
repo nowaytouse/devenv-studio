@@ -1,5 +1,11 @@
 # LTSC Studio — design record
 
+## 0.5 NPM and policy continuity
+
+NPM reuses the developer task and history protocol, with a fixed official Node installation, explicit per-user global prefix and registry, configuration isolation and lifecycle scripts disabled. Installation success requires exact JSON package identity/version readback; it does not prove CLI functionality. Exact trusted IDs from SetupProfile or Mac inventory can join the same workflow; imported commands and arbitrary package specifications remain non-executable. The Web recipe explicitly selects Node prerequisites and NPM tools. Large profiles stay exportable while GUI inspection/execution uses the same session bound as the backend.
+
+The new registry catalog preserves every prior action and ships the immutable 2026-10-21.2 snapshot alongside the first snapshot. Historical journals are validated against their own trusted revision. New device policies use the existing write-ahead original-value journal and native readback; a matching registry value does not establish that organization policy or all Windows behavior changed.
+
 ## 0.4 mixed workflows and legacy migration
 
 Recipes compose canonical settings and deployment IDs into one v2 workspace. Merging is transactional: validate all added identities, resolve mutually exclusive setting groups, preserve unrelated selections, then validate the complete result before assigning GUI state. Migration reads only explicitly supplied SetupProfile2.2.0 or MacInventory1 JSON, rejects duplicate keys and input bounds violations, and reports every requested, false, empty, custom or unsupported field. Imports start unchecked. Only selected mapped rows enter the same merge path; private configuration values and arbitrary commands never become executable payloads. Analyzed path and target identify the report; either changing disables merge pending reanalysis.

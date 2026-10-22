@@ -283,7 +283,10 @@ fn count(value: &Value, key: &str) -> Result<usize> {
         .get(key)
         .and_then(Value::as_u64)
         .with_context(|| format!("History event missing count {key}"))?;
-    ensure!(count <= 128, "Invalid history count {key}");
+    ensure!(
+        count <= crate::MAX_SESSION_TASKS as u64,
+        "Invalid history count {key}"
+    );
     Ok(count as usize)
 }
 
@@ -340,7 +343,7 @@ fn read_record(
             ensure!(
                 plan.schema_version == 1
                     && !plan.tasks.is_empty()
-                    && plan.tasks.len() <= 128
+                    && plan.tasks.len() <= crate::MAX_SESSION_TASKS
                     && !plan.catalog_revision.is_empty()
                     && plan.catalog_revision.len() <= 128,
                 "Invalid historical plan bounds"
@@ -355,7 +358,13 @@ fn read_record(
                         && !task.title.contains('\0')
                         && matches!(
                             task.kind.as_str(),
-                            "package" | "feature" | "maintenance" | "cargo" | "uv" | "vscode"
+                            "package"
+                                | "feature"
+                                | "maintenance"
+                                | "cargo"
+                                | "uv"
+                                | "vscode"
+                                | "npm"
                         ),
                     "Invalid historical task identity"
                 );
@@ -768,7 +777,7 @@ mod tests {
     }
     #[test]
     fn developer_kind_history_and_legacy_schema_are_both_readable() {
-        for kind in ["cargo", "uv", "vscode"] {
+        for kind in ["cargo", "uv", "vscode", "npm"] {
             let f = Fixture::new();
             let mut plan = header();
             plan["plan"]["tasks"][0]["kind"] = Value::String(kind.into());

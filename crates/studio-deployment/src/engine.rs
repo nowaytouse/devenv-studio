@@ -23,6 +23,8 @@ pub(crate) struct DeveloperTool {
     pub program: PathBuf,
     pub cargo_root: Option<PathBuf>,
     pub vscode_cli: Option<PathBuf>,
+    pub npm_cli: Option<PathBuf>,
+    pub npm_prefix: Option<PathBuf>,
 }
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
@@ -41,7 +43,7 @@ fn log(history: &mut impl History, value: impl Serialize) -> Result<()> {
         .context("Persist deployment history; no further command may run")
 }
 fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
-    if matches!(task.kind.as_str(), "cargo" | "uv" | "vscode") {
+    if matches!(task.kind.as_str(), "cargo" | "uv" | "vscode" | "npm") {
         return developer_invocation(tools, task, inspect);
     }
     let (program, args) = match task.kind.as_str() {
@@ -122,6 +124,7 @@ fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
         program,
         args,
         vscode_node: false,
+        npm_node: false,
     })
 }
 fn developer_invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
@@ -176,6 +179,37 @@ fn developer_invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Inv
             }
             args
         }
+        "npm" => {
+            let cli = tool.npm_cli.context("Missing official npm-cli.js")?;
+            let prefix = tool.npm_prefix.context("Missing fixed user npm prefix")?;
+            ensure!(
+                cli.is_absolute() && prefix.is_absolute(),
+                "npm CLI and user prefix must be absolute"
+            );
+            let mut args = vec![
+                cli.to_string_lossy().into_owned(),
+                if inspect { "ls" } else { "install" }.into(),
+                "--global".into(),
+                "--prefix".into(),
+                prefix.to_string_lossy().into_owned(),
+                "--registry=https://registry.npmjs.org/".into(),
+                "--userconfig=NUL".into(),
+                // Distinct null-device spellings avoid npm rejecting duplicate config sources.
+                "--globalconfig=NUL.ltsc-global".into(),
+                "--no-audit".into(),
+                "--no-fund".into(),
+                "--no-update-notifier".into(),
+                "--no-progress".into(),
+                "--color=false".into(),
+                "--ignore-scripts".into(),
+            ];
+            if inspect {
+                args.extend(["--json".into(), "--depth=0".into(), "--long".into()]);
+            } else {
+                args.extend(["--".into(), id.into()]);
+            }
+            args
+        }
         "vscode" => {
             let cli = tool.vscode_cli.context("Missing official VS Code cli.js")?;
             ensure!(
@@ -202,6 +236,7 @@ fn developer_invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Inv
         program: tool.program,
         args,
         vscode_node: task.kind == "vscode",
+        npm_node: task.kind == "npm",
     })
 }
 fn installed_developer(task: &Task, stdout: &str) -> Result<bool> {
@@ -247,6 +282,107 @@ fn installed_developer(task: &Task, stdout: &str) -> Result<bool> {
         }
     }
     Ok(found)
+}
+#[derive(serde::Deserialize)]
+struct NpmList {
+    path: String,
+    #[serde(default, deserialize_with = "npm_dependencies")]
+    dependencies: std::collections::BTreeMap<String, NpmPackage>,
+    #[serde(default)]
+    problems: Vec<String>,
+    #[serde(default)]
+    error: Option<serde_json::Value>,
+    #[serde(default)]
+    invalid: Option<serde_json::Value>,
+    #[serde(default)]
+    missing: bool,
+}
+#[derive(serde::Deserialize)]
+struct NpmPackage {
+    name: String,
+    version: String,
+    path: String,
+    #[serde(default)]
+    resolved: Option<String>,
+    #[serde(default)]
+    link: bool,
+    #[serde(default)]
+    problems: Vec<String>,
+    #[serde(default)]
+    error: Option<serde_json::Value>,
+    #[serde(default)]
+    invalid: Option<serde_json::Value>,
+    #[serde(default)]
+    missing: bool,
+}
+fn npm_dependencies<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<std::collections::BTreeMap<String, NpmPackage>, D::Error> {
+    struct UniquePackages;
+    impl<'de> serde::de::Visitor<'de> for UniquePackages {
+        type Value = std::collections::BTreeMap<String, NpmPackage>;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("an object of unique npm package identities")
+        }
+        fn visit_map<M: serde::de::MapAccess<'de>>(
+            self,
+            mut map: M,
+        ) -> std::result::Result<Self::Value, M::Error> {
+            let mut packages = std::collections::BTreeMap::new();
+            while let Some((name, package)) = map.next_entry::<String, NpmPackage>()? {
+                if packages.insert(name, package).is_some() {
+                    return Err(serde::de::Error::custom("Duplicate npm package identity"));
+                }
+            }
+            Ok(packages)
+        }
+    }
+    deserializer.deserialize_map(UniquePackages)
+}
+fn npm_path_matches(actual: &str, expected: &str) -> bool {
+    actual
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .eq_ignore_ascii_case(expected.replace('\\', "/").trim_end_matches('/'))
+}
+fn installed_npm(wanted: &str, stdout: &str, prefix: &str) -> Result<bool> {
+    let list: NpmList =
+        serde_json::from_str(stdout).context("Parse complete npm ls --json --long output")?;
+    ensure!(
+        npm_path_matches(&list.path, prefix),
+        "npm inspected a different global prefix"
+    );
+    ensure!(
+        list.error.is_none() && list.invalid.is_none() && !list.missing && list.problems.is_empty(),
+        "npm reported an incomplete or invalid installed-package tree"
+    );
+    for (id, package) in &list.dependencies {
+        ensure!(
+            crate::developer_ids::valid("npm", id)
+                && package.name == *id
+                && !package.version.is_empty()
+                && package.version.len() <= 128
+                && package.version.as_bytes()[0].is_ascii_digit()
+                && package
+                    .version
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b".+-".contains(&b))
+                && npm_path_matches(
+                    &package.path,
+                    &format!("{}/node_modules/{id}", prefix.trim_end_matches(['/', '\\']))
+                )
+                && !package.link
+                && !package.resolved.as_deref().is_some_and(|resolved| resolved
+                    .starts_with("file:")
+                    || resolved.starts_with("link:"))
+                && package.error.is_none()
+                && package.invalid.is_none()
+                && !package.missing
+                && package.problems.is_empty(),
+            "npm returned an incomplete, invalid or mismatched installed-package identity"
+        );
+    }
+    Ok(list.dependencies.contains_key(wanted))
 }
 fn normalize_python(value: &str) -> String {
     let mut normalized = String::new();
@@ -306,15 +442,32 @@ pub(crate) fn detect(
             detail: "尚未运行维护命令；检查状态不会自动启动扫描或修复。".into(),
         });
     }
-    let output = runner.run(&invocation(tools, task, true)?, cancel)?;
+    let command = invocation(tools, task, true)?;
+    let output = runner.run(&command, cancel)?;
     complete_output(&output)?;
-    let state = if matches!(task.kind.as_str(), "cargo" | "uv" | "vscode") {
+    let state = if matches!(task.kind.as_str(), "cargo" | "uv" | "vscode" | "npm") {
         ensure!(
             output.code == 0,
             "Developer provider inspection failed, not an absent tool: {}",
             output.diagnostic()
         );
-        if installed_developer(task, &output.stdout)? {
+        let installed = if task.kind == "npm" {
+            let prefix = command
+                .args
+                .windows(2)
+                .find(|pair| pair[0] == "--prefix")
+                .context("Missing npm inspection prefix")?;
+            installed_npm(
+                task.package_id
+                    .as_deref()
+                    .context("Missing npm package ID")?,
+                &output.stdout,
+                &prefix[1],
+            )?
+        } else {
+            installed_developer(task, &output.stdout)?
+        };
+        if installed {
             "installed"
         } else {
             "not_installed"
@@ -430,7 +583,7 @@ pub(crate) fn run_plan(
             let command = invocation(tools, task, false)?;
             log(
                 history,
-                serde_json::json!({"event":"intent","task_id":task.id,"program":command.program,"args":command.args,"environment":if command.vscode_node {"ELECTRON_RUN_AS_NODE=1; VSCODE_DEV and VSCODE_PORTABLE removed"}else{"inherited"},"warning":"No automatic rollback. OS servicing and installer descendants may continue after cancellation."}),
+                serde_json::json!({"event":"intent","task_id":task.id,"program":command.program,"args":command.args,"environment":if command.vscode_node {"ELECTRON_RUN_AS_NODE=1; VSCODE_DEV and VSCODE_PORTABLE removed"}else if command.npm_node {"NPM_CONFIG_*, NODE_OPTIONS and NODE_PATH removed; user/global npmrc disabled; fixed user prefix and registry; lifecycle scripts disabled"}else{"inherited"},"warning":"No automatic rollback. OS servicing and installer descendants may continue after cancellation."}),
             )?;
             if cancel.load(Ordering::Acquire) {
                 return Ok((false, "cancelled before command".into()));
@@ -589,12 +742,19 @@ mod tests {
         Ok(DeveloperTool {
             program: format!(
                 "/trusted/{}",
-                if kind == "vscode" { "Code.exe" } else { kind }
+                match kind {
+                    "vscode" => "Code.exe",
+                    "npm" => "node.exe",
+                    _ => kind,
+                }
             )
             .into(),
             cargo_root: (kind == "cargo").then(|| PathBuf::from("/trusted/.cargo")),
             vscode_cli: (kind == "vscode")
                 .then(|| PathBuf::from("/trusted/resources/app/out/cli.js")),
+            npm_cli: (kind == "npm")
+                .then(|| PathBuf::from("/trusted/node_modules/npm/bin/npm-cli.js")),
+            npm_prefix: (kind == "npm").then(|| PathBuf::from("/user/npm")),
         })
     }
     fn plan(kind: &str) -> DeploymentPlan {
@@ -963,6 +1123,198 @@ mod tests {
             assert!(outcome.cancelled);
             assert_eq!(outcome.completed, 0);
         }
+    }
+    fn npm_list(id: Option<&str>) -> String {
+        let mut list = serde_json::json!({"path":"/user/npm","name":"npm","extraneous":false,"_dependencies":{},"devDependencies":{},"peerDependencies":{}});
+        if let Some(id) = id {
+            list["dependencies"] = serde_json::json!({id:{"name":id,"version":"1.2.3","path":format!("/user/npm/node_modules/{id}"),"overridden":false}});
+        }
+        list.to_string()
+    }
+    #[test]
+    fn npm_arguments_use_one_fixed_user_prefix_and_no_lifecycle_scripts() {
+        for inspect in [true, false] {
+            let command =
+                invocation(&tools(), &developer_task("npm", "@scope/tool"), inspect).unwrap();
+            assert_eq!(command.program, PathBuf::from("/trusted/node.exe"));
+            assert!(command.npm_node && !command.vscode_node);
+            assert_eq!(
+                &command.args[..14],
+                [
+                    "/trusted/node_modules/npm/bin/npm-cli.js",
+                    if inspect { "ls" } else { "install" },
+                    "--global",
+                    "--prefix",
+                    "/user/npm",
+                    "--registry=https://registry.npmjs.org/",
+                    "--userconfig=NUL",
+                    "--globalconfig=NUL.ltsc-global",
+                    "--no-audit",
+                    "--no-fund",
+                    "--no-update-notifier",
+                    "--no-progress",
+                    "--color=false",
+                    "--ignore-scripts",
+                ]
+            );
+            if inspect {
+                assert_eq!(&command.args[14..], ["--json", "--depth=0", "--long"]);
+            } else {
+                assert_eq!(&command.args[14..], ["--", "@scope/tool"]);
+            }
+        }
+        fn missing(_: &str) -> Result<DeveloperTool> {
+            anyhow::bail!("Node/npm files unavailable")
+        }
+        let mut absent = tools();
+        absent.developer = missing;
+        let mut fake = Fake {
+            outputs: VecDeque::new(),
+            calls: vec![],
+            cancel: None,
+        };
+        assert!(
+            detect(
+                &developer_task("npm", "typescript"),
+                &absent,
+                &mut fake,
+                &Arc::new(AtomicBool::new(false))
+            )
+            .is_err()
+        );
+        assert!(fake.calls.is_empty());
+    }
+    #[test]
+    fn npm_json_requires_exact_complete_identity_and_same_prefix() {
+        for id in ["typescript", "@scope/tool"] {
+            assert!(installed_npm(id, &npm_list(Some(id)), "/user/npm").unwrap());
+            assert!(!installed_npm(id, &npm_list(None), "/user/npm").unwrap());
+            assert!(!installed_npm(id, &npm_list(Some("other-tool")), "/user/npm").unwrap());
+            assert!(installed_npm(id, &npm_list(Some(id)), "/other/npm").is_err());
+            let original: serde_json::Value = serde_json::from_str(&npm_list(Some(id))).unwrap();
+            for (field, value) in [
+                ("name", serde_json::json!("other-tool")),
+                ("version", serde_json::json!("")),
+                ("version", serde_json::json!("file:../package")),
+                (
+                    "path",
+                    serde_json::json!("/system/nodejs/node_modules/tool"),
+                ),
+                ("missing", serde_json::json!(true)),
+                ("link", serde_json::json!(true)),
+                ("resolved", serde_json::json!("file:../other")),
+                ("invalid", serde_json::json!(true)),
+                ("problems", serde_json::json!(["missing dependency"])),
+                ("error", serde_json::json!({"code":"ELSPROBLEMS"})),
+            ] {
+                let mut list = original.clone();
+                list["dependencies"][id][field] = value;
+                assert!(
+                    installed_npm(id, &list.to_string(), "/user/npm").is_err(),
+                    "{field}"
+                );
+            }
+            for field in ["name", "version", "path"] {
+                let mut list = original.clone();
+                list["dependencies"][id]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove(field);
+                assert!(
+                    installed_npm(id, &list.to_string(), "/user/npm").is_err(),
+                    "{field}"
+                );
+            }
+        }
+        for text in [
+            "",
+            "[]",
+            "{}",
+            "null",
+            r#"{"path":"/user/npm","dependencies":null}"#,
+            r#"{"path":"/user/npm","dependencies":[]}"#,
+            r#"{"path":"/user/npm","error":{}}"#,
+            r#"{"path":"/user/npm","invalid":true}"#,
+            r#"{"path":"/user/npm","problems":["invalid"]}"#,
+            r#"{"path":"/user/npm","dependencies":{"tool":{},"tool":{}}}"#,
+            r#"{"path":"/user/npm","path":"/other/npm"}"#,
+        ] {
+            assert!(installed_npm("tool", text, "/user/npm").is_err(), "{text}");
+        }
+        assert!(npm_path_matches(
+            r"C:\Users\User\AppData\Roaming\npm",
+            "c:/users/user/appdata/roaming/npm/"
+        ));
+    }
+    #[test]
+    fn npm_install_zero_exit_requires_readback_and_existing_tools_are_preserved() {
+        let task = developer_task("npm", "typescript");
+        let plan = DeploymentPlan {
+            schema_version: 1,
+            catalog_revision: "fixture".into(),
+            target: studio_core::Target::Win11Ltsc2024,
+            tasks: vec![task],
+        };
+        for after in [
+            npm_list(None),
+            "{}".into(),
+            r#"{"path":"/user/npm","error":{}}"#.into(),
+        ] {
+            let mut fake = Fake {
+                outputs: VecDeque::from([
+                    output(0, &npm_list(None)),
+                    output(0, "installed"),
+                    output(0, &after),
+                ]),
+                calls: vec![],
+                cancel: None,
+            };
+            let mut log = Log::default();
+            let outcome = run_plan(
+                &plan,
+                &tools(),
+                &mut fake,
+                &mut log,
+                &Arc::new(AtomicBool::new(false)),
+                None,
+            )
+            .unwrap();
+            assert_eq!((outcome.completed, outcome.failed), (0, 1));
+            assert_eq!(fake.calls.len(), 3);
+            assert!(!log.values.iter().any(|value| value["event"] == "completed"));
+        }
+        let mut fake = Fake {
+            outputs: VecDeque::from([output(0, &npm_list(Some("typescript")))]),
+            calls: vec![],
+            cancel: None,
+        };
+        let outcome = run_plan(
+            &plan,
+            &tools(),
+            &mut fake,
+            &mut Log::default(),
+            &Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+        assert_eq!((outcome.completed, outcome.failed), (1, 0));
+        assert_eq!(fake.calls.len(), 1);
+        let mut fake = Fake {
+            outputs: VecDeque::from([output(5, &npm_list(Some("typescript")))]),
+            calls: vec![],
+            cancel: None,
+        };
+        let outcome = run_plan(
+            &plan,
+            &tools(),
+            &mut fake,
+            &mut Log::default(),
+            &Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+        assert_eq!((outcome.completed, outcome.failed), (0, 1));
+        assert_eq!(fake.calls.len(), 1);
     }
     #[test]
     fn providers_are_resolved_after_selected_prerequisite_tasks() {

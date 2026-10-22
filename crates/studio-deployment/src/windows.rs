@@ -66,6 +66,15 @@ fn local_app_data() -> Result<PathBuf> {
     };
     known_folder(&LOCAL)
 }
+fn roaming_app_data() -> Result<PathBuf> {
+    const ROAMING: Guid = Guid {
+        a: 0x3eb685db,
+        b: 0x65f9,
+        c: 0x4cf6,
+        d: [0xa0, 0x3a, 0xe3, 0xef, 0x65, 0x72, 0x9f, 0x3d],
+    };
+    known_folder(&ROAMING)
+}
 fn user_profile() -> Result<PathBuf> {
     const PROFILE: Guid = Guid {
         a: 0x5e6c858f,
@@ -222,6 +231,19 @@ fn installed_file(path: &Path) -> Result<bool> {
         }
     }
 }
+fn regular_directory_if_present(path: &Path) -> Result<()> {
+    use std::os::windows::fs::MetadataExt;
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => ensure!(
+            metadata.is_dir() && metadata.file_attributes() & 0x400 == 0,
+            "npm directory must not be a reparse point or file: {}",
+            path.display()
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("Inspect fixed npm directory"),
+    }
+    Ok(())
+}
 fn winget_uv(root: &Path) -> Result<Option<PathBuf>> {
     let link = root.join("Links/uv.exe");
     match fs::symlink_metadata(&link) {
@@ -259,6 +281,9 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
         "cargo" => {
             "Install Rustup/Cargo in the standard user-profile .cargo/bin location and configure a working Rust toolchain (https://rustup.rs). Cargo crates are compiled with --locked; native build tools may also be required."
         }
+        "npm" => {
+            "Install official Node.js LTS with bundled npm in the standard system Program Files/nodejs location (https://nodejs.org/en/download). Custom, portable and version-manager locations are not searched. npm uses the fixed user Roaming AppData/npm prefix, public npm registry, and disables package lifecycle scripts; installed identity is not a tool launch test."
+        }
         "uv" => {
             "Install uv in the standard user-profile .local/bin or .cargo/bin, or through the explicit astral-sh.uv WinGet task (https://docs.astral.sh/uv/getting-started/installation/). Python must already be available; automatic Python downloads are disabled."
         }
@@ -275,6 +300,8 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                 program,
                 cargo_root: Some(root),
                 vscode_cli: None,
+                npm_cli: None,
+                npm_prefix: None,
             })
         }
         "uv" => {
@@ -287,6 +314,8 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                         program: path,
                         cargo_root: None,
                         vscode_cli: None,
+                        npm_cli: None,
+                        npm_prefix: None,
                     });
                 }
             }
@@ -300,10 +329,40 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                         program,
                         cargo_root: None,
                         vscode_cli: None,
+                        npm_cli: None,
+                        npm_prefix: None,
                     });
                 }
             }
             anyhow::bail!("{}", missing())
+        }
+        "npm" => {
+            let root = program_files()?.join("nodejs");
+            for directory in [
+                &root,
+                &root.join("node_modules"),
+                &root.join("node_modules/npm"),
+                &root.join("node_modules/npm/bin"),
+            ] {
+                regular_directory_if_present(directory)?;
+            }
+            let program = root.join("node.exe");
+            let cli = root.join("node_modules/npm/bin/npm-cli.js");
+            ensure!(
+                installed_file(&program)? && installed_file(&cli)?,
+                "{}",
+                missing()
+            );
+            let prefix = roaming_app_data()?.join("npm");
+            regular_directory_if_present(&prefix)?;
+            regular_directory_if_present(&prefix.join("node_modules"))?;
+            Ok(DeveloperTool {
+                program,
+                cargo_root: None,
+                vscode_cli: None,
+                npm_cli: Some(cli),
+                npm_prefix: Some(prefix),
+            })
         }
         "vscode" => {
             let mut roots = vec![local_app_data()?.join("Programs/Microsoft VS Code")];
@@ -318,6 +377,8 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                         program,
                         cargo_root: None,
                         vscode_cli: Some(cli),
+                        npm_cli: None,
+                        npm_prefix: None,
                     });
                 }
             }
@@ -333,8 +394,19 @@ pub(super) fn provider_capabilities() -> Vec<ProviderCapability> {
         available: winget.available,
         detail: winget.detail,
     }];
-    for provider in ["cargo", "uv", "vscode"] {
+    for provider in ["cargo", "uv", "vscode", "npm"] {
         let (available, detail) = match developer_tool(provider) {
+            Ok(tool) if provider == "npm" => match tool.npm_prefix {
+                Some(prefix) => (
+                    true,
+                    format!(
+                        "Installed Node/npm files: {}. Fixed user global prefix: {}. Public registry; npm lifecycle scripts disabled. Availability checks files only; installed identity does not verify a command can run.",
+                        tool.program.display(),
+                        prefix.display()
+                    ),
+                ),
+                None => (false, "Missing fixed user npm prefix".into()),
+            },
             Ok(tool) => (
                 true,
                 format!(

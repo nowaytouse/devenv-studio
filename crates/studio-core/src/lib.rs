@@ -354,8 +354,14 @@ pub fn load_catalog_for_revision(revision: &str) -> Result<Catalog> {
     if current.revision == revision {
         return Ok(current);
     }
-    if revision == "2026-10-21.1" {
-        return parse_catalog(include_str!("../../../data/catalog-2026-10-21.1.json"));
+    match revision {
+        "2026-10-21.1" => {
+            return parse_catalog(include_str!("../../../data/catalog-2026-10-21.1.json"));
+        }
+        "2026-10-21.2" => {
+            return parse_catalog(include_str!("../../../data/catalog-2026-10-21.2.json"));
+        }
+        _ => {}
     }
     bail!("Unknown recovery catalog revision: {revision}")
 }
@@ -516,6 +522,128 @@ static EXPORT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recovery_snapshots_preserve_the_previous_catalog() {
+        let current = load_catalog().unwrap();
+        let previous = load_catalog_for_revision("2026-10-21.2").unwrap();
+        let initial = load_catalog_for_revision("2026-10-21.1").unwrap();
+        assert_eq!(previous.actions.len(), 45);
+        assert_eq!(initial.actions.len(), 12);
+        assert_eq!(current.revision, "2026-10-23.1");
+        assert_eq!(current.actions.len(), previous.actions.len() + 13);
+        assert_eq!(
+            previous,
+            parse_catalog(include_str!("../../../data/catalog-2026-10-21.2.json")).unwrap()
+        );
+        assert_eq!(
+            initial,
+            parse_catalog(include_str!("../../../data/catalog-2026-10-21.1.json")).unwrap()
+        );
+        for action in &previous.actions {
+            assert_eq!(
+                current.actions.iter().find(|a| a.id == action.id),
+                Some(action),
+                "Existing actions must keep their trusted payload and metadata"
+            );
+        }
+        assert_eq!(
+            load_catalog_for_revision(&current.revision).unwrap(),
+            current
+        );
+        assert!(load_catalog_for_revision("unshipped-catalog").is_err());
+        let ids = BTreeSet::from(["explorer-extensions".into()]);
+        let historical_plan = build_plan(&previous, Target::Win11Ltsc2024, &ids).unwrap();
+        assert!(validate_plan(&historical_plan).is_err());
+    }
+
+    #[test]
+    fn legacy_policy_options_keep_the_exact_reviewed_addresses() {
+        let catalog = load_catalog().unwrap();
+        for (id, path, name, value) in [
+            (
+                "privacy-diagnostic-data-off",
+                r"Software\Policies\Microsoft\Windows\DataCollection",
+                "AllowTelemetry",
+                0,
+            ),
+            (
+                "experience-consumer-features-off",
+                r"Software\Policies\Microsoft\Windows\CloudContent",
+                "DisableWindowsConsumerFeatures",
+                1,
+            ),
+        ] {
+            let action = catalog.actions.iter().find(|a| a.id == id).unwrap();
+            assert_eq!(
+                action.changes,
+                vec![RegistryChange {
+                    hive: Hive::LocalMachine,
+                    path: path.into(),
+                    name: name.into(),
+                    value,
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn added_preferences_support_both_ltsc_targets_and_reject_paired_choices() {
+        let catalog = load_catalog().unwrap();
+        let previous = load_catalog_for_revision("2026-10-21.2").unwrap();
+        let new_actions: Vec<_> = catalog
+            .actions
+            .iter()
+            .filter(|a| !previous.actions.iter().any(|old| old.id == a.id))
+            .collect();
+        for action in new_actions {
+            assert_eq!(action.targets, Target::ALL);
+            for target in Target::ALL {
+                assert!(build_plan(&catalog, target, &BTreeSet::from([action.id.clone()])).is_ok());
+            }
+        }
+        for pair in [
+            [
+                "explorer-expand-current-folder",
+                "explorer-collapse-current-folder",
+            ],
+            ["experience-snap-assist-off", "experience-snap-assist-on"],
+            ["experience-autoplay-off", "experience-autoplay-on"],
+            ["experience-window-shake-off", "experience-window-shake-on"],
+        ] {
+            let selected = pair.map(str::to_owned).into_iter().collect();
+            for target in Target::ALL {
+                assert!(build_plan(&catalog, target, &selected).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn english_action_fields_cover_the_exact_current_catalog() {
+        let locale: serde_json::Value =
+            serde_json::from_str(include_str!("../../../data/locales/en-US.json")).unwrap();
+        let actions = locale["actions"].as_object().unwrap();
+        let catalog = load_catalog().unwrap();
+        assert_eq!(
+            actions.keys().map(String::as_str).collect::<BTreeSet<_>>(),
+            catalog.actions.iter().map(|a| a.id.as_str()).collect()
+        );
+        let fields = BTreeSet::from(["title", "description", "category", "restart", "risk"]);
+        for action in &catalog.actions {
+            let values = actions[&action.id].as_object().unwrap();
+            assert_eq!(
+                values.keys().map(String::as_str).collect::<BTreeSet<_>>(),
+                fields
+            );
+            for value in values.values() {
+                assert!(
+                    value
+                        .as_str()
+                        .is_some_and(|s| !s.trim().is_empty() && !s.contains('\0'))
+                );
+            }
+        }
+    }
+
     #[test]
     fn empty_selection_is_empty_plan() {
         let c = load_catalog().unwrap();

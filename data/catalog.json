@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": "2026-10-21.2",
+  "revision": "2026-10-23.1",
   "sources": [
     {
       "id": "winutil",
@@ -32,7 +32,7 @@
       "url": "https://github.com/nowaytouse/LTSC_Tools_Backup",
       "revision": "a8523abbe08147b4d5de8746f26d99d056057ab0",
       "license": "设计参考；未复制源码",
-      "description": "沿用用户逐项选择、计划预览与先记录原值的设计经验。旧项目独立保留。"
+      "description": "映射旧工具中已审查的诊断数据与消费者体验策略，并沿用逐项选择、计划预览与先记录原值的设计。旧项目独立保留。"
     }
   ],
   "actions": [
@@ -1276,6 +1276,372 @@
           "value": 2
         }
       ]
+    },
+    {
+      "id": "privacy-diagnostic-data-off",
+      "title": "使用企业版最低诊断数据级别",
+      "description": "将 Windows 诊断数据策略设为 AllowTelemetry=0，延续旧工具的关闭遥测选项。作用限于 Windows 诊断数据，不代表阻止所有 Microsoft 或第三方连接。",
+      "category": "privacy",
+      "sources": [
+        "ltsc-tools-backup"
+      ],
+      "evidence": [
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/installer.rs#L1642-L1648",
+        "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-system#allowtelemetry",
+        "https://learn.microsoft.com/en-us/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "设备级策略，需要管理员权限；最低级别面向企业版等受支持版本，组织策略可能覆盖；不停止诊断、安全或更新服务",
+      "changes": [
+        {
+          "hive": "local_machine",
+          "path": "Software\\Policies\\Microsoft\\Windows\\DataCollection",
+          "name": "AllowTelemetry",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "experience-consumer-features-off",
+      "title": "关闭 Microsoft 消费者体验",
+      "description": "通过企业版设备策略关闭消费者体验，例如建议应用、会员通知和设置后的推广安装。不会卸载已有应用。",
+      "category": "experience",
+      "sources": [
+        "winutil",
+        "ltsc-tools-backup"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json#L429-L442",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/installer.rs#L1664-L1670",
+        "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience#allowwindowsconsumerfeatures"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "设备级策略，需要管理员权限；适用于企业版、教育版与 IoT 企业版；LTSC 可能本就没有相应推荐内容",
+      "changes": [
+        {
+          "hive": "local_machine",
+          "path": "Software\\Policies\\Microsoft\\Windows\\CloudContent",
+          "name": "DisableWindowsConsumerFeatures",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "privacy-online-speech-off",
+      "title": "关闭在线语音识别",
+      "description": "关闭当前用户的在线语音识别偏好。依赖云端识别的听写或语音输入可能无法使用，本地语音功能保持原状。",
+      "category": "privacy",
+      "sources": [
+        "winutil"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json#L465-L472",
+        "https://support.microsoft.com/en-gb/windows/privacy/speech-voice-activation-inking-typing-and-privacy"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "可能影响语音输入与依赖在线识别的应用；不更改麦克风权限；可恢复原注册表值",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Speech_OneCore\\Settings\\OnlineSpeechPrivacy",
+          "name": "HasAccepted",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "privacy-activity-publishing-off",
+      "title": "禁止发布用户活动",
+      "description": "禁止应用向系统发布新的用户活动记录。不删除已有记录；部分跨设备继续操作功能可能减少。",
+      "category": "privacy",
+      "sources": [
+        "winutil"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json#L15-L20",
+        "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-privacy#publishuseractivities"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "设备级策略，需要管理员权限；组织策略可能覆盖；不会清除活动历史，恢复只还原所记录的策略值",
+      "changes": [
+        {
+          "hive": "local_machine",
+          "path": "Software\\Policies\\Microsoft\\Windows\\System",
+          "name": "PublishUserActivities",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "privacy-activity-upload-off",
+      "title": "禁止上传用户活动",
+      "description": "禁止上传已发布的用户活动；不删除已有记录。已移除此上传功能的 Windows 版本可能本就没有可观察变化。",
+      "category": "privacy",
+      "sources": [
+        "winutil"
+      ],
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/tweaks.json#L22-L27",
+        "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-privacy#uploaduseractivities"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "设备级策略，需要管理员权限；组织策略可能覆盖；不会清除活动历史，恢复只还原所记录的策略值",
+      "changes": [
+        {
+          "hive": "local_machine",
+          "path": "Software\\Policies\\Microsoft\\Windows\\System",
+          "name": "UploadUserActivities",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "explorer-expand-current-folder",
+      "title": "导航窗格自动展开到当前文件夹",
+      "description": "打开文件夹时，让资源管理器导航树自动展开到当前位置。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L3278",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L3253"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "NavPaneExpandToCurrentFolder",
+          "value": 1
+        }
+      ],
+      "choice_group": "explorer-navigation-expansion"
+    },
+    {
+      "id": "explorer-collapse-current-folder",
+      "title": "导航窗格不自动展开",
+      "description": "关闭导航树自动展开到当前文件夹的偏好；仍可手动展开文件夹。",
+      "category": "explorer",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L3274",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L3249"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "NavPaneExpandToCurrentFolder",
+          "value": 0
+        }
+      ],
+      "choice_group": "explorer-navigation-expansion"
+    },
+    {
+      "id": "experience-snap-assist-off",
+      "title": "关闭贴靠后的窗口建议",
+      "description": "贴靠一个窗口后，不再建议将其他窗口填入剩余区域。窗口贴靠本身仍可使用。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L1314",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L1582",
+        "https://support.microsoft.com/en-us/windows/experience/snap-your-windows"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "SnapAssist",
+          "value": 0
+        }
+      ],
+      "choice_group": "window-snap-assist"
+    },
+    {
+      "id": "experience-snap-assist-on",
+      "title": "显示贴靠后的窗口建议",
+      "description": "贴靠一个窗口后，建议将其他已打开窗口填入剩余区域。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L1318",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L1586",
+        "https://support.microsoft.com/en-us/windows/experience/snap-your-windows"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "SnapAssist",
+          "value": 1
+        }
+      ],
+      "choice_group": "window-snap-assist"
+    },
+    {
+      "id": "experience-autoplay-off",
+      "title": "关闭自动播放提示",
+      "description": "连接可移动媒体或设备时，不显示自动播放操作选择。这只修改自动播放偏好，不修改自动运行策略。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L6002",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L5892"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\AutoplayHandlers",
+          "name": "DisableAutoplay",
+          "value": 1
+        }
+      ],
+      "choice_group": "media-autoplay"
+    },
+    {
+      "id": "experience-autoplay-on",
+      "title": "允许自动播放提示",
+      "description": "允许 Windows 按已有设备偏好显示自动播放操作选择；不改写各媒体的默认操作或自动运行策略。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L6006",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L5896"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\AutoplayHandlers",
+          "name": "DisableAutoplay",
+          "value": 0
+        }
+      ],
+      "choice_group": "media-autoplay"
+    },
+    {
+      "id": "experience-window-shake-off",
+      "title": "关闭标题栏摇晃最小化",
+      "description": "摇晃窗口标题栏时，不再最小化其他窗口。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L2929",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L2904",
+        "https://support.microsoft.com/en-au/accessibility/windows/make-it-easier-to-focus-on-tasks"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "DisallowShaking",
+          "value": 1
+        }
+      ],
+      "choice_group": "window-titlebar-shake"
+    },
+    {
+      "id": "experience-window-shake-on",
+      "title": "允许标题栏摇晃最小化",
+      "description": "允许通过摇晃当前窗口标题栏来最小化其他窗口。",
+      "category": "experience",
+      "sources": [
+        "sophia"
+      ],
+      "evidence": [
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_10_LTSC_2021/Module/Sophia.psm1#L2925",
+        "https://github.com/farag2/Sophia-Script-for-Windows/blob/eeef532fc5f37129fe77ee58342f112f3bb71d39/src/Sophia_Script_for_Windows_11_LTSC_2024/Module/Sophia.psm1#L2900",
+        "https://support.microsoft.com/en-au/accessibility/windows/make-it-easier-to-focus-on-tasks"
+      ],
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "restart": "建议注销后重新登录",
+      "risk": "当前用户偏好；先记录原值，可从恢复记录还原",
+      "changes": [
+        {
+          "hive": "current_user",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "DisallowShaking",
+          "value": 0
+        }
+      ],
+      "choice_group": "window-titlebar-shake"
     }
   ],
   "presets": [

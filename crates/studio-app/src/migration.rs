@@ -170,6 +170,9 @@ impl Analyzer {
             "uv" => {
                 " Requires an existing usable Python interpreter and uv on Windows; automatic Python downloads are disabled. The source environment is not copied."
             }
+            "npm" => {
+                " Requires official Node.js and bundled npm on Windows. Uses the fixed current-user npm prefix and official registry with lifecycle scripts disabled; no PATH, mirror or project configuration is imported."
+            }
             "vscode" => {
                 " Requires the Microsoft VS Code CLI on Windows. This does not import editor settings or install into Cursor."
             }
@@ -245,7 +248,7 @@ impl Analyzer {
         for (field, kind) in [
             ("cargo_packages", Some("cargo")),
             ("uv_tools", Some("uv")),
-            ("npm_globals", None),
+            ("npm_globals", Some("npm")),
             ("pip_packages", None),
             ("scoop_tools", None),
         ] {
@@ -472,7 +475,7 @@ impl Analyzer {
         for (field, kind) in [
             ("cargo_packages", Some("cargo")),
             ("uv_tools", Some("uv")),
-            ("npm_globals", None),
+            ("npm_globals", Some("npm")),
             ("vscode_extensions", Some("vscode")),
             ("cursor_extensions", None),
         ] {
@@ -922,17 +925,54 @@ mod tests {
         );
     }
     #[test]
-    fn broad_legacy_tweak_is_not_replaced_by_a_narrow_setting() {
+    fn legacy_device_policies_map_exactly_and_false_never_requests_the_inverse() {
         let mut value = profile();
         value["system_tweaks"]["disable_consumer_features"] = true.into();
+        value["system_tweaks"]["disable_telemetry"] = true.into();
         let report = analyze_value(&value).unwrap();
         let item = report
             .items
             .iter()
             .find(|item| item.origin == "system_tweaks.disable_consumer_features")
             .unwrap();
-        assert_eq!(item.status, "manual");
-        assert!(item.settings.is_empty());
+        assert_eq!(item.status, "mapped");
+        assert_eq!(item.settings, vec!["experience-consumer-features-off"]);
+        assert!(report.settings.contains("privacy-diagnostic-data-off"));
+        for field in ["disable_consumer_features", "disable_telemetry"] {
+            value["system_tweaks"][field] = false.into();
+        }
+        let skipped = analyze_value(&value).unwrap();
+        assert!(!skipped.settings.contains("privacy-diagnostic-data-off"));
+        assert!(
+            !skipped
+                .settings
+                .contains("experience-consumer-features-off")
+        );
+    }
+
+    #[test]
+    fn npm_import_maps_only_trusted_exact_identities_for_profile_and_inventory() {
+        let mut value = profile();
+        value["packages"]["npm_globals"] = serde_json::json!([
+            "typescript",
+            "unknown-npm",
+            "typescript@latest",
+            "@unreviewed/tool"
+        ]);
+        let report = analyze_value(&value).unwrap();
+        assert!(report.deployment.contains("developer-npm-typescript"));
+        for requested in ["unknown-npm", "typescript@latest", "@unreviewed/tool"] {
+            assert!(report.items.iter().any(|item| item.requested == requested
+                && item.status == "manual"
+                && item.deployment.is_empty()));
+        }
+        let inventory = serde_json::json!({"schema_version":1,"captured_at":"synthetic","homebrew_formulae":[],"homebrew_casks":[],"homebrew_taps":[],"cargo_packages":[],"uv_tools":[],"npm_globals":["prettier"],"vscode_extensions":[],"cursor_extensions":[],"warnings":[]});
+        let inventory = analyze_value(&inventory).unwrap();
+        assert_eq!(
+            inventory.deployment,
+            BTreeSet::from(["developer-npm-prettier".to_owned()])
+        );
+        assert!(inventory.settings.is_empty());
     }
 
     #[test]

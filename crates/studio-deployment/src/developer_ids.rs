@@ -29,6 +29,21 @@ pub(crate) fn valid(kind: &str, value: &str) -> bool {
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
         }
+        "npm" => {
+            let component = |part: &str| {
+                ends_alphanumeric(part)
+                    && part.bytes().all(|b| {
+                        b.is_ascii_lowercase() || b.is_ascii_digit() || b"-_.".contains(&b)
+                    })
+            };
+            if let Some(scoped) = value.strip_prefix('@') {
+                scoped
+                    .split_once('/')
+                    .is_some_and(|(scope, name)| component(scope) && component(name))
+            } else {
+                component(value) && !matches!(value, "node_modules" | "favicon.ico")
+            }
+        }
         "vscode" => {
             let Some((publisher, name)) = value.split_once('.') else {
                 return false;
@@ -50,6 +65,8 @@ mod tests {
             ("cargo", "fd-find"),
             ("uv", "pre-commit"),
             ("uv", "ruff"),
+            ("npm", "typescript-language-server"),
+            ("npm", "@scope/tool"),
             ("vscode", "rust-lang.rust-analyzer"),
             ("vscode", "ms-python.python"),
         ] {
@@ -67,12 +84,29 @@ mod tests {
             "foo\\bar",
             "foo\0bar",
         ] {
-            for kind in ["cargo", "uv", "vscode"] {
+            for kind in ["cargo", "uv", "vscode", "npm"] {
                 assert!(!valid(kind, id), "{kind}: {id}");
             }
         }
         assert!(!valid("vscode", "publisher.extension.extra"));
         assert!(!valid("vscode", "publisher.-extension"));
         assert!(!valid("cargo", "Cargo-Name"));
+        for id in [
+            "@scope/tool@1",
+            "@scope//tool",
+            "@scope/../tool",
+            "@scope",
+            "@Scope/tool",
+            "Name",
+            ".name",
+            "_name",
+            "-name",
+            "git+https://example.com/a",
+            "npm:other",
+            "@scope/tool;exit",
+            "@scope/tool name",
+        ] {
+            assert!(!valid("npm", id), "{id}");
+        }
     }
 }

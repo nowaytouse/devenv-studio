@@ -71,14 +71,17 @@ pub const RECIPES: &[Recipe] = &[
         id: "web",
         title: ["Web 开发起点", "Web development"],
         description: [
-            "组合 Node.js LTS、Git、VS Code 与格式化和检查扩展；项目依赖仍由各项目管理。",
-            "Combine Node.js LTS, Git, VS Code and formatting/lint extensions. Project dependencies remain managed by each project.",
+            "组合 Node.js LTS、Git、VS Code、TypeScript、Prettier 与编辑器扩展；工具安装到用户 npm 前缀，项目依赖仍由各项目管理。",
+            "Combine Node.js LTS, Git, VS Code, TypeScript, Prettier and editor extensions. Tools use the user npm prefix; projects keep their own dependencies.",
         ],
         settings: &["explorer-extensions"],
         packages: &[
             ("package", "Git.Git"),
             ("package", "Microsoft.VisualStudioCode"),
             ("package", "OpenJS.NodeJS.LTS"),
+            ("npm", "typescript"),
+            ("npm", "typescript-language-server"),
+            ("npm", "prettier"),
             ("vscode", "esbenp.prettier-vscode"),
             ("vscode", "dbaeumer.vscode-eslint"),
         ],
@@ -157,7 +160,7 @@ pub fn merge(
         .cloned()
         .collect::<BTreeSet<_>>();
     ensure!(
-        tasks.len() <= 128,
+        tasks.len() <= studio_deployment::MAX_SESSION_TASKS,
         "A deployment session supports at most 128 tasks; split this workspace into profiles"
     );
     studio_core::build_plan(catalog, target, &settings)?;

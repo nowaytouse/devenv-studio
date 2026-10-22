@@ -1,5 +1,5 @@
 {
-  "revision": "2026-10-22.1",
+  "revision": "2026-10-23.1",
   "tasks": [
     {
       "id": "software-7zip-7zip",
@@ -5272,6 +5272,126 @@
         "https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-docker"
       ],
       "package_id": "ms-azuretools.vscode-docker",
+      "feature_name": null
+    },
+    {
+      "id": "developer-npm-typescript",
+      "title": "TypeScript (NPM)",
+      "description": "TypeScript 编译器，适合独立命令行使用；项目应继续锁定自己的 TypeScript 依赖。",
+      "category": "developer",
+      "kind": "npm",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "无需重启；若终端找不到命令，请检查已有 PATH 是否包含用户 npm 前缀。",
+      "limitations": "需要官方 Node.js Windows 安装及随附 npm，使用固定的当前用户 %APPDATA%\\npm 前缀和官方 registry.npmjs.org。保留已安装工具，不修改 PATH、镜像源或项目依赖；忽略用户 npm 配置，禁用生命周期脚本。需要脚本构建的包不保证可用。安装后仅核对精确包身份和版本，不代表工具已运行验证；实际版本由来源决定，不能由注册表恢复卸载。",
+      "evidence": [
+        "https://www.typescriptlang.org/download/",
+        "https://docs.npmjs.com/cli/v11/commands/npm-install"
+      ],
+      "package_id": "typescript",
+      "feature_name": null
+    },
+    {
+      "id": "developer-npm-typescript-language-server",
+      "title": "TypeScript Language Server (NPM)",
+      "description": "TypeScript/JavaScript 语言服务器；需要另外选中 TypeScript，编辑器仍需自行连接。",
+      "category": "developer",
+      "kind": "npm",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "无需重启；若终端找不到命令，请检查已有 PATH 是否包含用户 npm 前缀。",
+      "limitations": "需要官方 Node.js Windows 安装及随附 npm，使用固定的当前用户 %APPDATA%\\npm 前缀和官方 registry.npmjs.org。保留已安装工具，不修改 PATH、镜像源或项目依赖；忽略用户 npm 配置，禁用生命周期脚本。需要脚本构建的包不保证可用。安装后仅核对精确包身份和版本，不代表工具已运行验证；实际版本由来源决定，不能由注册表恢复卸载。",
+      "evidence": [
+        "https://github.com/typescript-language-server/typescript-language-server",
+        "https://docs.npmjs.com/cli/v11/commands/npm-install"
+      ],
+      "package_id": "typescript-language-server",
+      "feature_name": null
+    },
+    {
+      "id": "developer-npm-prettier",
+      "title": "Prettier (NPM)",
+      "description": "独立命令行代码格式化器；不会重写项目的格式化配置或项目依赖。",
+      "category": "developer",
+      "kind": "npm",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "无需重启；若终端找不到命令，请检查已有 PATH 是否包含用户 npm 前缀。",
+      "limitations": "需要官方 Node.js Windows 安装及随附 npm，使用固定的当前用户 %APPDATA%\\npm 前缀和官方 registry.npmjs.org。保留已安装工具，不修改 PATH、镜像源或项目依赖；忽略用户 npm 配置，禁用生命周期脚本。需要脚本构建的包不保证可用。安装后仅核对精确包身份和版本，不代表工具已运行验证；实际版本由来源决定，不能由注册表恢复卸载。",
+      "evidence": [
+        "https://prettier.io/docs/install",
+        "https://docs.npmjs.com/cli/v11/commands/npm-install"
+      ],
+      "package_id": "prettier",
+      "feature_name": null
+    },
+    {
+      "id": "developer-npm-npm-check-updates",
+      "title": "npm-check-updates (NPM)",
+      "description": "检查项目依赖的新版本；安装本工具不会自动更新任何项目。",
+      "category": "developer",
+      "kind": "npm",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "无需重启；若终端找不到命令，请检查已有 PATH 是否包含用户 npm 前缀。",
+      "limitations": "需要官方 Node.js Windows 安装及随附 npm，使用固定的当前用户 %APPDATA%\\npm 前缀和官方 registry.npmjs.org。保留已安装工具，不修改 PATH、镜像源或项目依赖；忽略用户 npm 配置，禁用生命周期脚本。需要脚本构建的包不保证可用。安装后仅核对精确包身份和版本，不代表工具已运行验证；实际版本由来源决定，不能由注册表恢复卸载。",
+      "evidence": [
+        "https://github.com/raineorshine/npm-check-updates",
+        "https://docs.npmjs.com/cli/v11/commands/npm-install"
+      ],
+      "package_id": "npm-check-updates",
+      "feature_name": null
+    },
+    {
+      "id": "developer-npm-http-server",
+      "title": "http-server (NPM)",
+      "description": "静态文件 HTTP 开发服务器；仅安装工具，不启动服务器或开放端口。",
+      "category": "developer",
+      "kind": "npm",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "无需重启；若终端找不到命令，请检查已有 PATH 是否包含用户 npm 前缀。",
+      "limitations": "需要官方 Node.js Windows 安装及随附 npm，使用固定的当前用户 %APPDATA%\\npm 前缀和官方 registry.npmjs.org。保留已安装工具，不修改 PATH、镜像源或项目依赖；忽略用户 npm 配置，禁用生命周期脚本。需要脚本构建的包不保证可用。安装后仅核对精确包身份和版本，不代表工具已运行验证；实际版本由来源决定，不能由注册表恢复卸载。",
+      "evidence": [
+        "https://github.com/http-party/http-server",
+        "https://docs.npmjs.com/cli/v11/commands/npm-install"
+      ],
+      "package_id": "http-server",
+      "feature_name": null
+    },
+    {
+      "id": "developer-npm-serve",
+      "title": "serve (NPM)",
+      "description": "静态站点预览服务器；仅安装工具，不启动服务，也不修改防火墙。",
+      "category": "developer",
+      "kind": "npm",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "无需重启；若终端找不到命令，请检查已有 PATH 是否包含用户 npm 前缀。",
+      "limitations": "需要官方 Node.js Windows 安装及随附 npm，使用固定的当前用户 %APPDATA%\\npm 前缀和官方 registry.npmjs.org。保留已安装工具，不修改 PATH、镜像源或项目依赖；忽略用户 npm 配置，禁用生命周期脚本。需要脚本构建的包不保证可用。安装后仅核对精确包身份和版本，不代表工具已运行验证；实际版本由来源决定，不能由注册表恢复卸载。",
+      "evidence": [
+        "https://github.com/vercel/serve",
+        "https://docs.npmjs.com/cli/v11/commands/npm-install"
+      ],
+      "package_id": "serve",
       "feature_name": null
     }
   ]
