@@ -1,0 +1,622 @@
+{
+  "actions": {
+    "privacy-advertising-id": {
+      "title": "Turn off the advertising ID",
+      "description": "Prevents apps from using this account’s advertising ID for personalized ads. It does not block all advertising.",
+      "category": "Privacy",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "privacy-tailored-experiences": {
+      "title": "Turn off diagnostic-data tailored experiences",
+      "description": "Stops diagnostic data from being used to personalize tips, recommendations, and ads. It does not disable Windows diagnostic services. Organization policy may override this preference.",
+      "category": "Privacy",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "privacy-feedback": {
+      "title": "Reduce feedback prompts",
+      "description": "Sets Windows feedback requests to Never for this account. You can still open Feedback Hub and submit feedback manually.",
+      "category": "Privacy",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-extensions": {
+      "title": "Show file extensions",
+      "description": "Show extensions for known file types in File Explorer so you can distinguish file types.",
+      "category": "File Explorer",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-hidden": {
+      "title": "Show hidden files",
+      "description": "Show hidden files and folders. This does not change the setting for protected operating system files.",
+      "category": "File Explorer",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "More profile files will be visible; take care when editing them."
+    },
+    "experience-taskview": {
+      "title": "Hide the Task View button",
+      "description": "Hide the Task View button on the taskbar. Win+Tab remains available.",
+      "category": "Taskbar",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-search": {
+      "title": "Hide taskbar search",
+      "description": "Simplify the taskbar. Search remains available from Start or with Win+S.",
+      "category": "Taskbar",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-left-taskbar": {
+      "title": "Align taskbar icons left",
+      "description": "Align taskbar icons to the left on Windows 11. Windows 10 does not need this setting.",
+      "category": "Taskbar",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "privacy-app-launch-tracking": {
+      "title": "Turn off app launch tracking",
+      "description": "Stop Windows from tracking app launches to improve Start and search results. Frequently used app recommendations may be reduced.",
+      "category": "Start",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-welcome": {
+      "title": "Turn off post-update welcome suggestions",
+      "description": "Stop Windows from showing welcome experiences that highlight new features and suggestions after updates or at sign-in.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-tips": {
+      "title": "Reduce Windows tips",
+      "description": "Turn off tips and suggestions shown while using Windows. Organization policy may override this preference.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-settings-suggestions": {
+      "title": "Turn off suggestions in Settings",
+      "description": "Turn off the three reviewed suggestion preferences in the Settings app. This does not change account notifications or security alerts.",
+      "category": "Windows experience",
+      "restart": "Sign out and back in if the change does not appear.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-open-this-pc": {
+      "title": "Open File Explorer to This PC",
+      "description": "Open File Explorer at This PC. This choice is mutually exclusive with Quick access.",
+      "category": "File Explorer",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-open-quick-access": {
+      "title": "Open File Explorer to Quick access",
+      "description": "Open File Explorer at Quick access. This choice is mutually exclusive with This PC.",
+      "category": "File Explorer",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-compact-mode": {
+      "title": "Use compact File Explorer view",
+      "description": "Reduce spacing between items in File Explorer. Choose the regular-spacing option to restore the roomier layout.",
+      "category": "File Explorer",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-comfortable-mode": {
+      "title": "Use regular File Explorer spacing",
+      "description": "Turn off compact mode and use more space between File Explorer items.",
+      "category": "File Explorer",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-hide-recent-files": {
+      "title": "Hide recent files in Quick access",
+      "description": "Stop listing recently opened files in Quick access. This does not delete files or history data.",
+      "category": "File Explorer",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-hide-frequent-folders": {
+      "title": "Hide frequent folders in Quick access",
+      "description": "Stop listing frequently used folders in Quick access.",
+      "category": "File Explorer",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-hide-sync-notifications": {
+      "title": "Hide File Explorer sync-provider notifications",
+      "description": "Hide sync-provider notification banners in File Explorer. File synchronization itself is unaffected.",
+      "category": "File Explorer",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-search-icon": {
+      "title": "Show the taskbar search icon",
+      "description": "Show the search icon. This choice is mutually exclusive with the other taskbar search display modes.",
+      "category": "Taskbar",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-search-icon-label": {
+      "title": "Show the taskbar search icon and label",
+      "description": "Show the search icon with its text label. This choice is mutually exclusive with the other taskbar search display modes.",
+      "category": "Taskbar",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-search-box": {
+      "title": "Show the taskbar search box",
+      "description": "Show the full search box. This choice is mutually exclusive with the other taskbar search display modes.",
+      "category": "Taskbar",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-center-taskbar": {
+      "title": "Center taskbar icons",
+      "description": "Center taskbar icons on Windows 11. This choice is mutually exclusive with left alignment.",
+      "category": "Taskbar",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-search-highlights-off": {
+      "title": "Turn off search highlights",
+      "description": "Hide search-highlight content in the search box. Windows Search remains enabled.",
+      "category": "Taskbar",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-disable-silent-app-installs": {
+      "title": "Turn off automatic installation of suggested apps",
+      "description": "Prevent Windows from automatically installing suggested apps. This does not uninstall apps that are already installed.",
+      "category": "Windows experience",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-disable-scoobe": {
+      "title": "Turn off setup-completion suggestions",
+      "description": "Stop prompts to finish setting up the device or get more out of Windows. Organization policy may override this preference.",
+      "category": "Windows experience",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-start-suggestions": {
+      "title": "Turn off Start menu recommendations",
+      "description": "Turn off tips, shortcuts, and new-app recommendations in Start. This does not guarantee that the recommendations area itself will be removed.",
+      "category": "Start",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-start-promotions": {
+      "title": "Turn off suggested app prompts in Start",
+      "description": "Reduce suggested app-install prompts in Start. Microsoft Store search and app installation remain available.",
+      "category": "Start",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "experience-start-pane-suggestions": {
+      "title": "Turn off app suggestions in Start",
+      "description": "Hide suggested app content in Start. App launching and search remain available.",
+      "category": "Start",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "taskbar-clock-seconds": {
+      "title": "Show seconds in the taskbar clock",
+      "description": "Show seconds in the taskbar clock. This may slightly increase power use.",
+      "category": "Taskbar",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "taskbar-end-task": {
+      "title": "Enable End task from the taskbar",
+      "description": "Allow ending an app task from its taskbar context menu. Use care when the app has unsaved work.",
+      "category": "Taskbar",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "personalization-dark-apps": {
+      "title": "Use dark mode for Windows and apps",
+      "description": "Set the Windows appearance and apps that follow the system theme to dark.",
+      "category": "Personalization",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "personalization-light-apps": {
+      "title": "Use light mode for Windows and apps",
+      "description": "Set the Windows appearance and apps that follow the system theme to light.",
+      "category": "Personalization",
+      "restart": "Close and reopen the affected app; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-hide-hidden": {
+      "title": "Do not show hidden files",
+      "description": "Do not show files and folders marked as hidden. The protected operating system files setting is unchanged.",
+      "category": "File Explorer",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-hide-extensions": {
+      "title": "Hide known file extensions",
+      "description": "Hide extensions for known file types. This choice is mutually exclusive with showing extensions.",
+      "category": "File Explorer",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-checkboxes-on": {
+      "title": "Use item check boxes",
+      "description": "Show check boxes on File Explorer items to make selecting multiple items easier.",
+      "category": "Accessibility",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-checkboxes-off": {
+      "title": "Turn off item check boxes",
+      "description": "Turn off check boxes on File Explorer items.",
+      "category": "Accessibility",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-show-merge-conflicts": {
+      "title": "Show folder-merge conflict prompts",
+      "description": "Show conflict choices when merging folders.",
+      "category": "File Explorer",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "personalization-battery-percent": {
+      "title": "Show battery percentage in the system tray",
+      "description": "Show a numeric battery percentage on supported Windows 11 devices. Not applicable to devices without a battery.",
+      "category": "Taskbar",
+      "restart": "Close and reopen File Explorer; sign out if needed.",
+      "risk": "Only applies where a battery and this Windows 11 interface feature are available. The prior value is recorded for restoration."
+    },
+    "explorer-show-recent-files": {
+      "title": "Show recent files in Quick access",
+      "description": "List recently opened files in Quick access. This choice is mutually exclusive with hiding recent files.",
+      "category": "File Explorer",
+      "restart": "Close and reopen File Explorer.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "explorer-show-frequent-folders": {
+      "title": "Show frequent folders in Quick access",
+      "description": "List frequently used folders in Quick access. This choice is mutually exclusive with hiding frequent folders.",
+      "category": "File Explorer",
+      "restart": "Close and reopen File Explorer.",
+      "risk": "Per-user preference. The prior value is recorded and can be restored."
+    },
+    "personalization-thispc-desktop": {
+      "title": "Show This PC on the desktop",
+      "description": "Show the This PC desktop icon. Other desktop icons are unchanged.",
+      "category": "Personalization",
+      "restart": "Refresh the desktop or sign out.",
+      "risk": "This creates or updates a current-user icon-display DWORD. The prior value is recorded for restoration."
+    },
+    "taskbar-group-always": {
+      "title": "Always combine taskbar buttons",
+      "description": "Always combine windows from the same app and hide button labels.",
+      "category": "Taskbar",
+      "restart": "Sign out and back in.",
+      "risk": "Windows 10 LTSC 2021 only. Uncombined windows use more taskbar space."
+    },
+    "taskbar-group-full": {
+      "title": "Combine taskbar buttons when the taskbar is full",
+      "description": "Combine windows from the same app only when taskbar space is limited.",
+      "category": "Taskbar",
+      "restart": "Sign out and back in.",
+      "risk": "Windows 10 LTSC 2021 only. Uncombined windows use more taskbar space."
+    },
+    "taskbar-group-never": {
+      "title": "Never combine taskbar buttons",
+      "description": "Keep each window separate and show its label. This can use more taskbar space.",
+      "category": "Taskbar",
+      "restart": "Sign out and back in.",
+      "risk": "Windows 10 LTSC 2021 only. Uncombined windows use more taskbar space."
+    }
+  },
+  "presets": {
+    "essentials": {
+      "title": "Essential preferences",
+      "description": "A small, editable starting set for file visibility and taskbar clarity. Presets only select options for review; they never apply settings automatically."
+    },
+    "privacy": {
+      "title": "Privacy preferences",
+      "description": "A focused, editable set for advertising, tailored experiences, feedback prompts, and visible activity in Quick access. Review selections before applying."
+    },
+    "developer": {
+      "title": "Developer convenience",
+      "description": "A small, editable set for file extensions, compact File Explorer, and taskbar End task access. Review selections before applying."
+    }
+  },
+  "tasks": {
+    "software-7zip-7zip": {
+      "title": "7-Zip",
+      "description": "Archive utility for creating 7z and ZIP files and opening common archive formats.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-mozilla-firefox": {
+      "title": "Firefox",
+      "description": "Web browser for everyday browsing, web apps, and optional browser extensions.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-google-chrome": {
+      "title": "Chrome",
+      "description": "Google web browser for websites, web apps, and Chrome extensions.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-brave-brave": {
+      "title": "Brave",
+      "description": "Chromium-based web browser with configurable ad and tracker protections.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-videolan-vlc": {
+      "title": "VLC (Video Player)",
+      "description": "Audio and video player for local media, discs, and network streams.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-git-git": {
+      "title": "Git",
+      "description": "Distributed version-control tool for tracking code changes, managing branches, and collaborating with remote repositories.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-microsoft-visualstudiocode": {
+      "title": "VS Code",
+      "description": "Code editor with syntax highlighting, extensions, and debugging integration.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-notepadplusplus": {
+      "title": "Notepad++",
+      "description": "Text and code editor for logs, configuration files, and multi-file text editing.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-microsoft-powertoys": {
+      "title": "PowerToys",
+      "description": "Windows desktop utilities for window layouts, quick launching, bulk renaming, and other configurable tasks.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-microsoft-windowsterminal": {
+      "title": "Windows Terminal",
+      "description": "Tabbed terminal for PowerShell, Command Prompt, and other configured command-line environments.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-microsoft-powershell": {
+      "title": "PowerShell",
+      "description": "Command-line and scripting environment for system administration, automation, and PowerShell scripts.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-openjs-nodejs-lts": {
+      "title": "NodeJS LTS",
+      "description": "Long-term-support JavaScript runtime for Node.js tools, services, and frontend build tasks.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-thedocumentfoundation-libreoffice": {
+      "title": "LibreOffice",
+      "description": "Office suite for documents, spreadsheets, and presentations.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-sumatrapdf-sumatrapdf": {
+      "title": "Sumatra PDF",
+      "description": "Document reader for PDFs and supported ebook and comic formats.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-voidtools-everything": {
+      "title": "Everything",
+      "description": "Filename search tool that indexes local files and folders for fast lookup.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winscp-winscp": {
+      "title": "WinSCP",
+      "description": "Graphical file-transfer client for exchanging files with remote servers over SFTP, SCP, and other supported protocols.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-putty-putty": {
+      "title": "PuTTY",
+      "description": "Terminal client for SSH sessions and serial-device connections.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-obsproject-obsstudio": {
+      "title": "OBS Studio",
+      "description": "Screen recording and live-streaming tool for composing sources and recording or streaming content.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-obsidian-obsidian": {
+      "title": "Obsidian",
+      "description": "Local Markdown note-taking app for organizing knowledge, linking notes, and managing references.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-sharex-sharex": {
+      "title": "ShareX (Screenshots)",
+      "description": "Screenshot and screen-recording tool with capture, annotation, and configurable sharing workflows.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-keepassxcteam-keepassxc": {
+      "title": "KeePassXC",
+      "description": "Local password-database manager for storing, generating, and organizing passwords in a user-managed encrypted database.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-gimp-gimp-3": {
+      "title": "GIMP (Image Editor)",
+      "description": "Image editor for photo retouching, layer composition, and raster graphics.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-agilebits-1password": {
+      "title": "1Password",
+      "description": "Password and sensitive-information manager for credentials and vaults through a 1Password account.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-audacity-audacity": {
+      "title": "Audacity",
+      "description": "Audio recording and editing tool for trimming, adjusting tracks, and exporting audio.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-blenderfoundation-blender": {
+      "title": "Blender (3D Graphics)",
+      "description": "3D creation software for modeling, animation, materials, and rendering.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-bitwarden-bitwarden": {
+      "title": "Bitwarden",
+      "description": "Password manager for storing and generating passwords and accessing personal or organization vaults.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-calibre-calibre": {
+      "title": "Calibre",
+      "description": "Ebook library manager for organizing books, editing metadata, reading, and converting supported formats.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-crystaldewworld-crystaldiskinfo": {
+      "title": "Crystal Disk Info",
+      "description": "Storage-health utility for viewing SMART status and temperatures on supported drives.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-rufus-rufus": {
+      "title": "Rufus Imager",
+      "description": "USB boot-media creator that writes disk images to a USB drive; creating media overwrites data on the selected device.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-digitalscholar-zotero": {
+      "title": "Zotero",
+      "description": "Reference manager for collecting papers and citations, organizing research, and generating bibliographies.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "feature-netfx3": {
+      "title": ".NET Framework 3.5",
+      "description": "Enable .NET Framework 3.5 for legacy applications that depend on .NET 2.0, 3.0, or 3.5.",
+      "category": "Windows Features",
+      "restart": "A restart may be needed; Enable Pending is reported explicitly.",
+      "limitations": "Requires existing administrator access. The LTSC image may need matching installation media or a component-repair source, or policy may allow Windows Update to provide files. This does not install dependent apps. The component state is read back after enabling; registry restoration cannot undo component installation."
+    },
+    "feature-wsl": {
+      "title": "Windows Subsystem for Linux",
+      "description": "Enable the Windows Subsystem for Linux component as a foundation for configuring WSL.",
+      "category": "Windows Features",
+      "restart": "A restart may be needed; Enable Pending is reported explicitly.",
+      "limitations": "Requires existing administrator access and applicable system policy. Enables only the WSL component; it does not install a Linux distribution or WSL kernel. WSL 2 also requires Virtual Machine Platform and supported hardware virtualization enabled, and may require a restart. Registry restoration cannot undo component installation."
+    },
+    "feature-virtual-machine-platform": {
+      "title": "Virtual Machine Platform",
+      "description": "Enable Virtual Machine Platform for environments such as WSL 2 that use Windows virtualization infrastructure.",
+      "category": "Windows Features",
+      "restart": "A restart may be needed; Enable Pending is reported explicitly.",
+      "limitations": "Requires existing administrator access, supported hardware virtualization enabled in firmware, and applicable system policy. Use inside a virtual machine also depends on nested virtualization. Does not install a WSL distribution or create a virtual machine; a restart may be needed. Registry restoration cannot undo component installation."
+    },
+    "feature-hyper-v": {
+      "title": "Hyper-V",
+      "description": "Enable the Hyper-V platform and related management components for creating and running local virtual machines.",
+      "category": "Windows Features",
+      "restart": "A restart may be needed; Enable Pending is reported explicitly.",
+      "limitations": "Requires existing administrator access, a processor and memory that meet Hyper-V requirements, and hardware virtualization enabled in firmware. Organization policy, host environment, or LTSC image may restrict availability. Changes system virtualization configuration and may require a restart; it does not create a virtual machine. Registry restoration cannot undo component installation."
+    },
+    "feature-sandbox": {
+      "title": "Windows Sandbox",
+      "description": "Enable Windows Sandbox, an isolated desktop environment whose contents are discarded when it closes.",
+      "category": "Windows Features",
+      "restart": "A restart may be needed; Enable Pending is reported explicitly.",
+      "limitations": "Requires existing administrator access, sufficient hardware resources, and hardware virtualization enabled. Use inside a virtual machine depends on nested virtualization. System policy or LTSC image may restrict availability, and a restart may be needed. Enables only the component; it does not start Sandbox or install test software. Registry restoration cannot undo component installation."
+    },
+    "feature-print-to-pdf": {
+      "title": "Microsoft Print to PDF",
+      "description": "Enable the Microsoft Print to PDF virtual printer so supported apps can output PDF files.",
+      "category": "Windows Features",
+      "restart": "A restart may be needed; Enable Pending is reported explicitly.",
+      "limitations": "Requires existing administrator access. Availability depends on the LTSC image, printing components, and organization policy. Enables only the virtual printer; it does not convert existing documents or guarantee print layout in every app. Registry restoration cannot undo component installation."
+    },
+    "feature-work-folders": {
+      "title": "Work Folders Client",
+      "description": "Enable the Work Folders client for synchronizing work files with an organization’s Work Folders server.",
+      "category": "Windows Features",
+      "restart": "A restart may be needed; Enable Pending is reported explicitly.",
+      "limitations": "Requires existing administrator access, an organization-managed Work Folders server, a valid account, and network access. Enables only the client component; it does not configure a server address or account or start synchronization. Organization policy may restrict use. Registry restoration cannot undo component installation."
+    },
+    "maintenance-check-health": {
+      "title": "Quick component-store check",
+      "description": "Run DISM /CheckHealth to read existing component-store corruption markers; this is not a full scan.",
+      "category": "Maintenance",
+      "restart": "Follow command output; no automatic restart.",
+      "limitations": "Execution history stores command results; it is not a system image or rollback point. Command completion does not prove the system is healthy or that repair succeeded. Review DISM/CBS logs and actual output. Cancellation terminates the launched process, but Windows servicing or installer descendants may continue. Each command has a 90-minute limit."
+    },
+    "maintenance-scan-health": {
+      "title": "Scan component store",
+      "description": "Run DISM /ScanHealth to scan the component store. This may take a while.",
+      "category": "Maintenance",
+      "restart": "Follow command output; no automatic restart.",
+      "limitations": "Execution history stores command results; it is not a system image or rollback point. Command completion does not prove the system is healthy or that repair succeeded. Review DISM/CBS logs and actual output. Cancellation terminates the launched process, but Windows servicing or installer descendants may continue. Each command has a 90-minute limit."
+    },
+    "maintenance-restore-health": {
+      "title": "Repair component store",
+      "description": "Run DISM /RestoreHealth to attempt component-store repair. It may use Windows Update as a repair source.",
+      "category": "Maintenance",
+      "restart": "Follow command output; no automatic restart.",
+      "limitations": "Execution history stores command results; it is not a system image or rollback point. Command completion does not prove the system is healthy or that repair succeeded. Review DISM/CBS logs and actual output. Cancellation terminates the launched process, but Windows servicing or installer descendants may continue. Each command has a 90-minute limit."
+    },
+    "maintenance-sfc-verify": {
+      "title": "Verify system files",
+      "description": "Run SFC /verifyonly to verify protected system files; this does not run /scannow or repair them automatically.",
+      "category": "Maintenance",
+      "restart": "Follow command output; no automatic restart.",
+      "limitations": "Execution history stores command results; it is not a system image or rollback point. Command completion does not prove the system is healthy or that repair succeeded. Review DISM/CBS logs and actual output. Cancellation terminates the launched process, but Windows servicing or installer descendants may continue. Each command has a 90-minute limit."
+    }
+  }
+}

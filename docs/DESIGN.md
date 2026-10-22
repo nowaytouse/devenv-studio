@@ -1,5 +1,17 @@
 # LTSC Studio — design record
 
+## 0.3 application shell and preferences
+
+The desktop now groups eleven pages into Workspace, Execution and Application. A compact header replaces the decorative hero. Shared tokens supply five accent palettes for light and dark appearance, including the native system preference, while interface zoom preserves display DPI and density affects spacing. Navigation and each page scroll independently.
+
+Application preferences use a separate versioned file, with immediate preview and explicit save. Validated JSON is staged beside the destination, synced and atomically renamed over the prior valid file. Corrupt, unsafe, oversized or future-version preferences remain untouched and visible as errors. Preferences never select or execute Windows actions.
+
+Chinese and English chrome use explicit translation pairs. English catalog descriptions are an embedded complete overlay keyed by stable IDs; only presentation clones are localized. Canonical catalogs, executable plans, profiles and recovery validation remain unchanged. Original technical output is retained. Translation validation failures remain observable in Settings and Status.
+
+Status derives from host detection, validated catalogs, capability checks, active workers and returned reports. Dismissing a notice does not discard the last operation report. Persisted deployment history is read only from the application directory with file/event/aggregate bounds; errors remain visible, unfinished runs remain interrupted, and final counts must agree with task evidence. History is neither current-machine inspection nor restore authorization.
+
+Help explains preparation, confirmations, prerequisites, troubleshooting and recovery boundaries. About reports the actual package version, licensing and pinned source provenance. Closing an idle app exits; closing during work requests cancellation and requires the joined report before exit. Legacy feature gaps are tracked in LEGACY_PARITY.md.
+
 ## 0.2 workbench extension
 
 The second delivery adds a deployment domain alongside reversible registry preferences. There are 45 setting options in 31 independent setting groups, plus 30 WinGet packages, 7 optional feature-enables and 4 maintenance commands. GUI pages browse these domains separately; v2 workspace profiles and exports preserve one selection. Each domain has its own execution confirmation and recovery boundary.

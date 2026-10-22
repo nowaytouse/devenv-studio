@@ -1,11 +1,13 @@
+mod catalog_locale;
 mod gui;
+mod prefs;
 mod workspace_io;
 
 use anyhow::{Context, Result, bail};
 use std::{collections::BTreeSet, path::PathBuf, process::ExitCode};
 use studio_core::{Profile, Target, load_catalog};
 
-const HELP: &str = "LTSC Studio 0.2
+const HELP: &str = "LTSC Studio 0.3
 Native desktop: ltsc-studio
 List reviewed settings and presets: ltsc-studio catalog
 List software/features/maintenance: ltsc-studio tasks
@@ -110,6 +112,9 @@ fn execute(args: &[String]) -> Result<()> {
     };
     match command.as_str() {
         "--help" | "-h" if args.len() == 1 => println!("{HELP}"),
+        "--version" | "-V" if args.len() == 1 => {
+            println!("LTSC Studio {}", env!("CARGO_PKG_VERSION"))
+        }
         "catalog" if args.len() == 1 => {
             let catalog = load_catalog()?;
             println!("LTSC Studio catalog {}\n", catalog.revision);

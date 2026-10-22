@@ -10,10 +10,13 @@ use studio_core::Target;
 
 #[cfg(any(windows, test))]
 mod engine;
+mod history;
 #[cfg(any(windows, test))]
 mod process;
 #[cfg(windows)]
 mod windows;
+
+pub use history::{HistoryEvidence, HistoryRecord, HistoryTask, history};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
