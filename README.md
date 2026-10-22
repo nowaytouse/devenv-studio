@@ -2,7 +2,7 @@
 
 用 Rust 构建的 Windows LTSC 配置工作台。自己选择配置，先看清变更，再应用；macOS 与 Linux 可以使用同一个原生界面预览和保存方案。
 
-当前为 0.3.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 45 个选项，覆盖 31 组独立设置；另有 30 个软件包、7 个 Windows 可选功能和 4 个维护任务。所有选择默认关闭。
+当前为 0.4.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 45 个选项，覆盖 31 组独立设置；另有 234 个 WinGet 软件包、20 个开发工具/扩展、7 个 Windows 可选功能和 4 个维护任务。所有选择默认关闭。
 
 ## 配置覆盖
 
@@ -11,11 +11,22 @@
 | 资源管理器 | 文件扩展名、隐藏文件、打开到此电脑/快速访问、紧凑/常规间距、最近文件与常用文件夹、项目复选框、同步提供程序通知、文件夹合并冲突提示 |
 | 任务栏与开始菜单 | 搜索隐藏/图标/标签/搜索框、居左/居中对齐、任务视图、时钟秒数、右键结束任务、Windows 10 按钮合并方式、开始菜单推荐与启动追踪 |
 | 外观与隐私 | 系统/应用深浅色、桌面此电脑、广告 ID、诊断个性化、反馈提示、欢迎与设置建议、设备设置完成提示 |
-| 软件部署 | 7-Zip、Firefox、Chrome、Git、VS Code、PowerToys、Terminal、PowerShell、Node.js LTS、LibreOffice、Everything、VLC 等 30 个明确 WinGet 包 |
+| 软件部署 | 7-Zip、Firefox、Chrome、Git、VS Code、PowerToys、Terminal、PowerShell、Node.js LTS、LibreOffice、Everything、VLC 等 234 个明确 WinGet 包 |
+| 开发环境 | 8个Cargo工具、4个uv工具、8个VS Code扩展；通过现有执行器检查、安装并回查 |
 | Windows 功能 | .NET 3.5、WSL 系统组件、虚拟机平台、Hyper-V、Windows 沙盒、打印为 PDF、工作文件夹 |
 | 系统维护 | DISM 快速检查、完整扫描、组件存储修复，以及 SFC 只读验证 |
 
 45 是可选方案数量，包含同一设置的不同取值，不代表 45 组独立功能。各项按实际 LTSC 版本开放；同组的不同取值互斥。三个起步预设可显式载入并继续修改，不会自动应用。
+
+## 混合方案与迁移
+
+应用从方案工作区开始，提供日常桌面、Rust开发、Python工具、Web开发和WSL组件准备五种混合方案。每个组合同时列出设置、软件、工具或扩展；检查后明确加入当前选择，仍可逐项修改，再保存为同一份v2档案或导出完整方案。加入组合不会执行系统变更。
+
+迁移页面可读取旧工具的SetupProfile 2.2.0或schema 1 Mac清单JSON，也可拖入文件。报告逐项区分已映射、需手动处理和未支持；初始不勾选，由用户决定哪些映射加入当前方案。只接受当前可信目录内的精确任务，保留其他选择并校验互斥设置。未迁移的私密字段不回显其值，原文件保持不变。Mac功能映射不保证相同版本、构建选项或二进制。
+
+开发环境提供Cargo、uv和Microsoft VS Code三个实际执行适配器。计划先执行明确选中的WinGet软件，再执行开发任务，最后处理功能与维护；开发提供程序按任务重新查找，避免软件安装后仍沿用缺失状态。提供程序来自固定安装位置，不执行导入档案里的命令。Rust链接器/SDK、兼容Python和网络源需已准备好，uv不会自动下载Python。Scoop、NPM、Pip、Cursor配置和系统调优尚未迁移的内容会在报告中保留说明。
+
+目录来自固定WinUtil版本的全部234个有效WinGet包标识，排除了两个msstore来源项。软件实际版本、操作系统兼容性、硬件、许可和安装条件由执行时的来源与安装器检查；目录可选不等于已在LTSC设备验收。每次执行/检查最多128个部署任务，较大选择可保存/导出后拆分操作。
 
 ## 应用界面与偏好
 
@@ -44,8 +55,8 @@ macOS/Linux 是实际可交互的预览模式，不能修改 Windows，也不会
 
 | 来源 | 本项目吸收的能力 | 整合方式 |
 | --- | --- | --- |
-| [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) | 用户选择、计划预览、记录原值与回滚的设计经验 | 新 Rust 核心重新实现；旧仓库独立保留 |
-| [WinUtil](https://github.com/ChrisTitusTech/winutil) | 经过拆分审查的隐私和桌面偏好 | 配置映射进入同一份清单，由原生 Rust 引擎执行 |
+| [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) | SetupProfile 迁移、Mac 清单映射、Cargo/uv/VS Code 工作流，以及选择与恢复设计 | 逐项映射到受信任任务，加入同一份混合档案；旧仓库独立保留 |
+| [WinUtil](https://github.com/ChrisTitusTech/winutil) | 固定版本的 234 个 WinGet 软件标识，以及拆分审查的隐私和桌面偏好 | 软件与配置进入同一份清单，由原生 Rust 引擎执行 |
 | [Sophia Script](https://github.com/farag2/Sophia-Script-for-Windows) | 隐私、Explorer 和 Windows 版本适配参考 | 精确来源随配置记录，保留 MIT 声明 |
 | [Win11Debloat](https://github.com/Raphire/Win11Debloat) | Explorer 与部分用户体验配置 | 只纳入可单独选择、可恢复的设置 |
 
@@ -66,6 +77,8 @@ cargo run -p ltsc-studio
 ```sh
 cargo run -p ltsc-studio -- catalog
 cargo run -p ltsc-studio -- tasks
+cargo run -p ltsc-studio -- plan --target win11-ltsc-2024 --recipe rust
+cargo run -p ltsc-studio -- migrate --target win11-ltsc-2024 --input examples/migration-profile.json
 cargo run -p ltsc-studio -- plan --target win11-ltsc-2024 --select explorer-extensions,privacy-advertising-id --tasks software-git-git,feature-netfx3
 cargo run -p ltsc-studio -- inspect --target win11-ltsc-2024 --select explorer-extensions
 cargo run -p ltsc-studio -- plan --profile my-profile.json --output my-plan.json

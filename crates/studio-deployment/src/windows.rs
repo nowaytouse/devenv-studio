@@ -1,6 +1,6 @@
 use crate::{
-    Capability, DeploymentEvent, DeploymentPlan, DeploymentReport, Detection,
-    engine::{self, History, Tools},
+    Capability, DeploymentEvent, DeploymentPlan, DeploymentReport, Detection, ProviderCapability,
+    engine::{self, DeveloperTool, History, Tools},
     process::{Invocation, Runner, TASK_TIMEOUT},
 };
 use anyhow::{Context, Result, ensure};
@@ -64,12 +64,24 @@ fn local_app_data() -> Result<PathBuf> {
         c: 0x4fcf,
         d: [0x9d, 0x55, 0x7b, 0x8e, 0x7f, 0x15, 0x70, 0x91],
     };
+    known_folder(&LOCAL)
+}
+fn user_profile() -> Result<PathBuf> {
+    const PROFILE: Guid = Guid {
+        a: 0x5e6c858f,
+        b: 0x0e22,
+        c: 0x4760,
+        d: [0x9a, 0xfe, 0xea, 0x33, 0x17, 0xb6, 0x71, 0x73],
+    };
+    known_folder(&PROFILE)
+}
+fn known_folder(folder: &Guid) -> Result<PathBuf> {
     let mut pointer = std::ptr::null_mut();
     // SAFETY: Windows allocates a nul-terminated string; it is freed exactly once.
-    let result = unsafe { SHGetKnownFolderPath(&LOCAL, 0, std::ptr::null_mut(), &mut pointer) };
+    let result = unsafe { SHGetKnownFolderPath(folder, 0, std::ptr::null_mut(), &mut pointer) };
     ensure!(
         result >= 0 && !pointer.is_null(),
-        "Read Windows LocalAppData known folder failed: 0x{result:08X}"
+        "Read Windows known folder failed: 0x{result:08X}"
     );
     let mut len = 0;
     while len < 32768 && unsafe { *pointer.add(len) } != 0 {
@@ -77,16 +89,13 @@ fn local_app_data() -> Result<PathBuf> {
     }
     if len == 32768 {
         unsafe { CoTaskMemFree(pointer.cast()) };
-        anyhow::bail!("LocalAppData path exceeds limit");
+        anyhow::bail!("Known folder path exceeds limit");
     }
     let path = PathBuf::from(OsString::from_wide(unsafe {
         std::slice::from_raw_parts(pointer, len)
     }));
     unsafe { CoTaskMemFree(pointer.cast()) };
-    ensure!(
-        path.is_absolute(),
-        "LocalAppData known folder is not absolute"
-    );
+    ensure!(path.is_absolute(), "Windows known folder is not absolute");
     Ok(path)
 }
 fn windows_directory() -> Result<PathBuf> {
@@ -192,6 +201,157 @@ pub(super) fn winget_capability() -> Capability {
         },
     }
 }
+fn installed_file(path: &Path) -> Result<bool> {
+    use std::os::windows::fs::MetadataExt;
+    ensure!(
+        path.is_absolute(),
+        "Installed provider path must be absolute"
+    );
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            ensure!(
+                metadata.file_attributes() & 0x400 == 0 && metadata.is_file(),
+                "Installed provider must be a regular executable, not a reparse point: {}",
+                path.display()
+            );
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => {
+            Err(error).with_context(|| format!("Inspect installed provider {}", path.display()))
+        }
+    }
+}
+fn winget_uv(root: &Path) -> Result<Option<PathBuf>> {
+    let link = root.join("Links/uv.exe");
+    match fs::symlink_metadata(&link) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).context("Inspect WinGet uv link"),
+    }
+    let target = link
+        .canonicalize()
+        .context("Resolve installed WinGet uv link")?;
+    let packages = root
+        .join("Packages")
+        .canonicalize()
+        .context("Resolve installed WinGet package directory")?;
+    let relative = target
+        .strip_prefix(&packages)
+        .context("WinGet uv target is outside its package directory")?;
+    let package = relative
+        .components()
+        .next()
+        .context("WinGet uv package component missing")?
+        .as_os_str()
+        .to_string_lossy();
+    ensure!(
+        package.starts_with("astral-sh.uv_")
+            && target.file_name().is_some_and(|name| name == "uv.exe"),
+        "WinGet uv link does not identify the expected package"
+    );
+    ensure!(installed_file(&target)?, "WinGet uv executable is missing");
+    Ok(Some(target))
+}
+fn developer_tool(kind: &str) -> Result<DeveloperTool> {
+    let profile = user_profile()?;
+    let missing = || match kind {
+        "cargo" => {
+            "Install Rustup/Cargo in the standard user-profile .cargo/bin location and configure a working Rust toolchain (https://rustup.rs). Cargo crates are compiled with --locked; native build tools may also be required."
+        }
+        "uv" => {
+            "Install uv in the standard user-profile .local/bin or .cargo/bin, or through the explicit astral-sh.uv WinGet task (https://docs.astral.sh/uv/getting-started/installation/). Python must already be available; automatic Python downloads are disabled."
+        }
+        _ => {
+            "Install the official stable Visual Studio Code user/system package (https://code.visualstudio.com/docs/setup/windows). A standard installation with Code.exe and resources/app/out/cli.js is required; custom, portable and Insiders installs are not searched."
+        }
+    };
+    match kind {
+        "cargo" => {
+            let root = profile.join(".cargo");
+            let program = root.join("bin/cargo.exe");
+            ensure!(installed_file(&program)?, "{}", missing());
+            Ok(DeveloperTool {
+                program,
+                cargo_root: Some(root),
+                vscode_cli: None,
+            })
+        }
+        "uv" => {
+            for path in [
+                profile.join(".local/bin/uv.exe"),
+                profile.join(".cargo/bin/uv.exe"),
+            ] {
+                if installed_file(&path)? {
+                    return Ok(DeveloperTool {
+                        program: path,
+                        cargo_root: None,
+                        vscode_cli: None,
+                    });
+                }
+            }
+            let mut roots = vec![local_app_data()?.join("Microsoft/WinGet")];
+            if let Ok(files) = program_files() {
+                roots.push(files.join("WinGet"));
+            }
+            for root in roots {
+                if let Some(program) = winget_uv(&root)? {
+                    return Ok(DeveloperTool {
+                        program,
+                        cargo_root: None,
+                        vscode_cli: None,
+                    });
+                }
+            }
+            anyhow::bail!("{}", missing())
+        }
+        "vscode" => {
+            let mut roots = vec![local_app_data()?.join("Programs/Microsoft VS Code")];
+            if let Ok(files) = program_files() {
+                roots.push(files.join("Microsoft VS Code"));
+            }
+            for root in roots {
+                let program = root.join("Code.exe");
+                let cli = root.join("resources/app/out/cli.js");
+                if installed_file(&program)? && installed_file(&cli)? {
+                    return Ok(DeveloperTool {
+                        program,
+                        cargo_root: None,
+                        vscode_cli: Some(cli),
+                    });
+                }
+            }
+            anyhow::bail!("{}", missing())
+        }
+        _ => anyhow::bail!("Unknown developer provider {kind}"),
+    }
+}
+pub(super) fn provider_capabilities() -> Vec<ProviderCapability> {
+    let winget = winget_capability();
+    let mut capabilities = vec![ProviderCapability {
+        provider: "winget".into(),
+        available: winget.available,
+        detail: winget.detail,
+    }];
+    for provider in ["cargo", "uv", "vscode"] {
+        let (available, detail) = match developer_tool(provider) {
+            Ok(tool) => (
+                true,
+                format!(
+                    "Installed provider: {}. Availability is rechecked for each task after any explicitly selected prerequisites; no provider is bootstrapped automatically.",
+                    tool.program.display()
+                ),
+            ),
+            Err(error) => (false, format!("{error:#}")),
+        };
+        capabilities.push(ProviderCapability {
+            provider: provider.into(),
+            available,
+            detail,
+        });
+    }
+    capabilities
+}
 fn tools(require_winget: bool) -> Result<Tools> {
     let system = windows_directory()?.join("System32");
     let dism = system.join("dism.exe");
@@ -205,7 +365,12 @@ fn tools(require_winget: bool) -> Result<Tools> {
     } else {
         None
     };
-    Ok(Tools { winget, dism, sfc })
+    Ok(Tools {
+        winget,
+        dism,
+        sfc,
+        developer: developer_tool,
+    })
 }
 fn host(target: studio_core::Target) -> Result<()> {
     let host = studio_platform::host();

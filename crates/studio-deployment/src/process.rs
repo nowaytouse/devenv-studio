@@ -19,6 +19,7 @@ pub(crate) const TASK_TIMEOUT: Duration = Duration::from_secs(90 * 60);
 pub(crate) struct Invocation {
     pub program: PathBuf,
     pub args: Vec<String>,
+    pub vscode_node: bool,
 }
 #[derive(Debug, Clone)]
 pub(crate) struct Output {
@@ -109,6 +110,19 @@ fn run_configured(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if invocation.vscode_node {
+        ensure!(
+            invocation
+                .program
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("Code.exe")),
+            "VS Code node environment is restricted to Code.exe"
+        );
+        command
+            .env("ELECTRON_RUN_AS_NODE", "1")
+            .env_remove("VSCODE_DEV")
+            .env_remove("VSCODE_PORTABLE");
+    }
     if let Some(parent) = invocation.program.parent() {
         command.current_dir(parent);
     }
@@ -236,6 +250,7 @@ mod tests {
         // The child is this test binary, with one fixture selected. No shell or live system task.
         let exe = std::env::current_exe().unwrap();
         let inv = Invocation {
+            vscode_node: false,
             program: exe,
             args: vec![
                 "--exact".into(),
@@ -257,6 +272,7 @@ mod tests {
         assert!(out.stdout.contains("out-complete"));
         assert!(out.stderr.contains("err-complete"));
         let invalid = Invocation {
+            vscode_node: false,
             program: std::env::temp_dir().join("ltsc-does-not-exist.exe"),
             args: vec![],
         };
@@ -272,6 +288,7 @@ mod tests {
     #[test]
     fn cancelled_before_spawn_and_relative_paths_fail() {
         let inv = Invocation {
+            vscode_node: false,
             program: std::env::current_exe().unwrap(),
             args: vec![],
         };
@@ -287,6 +304,7 @@ mod tests {
         assert!(
             run_bounded(
                 &Invocation {
+                    vscode_node: false,
                     program: "dism.exe".into(),
                     args: vec![]
                 },
@@ -299,6 +317,7 @@ mod tests {
     #[test]
     fn actual_child_timeout_and_cancellation_are_reaped() {
         let inv = Invocation {
+            vscode_node: false,
             program: std::env::current_exe().unwrap(),
             args: vec![
                 "--exact".into(),

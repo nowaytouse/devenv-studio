@@ -1,6 +1,6 @@
 # 来源与集成范围
 
-审查日期：2026-10-21。以下为源码行为审查，不是 LTSC 设备运行验收。0.2.0 内置 45 个配置选项（31 组独立设置）、30 个软件包、7 个可选功能及 4 个维护任务；所有选项均默认关闭。
+审查日期：2026-10-22。以下为源码行为审查，不是 LTSC 设备运行验收。当前清单版本仍为 `2026-10-22.1`：45 个注册表选项（31 组独立设置）、234 个 WinGet 软件包、20 个开发工具任务、7 个可选功能及 4 个维护任务；所有项目默认不选。
 
 ## 固定来源
 
@@ -15,7 +15,9 @@
 
 下表保留首批设置的对应关系。扩展后的全部选项、互斥组和预设以 [catalog.json](../data/catalog.json) 为准，每项都保留精确来源。新版涵盖 Explorer 打开位置、视图密度、快速访问记录、复选框、任务栏搜索模式、对齐、时钟、结束任务、按钮合并、主题、开始菜单和推荐偏好。
 
-软件清单见 [deployment.json](../data/deployment.json)：30 个软件包 ID 均来自上述固定 WinUtil 提交的 [applications.json](https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json)，使用已安装的官方 WinGet 和精确 ID；实际安装版本由执行时软件源决定，没有宣称固定或跨平台版本一致。
+软件清单见 [deployment.json](../data/deployment.json)：234 个唯一的软件包 ID 对应 WinUtil 固定提交中全部符合项目 ID 字符规则的原生 WinGet 条目（保留原有 30 项并新增 204 项）。两个 `msstore:` 条目使用 Microsoft Store 源标识，未纳入原生 WinGet 包目录。新增的 204 项各自链接到 WinUtil JSON 中对应源键行，原有 30 项的任务 ID、包 ID 与既有证据保持不变；执行时使用已安装的官方 WinGet 与精确 ID。实际安装版本由执行时来源决定，不固定，也不保证跨设备版本一致。固定文件 SHA-256 为 `5072ff3f3b4c689db313000c8ef7ff93c655f5cea55c5990192ead87789ecf41`；`scripts/update_catalog.py --source <本地固定源文件> --check` 可用已保存的源文件离线校验摘要、目录 ID 与英文覆盖率，不写入文件。
+
+开发工具包含 8 个 Cargo crate、4 个 uv 工具和 8 个 VS Code 扩展。它们是独立的用户级任务，需有对应工具链或编辑器；如果同时选择目录中提供的 WinGet 前置软件，执行引擎会先安装所选软件，再运行开发工具任务。Cargo/PyPI/Marketplace 的版本取执行时来源，不固定。Cargo 构建、Python 包安装后端或 VS Code 扩展可能执行其发布者提供的代码；用户应先审阅来源、许可与权限。本功能不提升这些任务的权限，也不写入系统 PATH。各任务链接对应的 crates.io、PyPI 或 Marketplace 项目页。
 
 7 项 Windows 功能通过本机 DISM 查询、启用和回读，4 项维护通过 DISM/SFC 运行固定参数。相关微软文档链接保存在每项证据中；没有将 PowerShell 上游整体包装为 Rust 功能。
 

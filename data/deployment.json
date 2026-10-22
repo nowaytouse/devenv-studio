@@ -1,5 +1,5 @@
 {
-  "revision": "2026-10-21.2",
+  "revision": "2026-10-22.1",
   "tasks": [
     {
       "id": "software-7zip-7zip",
@@ -812,6 +812,4466 @@
         "https://learn.microsoft.com/windows-server/administration/windows-commands/sfc"
       ],
       "package_id": null,
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-abdownloadmanager",
+      "title": "AB Download Manager",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 AB Download Manager。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L20",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "amir1376.ABDownloadManager",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-adobe",
+      "title": "Adobe Acrobat Reader",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 Adobe Acrobat Reader。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L29",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Adobe.Acrobat.Reader.64-bit",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-advancedip",
+      "title": "Advanced IP Scanner",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Advanced IP Scanner。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L38",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Famatech.AdvancedIPScanner",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-aimp",
+      "title": "AIMP (Music Player)",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 AIMP (Music Player)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L47",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "AIMP.AIMP",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-angryipscanner",
+      "title": "Angry IP Scanner",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Angry IP Scanner。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L56",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "angryziber.AngryIPScanner",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-anydesk",
+      "title": "AnyDesk",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 AnyDesk。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L65",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "AnyDesk.AnyDesk",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-autoruns",
+      "title": "Autoruns",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 Autoruns。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L83",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.Sysinternals.Autoruns",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-rdcman",
+      "title": "RDCMan",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 RDCMan。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L92",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.Sysinternals.RDCMan",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-autohotkey",
+      "title": "AutoHotkey",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 AutoHotkey。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L101",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "AutoHotkey.AutoHotkey",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-battlenet",
+      "title": "Battle.net",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Battle.net。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L110",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Blizzard.BattleNet",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-bruno",
+      "title": "Bruno",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Bruno。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L146",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Bruno.Bruno",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-bulkcrapuninstaller",
+      "title": "Bulk Crap Uninstaller",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Bulk Crap Uninstaller。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L155",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Klocman.BulkCrapUninstaller",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-blurautoclicker",
+      "title": "BlurAutoClicker",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 BlurAutoClicker。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L164",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Blur009.BlurAutoClicker",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-cemu",
+      "title": "Cemu",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Cemu。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L182",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Cemu.Cemu",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-chatterino",
+      "title": "Chatterino",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Chatterino。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L200",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ChatterinoTeam.Chatterino",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-chromium",
+      "title": "Chromium",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Chromium。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L218",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Hibbiki.Chromium",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-cinebenchr23",
+      "title": "Cinebench R23",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Cinebench R23。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L227",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Maxon.CinebenchR23",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-claude",
+      "title": "Claude Desktop",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Claude Desktop。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L236",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Anthropic.Claude",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-claude-code",
+      "title": "Claude Code",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Claude Code。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L245",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Anthropic.ClaudeCode",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-cmake",
+      "title": "CMake",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 CMake。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L254",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Kitware.CMake",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-codex",
+      "title": "Codex",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Codex。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L263",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OpenAI.Codex",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-cpuz",
+      "title": "CPU-Z",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 CPU-Z。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L272",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "CPUID.CPU-Z",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-crystaldiskmark",
+      "title": "Crystal Disk Mark",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Crystal Disk Mark。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L290",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "CrystalDewWorld.CrystalDiskMark",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-cursor",
+      "title": "Cursor",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Cursor。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L299",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Anysphere.Cursor",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ddu",
+      "title": "Display Driver Uninstaller",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Display Driver Uninstaller。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L308",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Wagnardsoft.DisplayDriverUninstaller",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-discord",
+      "title": "Discord",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Discord。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L317",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Discord.Discord",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dismtools",
+      "title": "DISMTools",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 DISMTools。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L326",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "CodingWondersSoftware.DISMTools.Stable",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ntlite",
+      "title": "NTLite",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 NTLite。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L335",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Nlitesoft.NTLite",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dorion",
+      "title": "Dorion",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Dorion。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L344",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "SpikeHD.Dorion",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dockerdesktop",
+      "title": "Docker Desktop",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Docker Desktop。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L353",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Docker.DockerDesktop",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dotnet6",
+      "title": ".NET Desktop Runtime 6",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 .NET Desktop Runtime 6。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L362",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.DotNet.DesktopRuntime.6",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dotnet8",
+      "title": ".NET Desktop Runtime 8",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 .NET Desktop Runtime 8。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L371",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.DotNet.DesktopRuntime.8",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dotnet9",
+      "title": ".NET Desktop Runtime 9",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 .NET Desktop Runtime 9。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L380",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.DotNet.DesktopRuntime.9",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dotnet10",
+      "title": ".NET Desktop Runtime 10",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 .NET Desktop Runtime 10。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L389",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.DotNet.DesktopRuntime.10",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-dropbox",
+      "title": "Dropbox",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Dropbox。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L398",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Dropbox.Dropbox",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-eaapp",
+      "title": "EA App",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 EA App。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L407",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ElectronicArts.EADesktop",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-eartrumpet",
+      "title": "EarTrumpet (Audio)",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 EarTrumpet (Audio)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L416",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "File-New-Project.EarTrumpet",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-edge",
+      "title": "Edge",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Edge。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L425",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.Edge",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-es-de",
+      "title": "EmulationStation Desktop Edition",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 EmulationStation Desktop Edition。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L434",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ES-DE.EmulationStation-DE",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-enteauth",
+      "title": "Ente Auth",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Ente Auth。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L444",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ente-io.auth-desktop",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-epicgames",
+      "title": "Epic Games Launcher",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Epic Games Launcher。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L453",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "EpicGames.EpicGamesLauncher",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-files",
+      "title": "Files",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Files。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L462",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "FilesCommunity.Files",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-fileconverter",
+      "title": "File Converter",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 File Converter。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L471",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "AdrienAllard.FileConverter",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-firefoxesr",
+      "title": "Firefox ESR",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Firefox ESR。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L489",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Mozilla.Firefox.ESR",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-floorp",
+      "title": "Floorp",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Floorp。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L498",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Ablaze.Floorp",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-flux",
+      "title": "F.lux",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 F.lux。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L507",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "flux.flux",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-foobar",
+      "title": "foobar2000 (Music Player)",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 foobar2000 (Music Player)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L516",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "PeterPawlowski.foobar2000",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-fnm",
+      "title": "Fast Node Manager",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Fast Node Manager。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L525",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Schniz.fnm",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-foxpdfreader",
+      "title": "Foxit PDF Reader",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 Foxit PDF Reader。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L534",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Foxit.FoxitReader",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-geforcenow",
+      "title": "GeForce NOW",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 GeForce NOW。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L543",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Nvidia.GeForceNow",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-gitextensions",
+      "title": "Git Extensions",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Git Extensions。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L570",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GitExtensionsTeam.GitExtensions",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-githubcli",
+      "title": "GitHub CLI",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 GitHub CLI。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L579",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GitHub.cli",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-githubdesktop",
+      "title": "GitHub Desktop",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 GitHub Desktop。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L588",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GitHub.GitHubDesktop",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-gog",
+      "title": "GOG Galaxy",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 GOG Galaxy。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L597",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GOG.Galaxy",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-golang",
+      "title": "Go",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Go。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L606",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GoLang.Go",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-googledrive",
+      "title": "Google Drive",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Google Drive。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L615",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Google.GoogleDrive",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-gpuz",
+      "title": "GPU-Z",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 GPU-Z。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L624",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TechPowerUp.GPU-Z",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-gsudo",
+      "title": "gsudo",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 gsudo。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L633",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "gerardog.gsudo",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-helium",
+      "title": "Helium",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Helium。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L642",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ImputNet.Helium",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-hugo",
+      "title": "Hugo",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Hugo。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L651",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Hugo.Hugo.Extended",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-handbrake",
+      "title": "HandBrake",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 HandBrake。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L660",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "HandBrake.HandBrake",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-heroiclauncher",
+      "title": "Heroic Games Launcher",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Heroic Games Launcher。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L669",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "HeroicGamesLauncher.HeroicGamesLauncher",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-hwinfo",
+      "title": "HWiNFO",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 HWiNFO。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L678",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "REALiX.HWiNFO",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-hwmonitor",
+      "title": "HWMonitor",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 HWMonitor。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L687",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "CPUID.HWMonitor",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-imageglass",
+      "title": "ImageGlass (Image Viewer)",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 ImageGlass (Image Viewer)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L696",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "DuongDieuPhap.ImageGlass",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-internetdownloadmanager",
+      "title": "Internet Download Manager",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Internet Download Manager。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L705",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Tonec.InternetDownloadManager",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-irfanview",
+      "title": "IrfanView",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 IrfanView。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L714",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "IrfanSkiljan.IrfanView",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-itch",
+      "title": "Itch.io",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Itch.io。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L723",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ItchIo.Itch",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-itunes",
+      "title": "iTunes",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 iTunes。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L732",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Apple.iTunes",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-java8",
+      "title": "Amazon Corretto 8 (LTS)",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Amazon Corretto 8 (LTS)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L741",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Amazon.Corretto.8.JDK",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-java21",
+      "title": "Amazon Corretto 21 (LTS)",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Amazon Corretto 21 (LTS)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L750",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Amazon.Corretto.21.JDK",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-java25",
+      "title": "Amazon Corretto 25 (LTS)",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Amazon Corretto 25 (LTS)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L759",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Amazon.Corretto.25.JDK",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-jellyfinmediaplayer",
+      "title": "Jellyfin Media Player",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Jellyfin Media Player。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L768",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Jellyfin.JellyfinMediaPlayer",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-jellyfinserver",
+      "title": "Jellyfin Server",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Jellyfin Server。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L777",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Jellyfin.Server",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-jetbrains",
+      "title": "Jetbrains Toolbox",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Jetbrains Toolbox。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L786",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "JetBrains.Toolbox",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-jpegview",
+      "title": "JPEG View",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 JPEG View。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L795",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "sylikc.JPEGView",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-joplin",
+      "title": "Joplin",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 Joplin。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L804",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Joplin.Joplin",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-klite",
+      "title": "K-Lite Codec Standard",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 K-Lite Codec Standard。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L822",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "CodecGuide.K-LiteCodecPack.Standard",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-kodi",
+      "title": "Kodi Media Center",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Kodi Media Center。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L831",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "XBMCFoundation.Kodi",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-lazygit",
+      "title": "Lazygit",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Lazygit。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L840",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "JesseDuffield.lazygit",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-librewolf",
+      "title": "LibreWolf",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 LibreWolf。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L858",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "LibreWolf.LibreWolf",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-localsend",
+      "title": "LocalSend",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 LocalSend。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L867",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "LocalSend.LocalSend",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-mpc-qt",
+      "title": "mpc-qt",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 mpc-qt。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L876",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "mpc-qt.mpc-qt",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-mpv",
+      "title": "mpv",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 mpv。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L885",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "shinchiro.mpv",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-matrix",
+      "title": "Element",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Element。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L893",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Element.Element",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-minitoolpartitionwizard",
+      "title": "MiniTool Partition Wizard",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 MiniTool Partition Wizard。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L902",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "MiniTool.PartitionWizard.Free",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-modrinth",
+      "title": "Modrinth App",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Modrinth App。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L911",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Modrinth.ModrinthApp",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-moonlight",
+      "title": "Moonlight/GameStream Client",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Moonlight/GameStream Client。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L920",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "MoonlightGameStreamingProject.Moonlight",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-mpchc",
+      "title": "Media Player Classic - Home Cinema",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 Media Player Classic - Home Cinema。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L929",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "clsid2.mpc-hc",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-msedgeredirect",
+      "title": "MSEdgeRedirect",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 MSEdgeRedirect。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L938",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "rcmaehl.MSEdgeRedirect",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-msiafterburner",
+      "title": "MSI Afterburner",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 MSI Afterburner。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L947",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Guru3D.Afterburner",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-mullvadvpn",
+      "title": "Mullvad VPN",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Mullvad VPN。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L956",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "MullvadVPN.MullvadVPN",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-mullvadbrowser",
+      "title": "Mullvad Browser",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Mullvad Browser。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L965",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "MullvadVPN.MullvadBrowser",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nomacs",
+      "title": "nomacs",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 nomacs。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L974",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "nomacs.nomacs",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nanazip",
+      "title": "NanaZip",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 NanaZip。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L983",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "M2Team.NanaZip",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-netbird",
+      "title": "NetBird",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 NetBird。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L992",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Netbird.Netbird",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-tailscale",
+      "title": "Tailscale",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Tailscale。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1001",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Tailscale.Tailscale",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-naps2",
+      "title": "NAPS2 (Scanner)",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 NAPS2 (Scanner)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1010",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Cyanfish.NAPS2",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-neovim",
+      "title": "Neovim",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Neovim。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1019",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Neovim.Neovim",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nextclouddesktop",
+      "title": "Nextcloud Desktop",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Nextcloud Desktop。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1028",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Nextcloud.NextcloudDesktop",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nmap",
+      "title": "Nmap",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Nmap。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1037",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Insecure.Nmap",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nodejs",
+      "title": "NodeJS",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 NodeJS。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1046",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OpenJS.NodeJS",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-pnpm",
+      "title": "pnpm",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 pnpm。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1064",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "pnpm.pnpm",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nuget",
+      "title": "NuGet",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 NuGet。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1081",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.NuGet",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nvclean",
+      "title": "NVCleanstall",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 NVCleanstall。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1090",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TechPowerUp.NVCleanstall",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-okular",
+      "title": "Okular",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 Okular。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1117",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "KDE.Okular",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-onedrive",
+      "title": "OneDrive",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 OneDrive。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1126",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.OneDrive",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-onlyoffice",
+      "title": "ONLYOFFICE Desktop",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 ONLYOFFICE Desktop。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1135",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ONLYOFFICE.DesktopEditors",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-opautoclicker",
+      "title": "OPAutoClicker",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 OPAutoClicker。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1144",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OPAutoClicker.OPAutoClicker",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-openrgb",
+      "title": "OpenRGB",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 OpenRGB。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1153",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OpenRGB.OpenRGB",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-openvpn",
+      "title": "OpenVPN Connect",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 OpenVPN Connect。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1162",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OpenVPNTechnologies.OpenVPNConnect",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ovirtualbox",
+      "title": "Oracle VirtualBox",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Oracle VirtualBox。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1171",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Oracle.VirtualBox",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-policyplus",
+      "title": "Policy Plus",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Policy Plus。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1180",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Fleex255.PolicyPlus",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-processexplorer",
+      "title": "Process Explorer",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 Process Explorer。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1189",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.Sysinternals.ProcessExplorer",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-paintdotnet",
+      "title": "Paint.NET",
+      "description": "WinUtil 固定清单将此软件归类为「多媒体」；通过 WinGet 安装 Paint.NET。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1198",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "dotPDN.PaintDotNet",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-parsec",
+      "title": "Parsec",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Parsec。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1207",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Parsec.Parsec",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-peazip",
+      "title": "PeaZip",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 PeaZip。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1216",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Giorgiotani.Peazip",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-pdf-xchange",
+      "title": "PDF-XChange Editor",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 PDF-XChange Editor。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1225",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TrackerSoftware.PDF-XChangeEditor",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-pdf24creator",
+      "title": "PDF24 Creator",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 PDF24 Creator。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1234",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "geeksoftwareGmbH.PDF24Creator",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-pdfgear",
+      "title": "PDFgear",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 PDFgear。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1243",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "PDFgear.PDFgear",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-pdfsam",
+      "title": "PDFsam Basic",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 PDFsam Basic。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1252",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "PDFsam.PDFsam",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-playnite",
+      "title": "Playnite",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Playnite。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1261",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Playnite.Playnite",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-plex",
+      "title": "Plex Media Server",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Plex Media Server。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1270",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Plex.PlexMediaServer",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-plexdesktop",
+      "title": "Plex Desktop",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Plex Desktop。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1279",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Plex.Plex",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-posh",
+      "title": "Oh My Posh (Prompt)",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Oh My Posh (Prompt)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1288",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "JanDeDobbeleer.OhMyPosh",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-postman",
+      "title": "Postman",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Postman。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1297",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Postman.Postman",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-prismlauncher",
+      "title": "Prism Launcher",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Prism Launcher。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1324",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "PrismLauncher.PrismLauncher",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-processlasso",
+      "title": "Process Lasso",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Process Lasso。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1333",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "BitSum.ProcessLasso",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-protonauth",
+      "title": "Proton Authenticator",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Proton Authenticator。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1342",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Proton.ProtonAuthenticator",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-protonmail",
+      "title": "Proton Mail",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Proton Mail。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1351",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Proton.ProtonMail",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-protondrive",
+      "title": "Proton Drive",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Proton Drive。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1360",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Proton.ProtonDrive",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-protonpass",
+      "title": "Proton Pass",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Proton Pass。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1369",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Proton.ProtonPass",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-protonvpn",
+      "title": "Proton VPN",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Proton VPN。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1378",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Proton.ProtonVPN",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-processmonitor",
+      "title": "Process Monitor",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 Process Monitor。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1387",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.Sysinternals.ProcessMonitor",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-python3",
+      "title": "Python3",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Python3。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1405",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Python.Python.3.14",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-qbittorrent",
+      "title": "qBittorrent",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 qBittorrent。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1414",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "qBittorrent.qBittorrent",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-qownnotes",
+      "title": "QOwnNotes",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 QOwnNotes。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1423",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "pbek.QOwnNotes",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-qtox",
+      "title": "QTox",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 QTox。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1432",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Tox.qTox",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-revo",
+      "title": "Revo Uninstaller",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Revo Uninstaller。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1441",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "RevoUninstaller.RevoUninstaller",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-wiseprogramuninstaller",
+      "title": "Wise Program Uninstaller (WiseCleaner)",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Wise Program Uninstaller (WiseCleaner)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1450",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "WiseCleaner.WiseProgramUninstaller",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-rustlang",
+      "title": "Rust",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Rust。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1468",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Rustlang.Rust.MSVC",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-sdio",
+      "title": "Snappy Driver Installer Origin",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Snappy Driver Installer Origin。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1477",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GlennDelahoy.SnappyDriverInstallerOrigin",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-nilesoftshell",
+      "title": "Nilesoft Shell",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Nilesoft Shell。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1495",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Nilesoft.Shell",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-systeminformer",
+      "title": "System Informer",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 System Informer。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1504",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "WinsiderSS.SystemInformer",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-signal",
+      "title": "Signal",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Signal。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1513",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "OpenWhisperSystems.Signal",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-signalrgb",
+      "title": "SignalRGB",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 SignalRGB。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1522",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "WhirlwindFX.SignalRgb",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-simplenote",
+      "title": "Simplenote",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 Simplenote。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1531",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Automattic.Simplenote",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-simplewall",
+      "title": "Simplewall",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Simplewall。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1540",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Henry++.simplewall",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-slack",
+      "title": "Slack",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Slack。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1549",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "SlackTechnologies.Slack",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-startallback",
+      "title": "StartAllBack",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 StartAllBack。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1558",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "StartIsBack.StartAllBack",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-starship",
+      "title": "Starship (Shell Prompt)",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Starship (Shell Prompt)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1567",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Starship.Starship",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-steam",
+      "title": "Steam",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Steam。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1576",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Valve.Steam",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-roblox",
+      "title": "Roblox",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Roblox。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1585",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Roblox.Roblox",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-sublimetext",
+      "title": "Sublime Text",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Sublime Text。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1594",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "SublimeHQ.SublimeText.4",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-sunshine",
+      "title": "Sunshine/GameStream Server",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Sunshine/GameStream Server。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1612",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "LizardByte.Sunshine",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-synctrayzor",
+      "title": "SyncTrayzor",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 SyncTrayzor。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1621",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GermanCoding.SyncTrayzor",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-syncthing",
+      "title": "Syncthing (CLI / Web UI)",
+      "description": "WinUtil 固定清单将此软件归类为「自托管工具」；通过 WinGet 安装 Syncthing (CLI / Web UI)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1629",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Syncthing.Syncthing",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-tcpview",
+      "title": "TCPView",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 TCPView。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1638",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.Sysinternals.TCPView",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-teams",
+      "title": "Teams",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Teams。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1647",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.Teams",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-teamviewer",
+      "title": "TeamViewer",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 TeamViewer。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1656",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TeamViewer.TeamViewer",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-teamspeak3",
+      "title": "TeamSpeak 3",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 TeamSpeak 3。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1665",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TeamSpeakSystems.TeamSpeakClient",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-teamspeak6",
+      "title": "TeamSpeak 6",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 TeamSpeak 6。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1674",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TeamSpeakSystems.TeamSpeakClient.Beta.6",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-telegram",
+      "title": "Telegram",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Telegram。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1683",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Telegram.TelegramDesktop",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-thunderbird",
+      "title": "Thunderbird",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Thunderbird。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1701",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Mozilla.Thunderbird",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-betterbird",
+      "title": "Betterbird",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Betterbird。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1710",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Betterbird.Betterbird",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-tor",
+      "title": "Tor Browser",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Tor Browser。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1719",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "TorProject.TorBrowser",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-totalcommander",
+      "title": "Total Commander",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Total Commander。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1728",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Ghisler.TotalCommander",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-treesize",
+      "title": "TreeSize Free",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 TreeSize Free。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1737",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "JAMSoftware.TreeSize.Free",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ttaskbar",
+      "title": "TranslucentTB",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 TranslucentTB。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1746",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "CharlesMilette.TranslucentTB",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ubisoft",
+      "title": "Ubisoft Connect",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Ubisoft Connect。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1755",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Ubisoft.Connect",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ungoogled",
+      "title": "Ungoogled Chromium",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Ungoogled Chromium。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1764",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "eloston.ungoogled-chromium",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-unity",
+      "title": "Unity Game Engine",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Unity Game Engine。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1773",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Unity.UnityHub",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-vagrant",
+      "title": "Vagrant",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Vagrant。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1782",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Hashicorp.Vagrant",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-vc2015-32",
+      "title": "Visual C++ 2015-2022 32-bit",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 Visual C++ 2015-2022 32-bit。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1800",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.VCRedist.2015+.x86",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-vc2015-64",
+      "title": "Visual C++ 2015-2022 64-bit",
+      "description": "WinUtil 固定清单将此软件归类为「微软工具」；通过 WinGet 安装 Visual C++ 2015-2022 64-bit。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1809",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.VCRedist.2015+.x64",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ventoy",
+      "title": "Ventoy",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Ventoy。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1818",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Ventoy.Ventoy",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-vesktop",
+      "title": "Vesktop",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Vesktop。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1827",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Vencord.Vesktop",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-viber",
+      "title": "Viber",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Viber。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1836",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Rakuten.Viber",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-visualstudio2022",
+      "title": "Visual Studio 2022",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Visual Studio 2022。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1845",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.VisualStudio.2022.Community",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-visualstudio2026",
+      "title": "Visual Studio 2026",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Visual Studio 2026。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1854",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Microsoft.VisualStudio.Community",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-vivaldi",
+      "title": "Vivaldi",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Vivaldi。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1863",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Vivaldi.Vivaldi",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-vrdesktopstreamer",
+      "title": "Virtual Desktop Streamer",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 Virtual Desktop Streamer。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1881",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "VirtualDesktop.Streamer",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-vscodium",
+      "title": "VS Codium",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 VS Codium。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1899",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "VSCodium.VSCodium",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-waterfox",
+      "title": "Waterfox",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Waterfox。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1908",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Waterfox.Waterfox",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-wingetui",
+      "title": "UniGetUI",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 UniGetUI。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1926",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Devolutions.UniGetUI",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-winrar",
+      "title": "WinRAR",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 WinRAR。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1935",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "RARLab.WinRAR",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-wireguard",
+      "title": "WireGuard",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 WireGuard。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1953",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "WireGuard.WireGuard",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-wireshark",
+      "title": "Wireshark",
+      "description": "WinUtil 固定清单将此软件归类为「专业工具」；通过 WinGet 安装 Wireshark。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1962",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "WiresharkFoundation.Wireshark",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-wiztree",
+      "title": "WizTree",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 WizTree。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1971",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "AntibodySoftware.WizTree",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-xeheditor",
+      "title": "HxD Hex Editor",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 HxD Hex Editor。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1980",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "MHNexus.HxD",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-xournal",
+      "title": "Xournal++",
+      "description": "WinUtil 固定清单将此软件归类为「文档」；通过 WinGet 安装 Xournal++。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1989",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Xournal++.Xournal++",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-yarn",
+      "title": "Yarn",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Yarn。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L1998",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Yarn.Yarn",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-zoom",
+      "title": "Zoom",
+      "description": "WinUtil 固定清单将此软件归类为「通信」；通过 WinGet 安装 Zoom。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2007",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Zoom.Zoom",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-uv",
+      "title": "uv",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 uv。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2016",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "astral-sh.uv",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-tightvnc",
+      "title": "TightVNC",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 TightVNC。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2025",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "GlavSoft.TightVNC",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-glazewm",
+      "title": "GlazeWM",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 GlazeWM。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2034",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "glzr-io.glazewm",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-overwolf",
+      "title": "CurseForge",
+      "description": "WinUtil 固定清单将此软件归类为「游戏」；通过 WinGet 安装 CurseForge。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2043",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Overwolf.CurseForge",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ofgb",
+      "title": "OFGB (Oh Frick Go Back)",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 OFGB (Oh Frick Go Back)。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2051",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "xM4ddy.OFGB",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-zenbrowser",
+      "title": "Zen Browser",
+      "description": "WinUtil 固定清单将此软件归类为「浏览器」；通过 WinGet 安装 Zen Browser。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2060",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Zen-Team.Zen-Browser",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-zed",
+      "title": "Zed",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Zed。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2069",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "ZedIndustries.Zed",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-deskflow",
+      "title": "Deskflow",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Deskflow。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2087",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Deskflow.Deskflow",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-ruby",
+      "title": "Ruby",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Ruby。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2096",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "RubyInstallerTeam.Ruby.4.0",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-lua",
+      "title": "Lua",
+      "description": "WinUtil 固定清单将此软件归类为「开发」；通过 WinGet 安装 Lua。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2105",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "rjpcomputing.luaforwindows",
+      "feature_name": null
+    },
+    {
+      "id": "software-winutil-cloudflarewarp",
+      "title": "Cloudflare WARP",
+      "description": "WinUtil 固定清单将此软件归类为「实用工具」；通过 WinGet 安装 Cloudflare WARP。请先查阅发布者说明并确认许可、配置和适用性。",
+      "category": "software",
+      "kind": "package",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "以安装器结果为准；不会自动重启",
+      "limitations": "需要用户已配置的 App Installer / WinGet 和 winget 来源，可使用网络。安装版本由来源当前可用版本决定，可能请求管理员权限。不会自动接受来源或软件许可；如需确认许可，请先在官方 WinGet 中手动完成。无法通过注册表恢复卸载软件。",
+      "evidence": [
+        "https://github.com/ChrisTitusTech/winutil/blob/7514faf0d0f4bff9b6c5d9213426ab52520cfac4/config/applications.json#L2114",
+        "https://learn.microsoft.com/windows/package-manager/winget/install"
+      ],
+      "package_id": "Cloudflare.Warp",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-ripgrep",
+      "title": "ripgrep (Cargo crate)",
+      "description": "递归文本搜索工具，适合在代码与文档中按模式查找内容。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/ripgrep"
+      ],
+      "package_id": "ripgrep",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-fd-find",
+      "title": "fd-find (Cargo crate)",
+      "description": "用于按名称和路径查找文件的命令行工具。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/fd-find"
+      ],
+      "package_id": "fd-find",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-bat",
+      "title": "bat (Cargo crate)",
+      "description": "带语法高亮与分页显示的命令行文件查看器。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/bat"
+      ],
+      "package_id": "bat",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-eza",
+      "title": "eza (Cargo crate)",
+      "description": "用于列出目录内容的命令行工具。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/eza"
+      ],
+      "package_id": "eza",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-zoxide",
+      "title": "zoxide (Cargo crate)",
+      "description": "根据使用记录快速跳转目录的命令行工具。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/zoxide"
+      ],
+      "package_id": "zoxide",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-starship",
+      "title": "starship (Cargo crate)",
+      "description": "可配置的跨 Shell 命令提示符。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/starship"
+      ],
+      "package_id": "starship",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-just",
+      "title": "just (Cargo crate)",
+      "description": "用于定义和运行项目常用命令的任务运行器。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/just"
+      ],
+      "package_id": "just",
+      "feature_name": null
+    },
+    {
+      "id": "developer-cargo-git-delta",
+      "title": "git-delta (Cargo crate)",
+      "description": "用于改善 Git diff 输出可读性的分页与差异查看工具。",
+      "category": "developer",
+      "kind": "cargo",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用当前用户可用的 Rust/Cargo 工具链和 crates.io 网络源；按 Crate 名执行 cargo install，不固定版本。请先检查软件许可及 Windows 兼容性。Cargo 构建可能执行 crate 提供的构建脚本；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://crates.io/crates/git-delta"
+      ],
+      "package_id": "git-delta",
+      "feature_name": null
+    },
+    {
+      "id": "developer-uv-ruff",
+      "title": "ruff (uv tool)",
+      "description": "Python 代码检查与格式化工具。",
+      "category": "developer",
+      "kind": "uv",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 uv 与当前用户的 Python 环境，并访问 PyPI；不固定包版本。请先检查软件许可和包的适用性。包安装或构建后端可能执行发布者提供的代码；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://pypi.org/project/ruff"
+      ],
+      "package_id": "ruff",
+      "feature_name": null
+    },
+    {
+      "id": "developer-uv-yamllint",
+      "title": "yamllint (uv tool)",
+      "description": "用于检查 YAML 文件格式与常见问题的工具。",
+      "category": "developer",
+      "kind": "uv",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 uv 与当前用户的 Python 环境，并访问 PyPI；不固定包版本。请先检查软件许可和包的适用性。包安装或构建后端可能执行发布者提供的代码；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://pypi.org/project/yamllint"
+      ],
+      "package_id": "yamllint",
+      "feature_name": null
+    },
+    {
+      "id": "developer-uv-httpie",
+      "title": "httpie (uv tool)",
+      "description": "用于发送和检查 HTTP 请求的命令行客户端。",
+      "category": "developer",
+      "kind": "uv",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 uv 与当前用户的 Python 环境，并访问 PyPI；不固定包版本。请先检查软件许可和包的适用性。包安装或构建后端可能执行发布者提供的代码；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://pypi.org/project/httpie"
+      ],
+      "package_id": "httpie",
+      "feature_name": null
+    },
+    {
+      "id": "developer-uv-pre-commit",
+      "title": "pre-commit (uv tool)",
+      "description": "在提交前按项目配置运行代码检查钩子的框架。",
+      "category": "developer",
+      "kind": "uv",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 uv 与当前用户的 Python 环境，并访问 PyPI；不固定包版本。请先检查软件许可和包的适用性。包安装或构建后端可能执行发布者提供的代码；本任务不修改系统 PATH。",
+      "evidence": [
+        "https://pypi.org/project/pre-commit"
+      ],
+      "package_id": "pre-commit",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-rust-lang-rust-analyzer",
+      "title": "rust-lang.rust-analyzer (VS Code extension)",
+      "description": "为 Visual Studio Code 提供 Rust 语言分析、补全和导航功能。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer"
+      ],
+      "package_id": "rust-lang.rust-analyzer",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-tamasfe-even-better-toml",
+      "title": "tamasfe.even-better-toml (VS Code extension)",
+      "description": "为 Visual Studio Code 提供 TOML 语法支持。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml"
+      ],
+      "package_id": "tamasfe.even-better-toml",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-ms-python-python",
+      "title": "ms-python.python (VS Code extension)",
+      "description": "为 Visual Studio Code 提供 Python 语言支持与调试集成。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=ms-python.python"
+      ],
+      "package_id": "ms-python.python",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-charliermarsh-ruff",
+      "title": "charliermarsh.ruff (VS Code extension)",
+      "description": "将 Ruff 检查与格式化集成到 Visual Studio Code。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff"
+      ],
+      "package_id": "charliermarsh.ruff",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-esbenp-prettier-vscode",
+      "title": "esbenp.prettier-vscode (VS Code extension)",
+      "description": "将 Prettier 格式化器集成到 Visual Studio Code。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode"
+      ],
+      "package_id": "esbenp.prettier-vscode",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-dbaeumer-vscode-eslint",
+      "title": "dbaeumer.vscode-eslint (VS Code extension)",
+      "description": "将 ESLint 检查集成到 Visual Studio Code。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint"
+      ],
+      "package_id": "dbaeumer.vscode-eslint",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-ms-vscode-powershell",
+      "title": "ms-vscode.powershell (VS Code extension)",
+      "description": "为 Visual Studio Code 提供 PowerShell 编辑与调试支持。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=ms-vscode.powershell"
+      ],
+      "package_id": "ms-vscode.powershell",
+      "feature_name": null
+    },
+    {
+      "id": "developer-vscode-ms-azuretools-vscode-docker",
+      "title": "ms-azuretools.vscode-docker (VS Code extension)",
+      "description": "为 Visual Studio Code 提供 Docker 开发集成。",
+      "category": "developer",
+      "kind": "vscode",
+      "targets": [
+        "win10_ltsc2021",
+        "win11_ltsc2024"
+      ],
+      "requires_admin": false,
+      "restart": "通常无需重启；新命令或扩展可能需要重新打开终端或编辑器。",
+      "limitations": "使用已安装的 Visual Studio Code 和 Marketplace 网络源；扩展版本由执行时来源决定。请先检查发布者、权限、许可与兼容性；扩展可能在 VS Code 中运行代码。不会自动启动扩展或修改其权限。",
+      "evidence": [
+        "https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-docker"
+      ],
+      "package_id": "ms-azuretools.vscode-docker",
       "feature_name": null
     }
   ]

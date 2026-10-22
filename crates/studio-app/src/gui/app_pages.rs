@@ -496,6 +496,11 @@ impl Studio {
                 ui.label(tx(zh, en));
             }
         });
+        settings_section(ui, tx("组合与迁移", "Recipes and migration"), |ui| {
+            ui.label(tx("方案工作区可预览日常、Rust、Python、Web 和 WSL 组合，再明确加入当前选择。组合会一起列出系统设置、软件、开发工具与扩展，仍可逐项修改。", "Review daily, Rust, Python, Web and WSL recipes in the workspace, then explicitly add them to your selection. Each recipe combines settings, software, developer tools and extensions; every item remains editable."));
+            ui.label(tx("迁移与映射先分析旧 SetupProfile 或 Mac 清单，再勾选要合并的项目。分析不会自动选择或执行；未支持内容会保留说明。更换路径或目标后须重新分析。", "Migration first analyzes a legacy SetupProfile or Mac inventory, then lets you select items to merge. Analysis never selects or executes automatically; unsupported content stays in the report. Reanalyze after changing the path or target."));
+            ui.label(tx("开发环境页会检查 Cargo、uv 和 VS Code 提供程序。安装所需软件后才执行开发工具；uv 不自动下载 Python，需要已有可用解释器。", "Developer Environment checks Cargo, uv and VS Code providers. Software prerequisites run before developer tools; uv requires an existing usable Python interpreter and never downloads Python automatically."));
+        });
         settings_section(
             ui,
             tx("恢复与历史有什么区别", "Recovery versus history"),

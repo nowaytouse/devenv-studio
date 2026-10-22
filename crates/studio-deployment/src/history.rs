@@ -353,7 +353,10 @@ fn read_record(
                         && !task.title.is_empty()
                         && task.title.len() <= 8192
                         && !task.title.contains('\0')
-                        && matches!(task.kind.as_str(), "package" | "feature" | "maintenance"),
+                        && matches!(
+                            task.kind.as_str(),
+                            "package" | "feature" | "maintenance" | "cargo" | "uv" | "vscode"
+                        ),
                     "Invalid historical task identity"
                 );
             }
@@ -464,8 +467,13 @@ fn read_record(
                                 .is_some_and(|s| s.len() <= 8192 && !s.contains('\0'))),
                         "Invalid historical argv"
                     );
+                    let environment = if value.get("environment").is_some() {
+                        format!("\nenvironment: {}", string(&value, "environment")?)
+                    } else {
+                        String::new()
+                    };
                     format!(
-                        "{program}\nargv: {}\n{}",
+                        "{program}\nargv: {}{environment}\n{}",
                         serde_json::to_string(args)?,
                         string(&value, "warning")?
                     )
@@ -757,6 +765,19 @@ mod tests {
         assert!(
             filename_timestamp(Path::new("999999999999999999999999999999999-1-0.jsonl")).is_err()
         );
+    }
+    #[test]
+    fn developer_kind_history_and_legacy_schema_are_both_readable() {
+        for kind in ["cargo", "uv", "vscode"] {
+            let f = Fixture::new();
+            let mut plan = header();
+            plan["plan"]["tasks"][0]["kind"] = Value::String(kind.into());
+            plan["plan"]["tasks"][0]["category"] = Value::String("developer".into());
+            f.write(vec![plan,inspected(),serde_json::json!({"event":"completed","task_id":id(),"restart_required":false,"detail":"provider verified installed"}),serde_json::json!({"event":"finished","completed":1,"failed":0,"cancelled":false,"restart_required":false})]);
+            let records = history_in(&f.0).unwrap();
+            assert_eq!(records[0].tasks[0].kind, kind);
+            assert_eq!(records[0].status, "completed");
+        }
     }
     #[test]
     fn io_failures_and_total_bounds_do_not_become_empty_history() {

@@ -17,6 +17,7 @@ use crate::workspace_io;
 mod i18n;
 use i18n::{lf, t, tx};
 mod app_pages;
+mod hybrid;
 mod theme;
 
 use theme::palette;
@@ -45,6 +46,9 @@ pub fn run_with_options(screenshot: Option<PathBuf>) -> eframe::Result<()> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
+    Recipes,
+    Migration,
+    Developer,
     Workbench,
     Software,
     Features,
@@ -112,6 +116,7 @@ struct Notice {
 }
 
 struct Studio {
+    hybrid: hybrid::HybridState,
     preferences: Preferences,
     saved_preferences: Preferences,
     preferences_error: Option<String>,
@@ -148,6 +153,7 @@ impl Studio {
             Err(error) => (Preferences::default(), Some(format!("{error:#}"))),
         };
         let mut app = Self {
+            hybrid: hybrid::HybridState::default(),
             saved_preferences: preferences.clone(),
             preferences,
             preferences_error,
@@ -163,7 +169,7 @@ impl Studio {
             setting_states: BTreeMap::new(),
             deployment_states: BTreeMap::new(),
             last_event: None,
-            page: Page::Workbench,
+            page: Page::Recipes,
             category: String::new(),
             query: String::new(),
             dialog: None,
@@ -472,6 +478,9 @@ impl Studio {
                             (
                                 tx("工作空间", "Workspace"),
                                 vec![
+                                    (Page::Recipes, tx("方案工作区", "Workspace recipes")),
+                                    (Page::Migration, tx("迁移与映射", "Migration & mapping")),
+                                    (Page::Developer, tx("开发环境", "Developer tools")),
                                     (Page::Status, tx("状态", "Status")),
                                     (Page::Workbench, t("配置工作台")),
                                     (Page::Software, t("软件部署")),
@@ -520,6 +529,7 @@ impl Studio {
                                 {
                                     self.page = page;
                                     self.query.clear();
+                                    self.hybrid.visible_tasks = 60;
                                 }
                             }
                             ui.add_space(10.0);
@@ -599,6 +609,9 @@ impl Studio {
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(match self.page {
+                    Page::Recipes => tx("方案工作区", "Workspace recipes"),
+                    Page::Migration => tx("迁移与映射", "Migration & mapping"),
+                    Page::Developer => tx("开发环境", "Developer tools"),
                     Page::Workbench => t("配置工作台"),
                     Page::Software => t("软件部署"),
                     Page::Features => t("Windows 功能"),
@@ -990,6 +1003,14 @@ impl Studio {
                 t("软件部署"),
                 t("精确的软件包 ID，由 WinGet 执行安装；安装器可能显示额外的许可与交互提示。"),
             ),
+            Page::Developer => (
+                "developer",
+                tx("开发环境", "Developer tools"),
+                tx(
+                    "通过 Cargo、uv 与 VS Code 安装工具及扩展，固定包标识并记录执行结果。",
+                    "Install tools and extensions with Cargo, uv and VS Code, using exact identities and recorded outcomes.",
+                ),
+            ),
             Page::Features => (
                 "features",
                 t("Windows 功能"),
@@ -1014,6 +1035,9 @@ impl Studio {
         );
         ui.add_space(12.0);
         self.target_controls(ui);
+        if self.page == Page::Developer {
+            self.providers_panel(ui);
+        }
         if self.page == Page::Software {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
@@ -1048,11 +1072,16 @@ impl Studio {
                     ui.label(RichText::new(&self.winget.detail).size(12.0));
                 });
         }
-        ui.add(
-            egui::TextEdit::singleline(&mut self.query)
-                .hint_text(t("搜索名称、软件包 ID 或功能名…"))
-                .desired_width(450.0),
-        );
+        if ui
+            .add(
+                egui::TextEdit::singleline(&mut self.query)
+                    .hint_text(t("搜索名称、软件包 ID 或功能名…"))
+                    .desired_width(450.0),
+            )
+            .changed()
+        {
+            self.hybrid.visible_tasks = 60;
+        }
         ui.add_space(8.0);
         let catalog = match &self.deployment_catalog {
             Ok(catalog) => catalog,
@@ -1085,6 +1114,12 @@ impl Studio {
                         .contains(&query))
             })
             .collect();
+        ui.label(lf!(
+            "匹配 {} 项；当前显示 {} 项",
+            "{} matches; showing {}",
+            tasks.len(),
+            tasks.len().min(self.hybrid.visible_tasks)
+        ));
         if tasks.is_empty() {
             empty(ui, t("没有匹配的项目"), t("调整关键词继续查找。"));
             return;
@@ -1095,7 +1130,7 @@ impl Studio {
             .corner_radius(8)
             .inner_margin(14.0)
             .show(ui, |ui| {
-                for (index, task) in tasks.iter().enumerate() {
+                for (index, task) in tasks.iter().take(self.hybrid.visible_tasks).enumerate() {
                     if index > 0 {
                         ui.separator();
                     }
@@ -1150,6 +1185,11 @@ impl Studio {
                     });
                 }
             });
+        if tasks.len() > self.hybrid.visible_tasks
+            && ui.button(tx("再显示 60 项", "Show 60 more")).clicked()
+        {
+            self.hybrid.visible_tasks += 60;
+        }
     }
 
     fn plan(&mut self, ui: &mut egui::Ui) {
@@ -1680,10 +1720,13 @@ impl eframe::App for Studio {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         match self.page {
+                            Page::Recipes => self.recipes_page(ui),
+                            Page::Migration => self.migration_page(ui),
                             Page::Workbench => self.workbench(ui),
-                            Page::Software | Page::Features | Page::Maintenance => {
-                                self.deployment_page(ui)
-                            }
+                            Page::Software
+                            | Page::Developer
+                            | Page::Features
+                            | Page::Maintenance => self.deployment_page(ui),
                             Page::Plan => self.plan(ui),
                             Page::Recovery => self.recovery(ui),
                             Page::Sources => self.sources(ui),
@@ -1955,7 +1998,11 @@ fn registry_details(ui: &mut egui::Ui, action: &studio_core::Action) {
 
 fn task_identity(task: &studio_deployment::Task) -> String {
     if let Some(id) = &task.package_id {
-        lf!("WinGet 软件包：{id}", "WinGet package: {id}", id = id)
+        if task.kind == "package" {
+            lf!("WinGet 软件包：{id}", "WinGet package: {id}", id = id)
+        } else {
+            format!("{}: {id}", task.kind)
+        }
     } else if let Some(name) = &task.feature_name {
         lf!(
             "Windows 功能：{name}",
@@ -2095,6 +2142,7 @@ mod tests {
 
     fn preview() -> Studio {
         Studio {
+            hybrid: hybrid::HybridState::default(),
             preferences: Preferences::default(),
             saved_preferences: Preferences::default(),
             preferences_error: None,
@@ -2118,7 +2166,7 @@ mod tests {
             setting_states: BTreeMap::new(),
             deployment_states: BTreeMap::new(),
             last_event: None,
-            page: Page::Workbench,
+            page: Page::Recipes,
             category: String::new(),
             query: String::new(),
             dialog: None,
@@ -2359,6 +2407,9 @@ mod tests {
     #[test]
     fn every_page_renders_bilingually_at_minimum_size_without_enabling_preview_mutation() {
         let pages = [
+            Page::Recipes,
+            Page::Migration,
+            Page::Developer,
             Page::Workbench,
             Page::Software,
             Page::Features,
@@ -2421,10 +2472,13 @@ mod tests {
                             egui::CentralPanel::default().show(ui, |ui| {
                                 app.header(ui);
                                 egui::ScrollArea::vertical().show(ui, |ui| match page {
+                                    Page::Recipes => app.recipes_page(ui),
+                                    Page::Migration => app.migration_page(ui),
                                     Page::Workbench => app.workbench(ui),
-                                    Page::Software | Page::Features | Page::Maintenance => {
-                                        app.deployment_page(ui)
-                                    }
+                                    Page::Software
+                                    | Page::Developer
+                                    | Page::Features
+                                    | Page::Maintenance => app.deployment_page(ui),
                                     Page::Plan => app.plan(ui),
                                     Page::Recovery => app.recovery(ui),
                                     Page::Sources => app.sources(ui),
@@ -2455,5 +2509,114 @@ mod tests {
             }
         }
         i18n::set_language(Language::ZhCn);
+    }
+
+    #[test]
+    fn reviewed_migration_preserves_workspace_and_developer_tasks_through_profile()
+    -> anyhow::Result<()> {
+        let mut app = preview();
+        app.catalog = Ok(studio_core::load_catalog()?);
+        app.deployment_catalog = Ok(studio_deployment::catalog()?);
+        let report = crate::migration::analyze(
+            include_bytes!("../../../examples/migration-profile.json"),
+            app.target,
+        )?;
+        assert!(report.items.iter().any(|item| item.status == "mapped"));
+        app.hybrid.report = Some(report);
+        app.hybrid.report_target = Some(app.target);
+        assert!(app.hybrid.selected_rows.is_empty());
+        assert!(app.selected.is_empty());
+        assert!(app.deployment_selected.is_empty());
+        assert!(app.worker.is_none());
+
+        let preserved = "experience-taskview".to_owned();
+        app.selected.insert(preserved.clone());
+        let report = app.hybrid.report.as_ref().unwrap();
+        app.hybrid.selected_rows = report
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.status == "mapped")
+            .map(|(index, _)| index)
+            .collect();
+        let mut added_settings = BTreeSet::new();
+        let mut added_tasks = BTreeSet::new();
+        for index in &app.hybrid.selected_rows {
+            let item = &report.items[*index];
+            added_settings.extend(item.settings.iter().cloned());
+            added_tasks.extend(item.deployment.iter().cloned());
+        }
+        let catalog = app.catalog.as_ref().unwrap();
+        let (settings, tasks) = crate::solutions::merge(
+            catalog,
+            app.target,
+            &app.selected,
+            &app.deployment_selected,
+            &added_settings,
+            &added_tasks,
+        )?;
+        assert!(settings.contains(&preserved));
+        let deployment = app.deployment_catalog.as_ref().unwrap();
+        for kind in ["cargo", "uv", "vscode"] {
+            assert!(
+                deployment
+                    .tasks
+                    .iter()
+                    .any(|task| task.kind == kind && tasks.contains(&task.id)),
+                "missing developer provider {kind}"
+            );
+        }
+
+        struct TestDirectory(PathBuf);
+        impl Drop for TestDirectory {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let path = std::env::temp_dir().join(format!(
+            "ltsc-migration-profile-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&path)?;
+        let directory = TestDirectory(path);
+        let profile_path = directory.0.join("reviewed-profile.json");
+        workspace_io::save(catalog, app.target, &settings, &tasks, &profile_path)?;
+        let loaded = workspace_io::load(&profile_path, catalog)?;
+        assert_eq!(loaded.schema_version, 2);
+        assert_eq!(loaded.settings.selected, settings);
+        assert_eq!(loaded.deployment, tasks);
+        assert!(app.worker.is_none());
+        assert!(app.deployment_selected.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn migration_merge_requires_report_and_unchanged_analyzed_path_and_target() -> anyhow::Result<()>
+    {
+        let mut app = preview();
+        app.hybrid.path = "  /synthetic/profile.json  ".into();
+        app.hybrid.report_path = Some("/synthetic/profile.json".into());
+        app.hybrid.report_target = Some(app.target);
+        assert!(!app.migration_current());
+        app.hybrid.report = Some(crate::migration::analyze(
+            include_bytes!("../../../examples/migration-profile.json"),
+            app.target,
+        )?);
+        assert!(app.migration_current());
+        app.hybrid.path = "/synthetic/different.json".into();
+        assert!(!app.migration_current());
+        app.hybrid.path = "/synthetic/profile.json".into();
+        app.target = Target::Win10Ltsc2021;
+        assert!(!app.migration_current());
+        app.target = Target::Win11Ltsc2024;
+        assert!(app.migration_current());
+        app.hybrid.report = None;
+        assert!(!app.migration_current());
+        assert!(app.selected.is_empty());
+        assert!(app.deployment_selected.is_empty());
+        Ok(())
     }
 }

@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "description": "Explicit product/provider mappings only. Windows availability is resolved against the embedded trusted catalog at import time; versions, builds, plugins and macOS-only settings are not reproduced.",
+  "mappings": [
+    {
+      "source_kind": "formula",
+      "source": "git",
+      "kind": "package",
+      "package_id": "Git.Git",
+      "evidence": [
+        "https://git-scm.com/downloads/win"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "powershell",
+      "kind": "package",
+      "package_id": "Microsoft.PowerShell",
+      "evidence": [
+        "https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "p7zip",
+      "kind": "package",
+      "package_id": "7zip.7zip",
+      "evidence": [
+        "https://www.7-zip.org/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "rtk",
+      "kind": "cargo",
+      "package_id": "rtk",
+      "evidence": [
+        "https://crates.io/crates/rtk"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "ripgrep",
+      "kind": "cargo",
+      "package_id": "ripgrep",
+      "evidence": [
+        "https://github.com/BurntSushi/ripgrep#installation"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "fd",
+      "kind": "cargo",
+      "package_id": "fd-find",
+      "evidence": [
+        "https://github.com/sharkdp/fd#installation"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "bat",
+      "kind": "cargo",
+      "package_id": "bat",
+      "evidence": [
+        "https://github.com/sharkdp/bat#installation"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "eza",
+      "kind": "cargo",
+      "package_id": "eza",
+      "evidence": [
+        "https://github.com/eza-community/eza/blob/main/INSTALL.md"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "ruff",
+      "kind": "uv",
+      "package_id": "ruff",
+      "evidence": [
+        "https://docs.astral.sh/ruff/installation/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "formula",
+      "source": "uv",
+      "kind": "package",
+      "package_id": "astral-sh.uv",
+      "evidence": [
+        "https://docs.astral.sh/uv/getting-started/installation/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "firefox",
+      "kind": "package",
+      "package_id": "Mozilla.Firefox",
+      "evidence": [
+        "https://www.mozilla.org/firefox/windows/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "google-chrome",
+      "kind": "package",
+      "package_id": "Google.Chrome",
+      "evidence": [
+        "https://www.google.com/chrome/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "brave-browser",
+      "kind": "package",
+      "package_id": "Brave.Brave",
+      "evidence": [
+        "https://brave.com/download/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "visual-studio-code",
+      "kind": "package",
+      "package_id": "Microsoft.VisualStudioCode",
+      "evidence": [
+        "https://code.visualstudio.com/docs/setup/windows"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "vlc",
+      "kind": "package",
+      "package_id": "VideoLAN.VLC",
+      "evidence": [
+        "https://www.videolan.org/vlc/download-windows.html"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "obsidian",
+      "kind": "package",
+      "package_id": "Obsidian.Obsidian",
+      "evidence": [
+        "https://obsidian.md/download"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "bitwarden",
+      "kind": "package",
+      "package_id": "Bitwarden.Bitwarden",
+      "evidence": [
+        "https://bitwarden.com/download/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "keepassxc",
+      "kind": "package",
+      "package_id": "KeePassXCTeam.KeePassXC",
+      "evidence": [
+        "https://keepassxc.org/download/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "1password",
+      "kind": "package",
+      "package_id": "AgileBits.1Password",
+      "evidence": [
+        "https://1password.com/downloads/windows/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "zotero",
+      "kind": "package",
+      "package_id": "DigitalScholar.Zotero",
+      "evidence": [
+        "https://www.zotero.org/download/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "audacity",
+      "kind": "package",
+      "package_id": "Audacity.Audacity",
+      "evidence": [
+        "https://www.audacityteam.org/download/windows/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "blender",
+      "kind": "package",
+      "package_id": "BlenderFoundation.Blender",
+      "evidence": [
+        "https://www.blender.org/download/"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "calibre",
+      "kind": "package",
+      "package_id": "calibre.calibre",
+      "evidence": [
+        "https://calibre-ebook.com/download_windows"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    },
+    {
+      "source_kind": "cask",
+      "source": "obs",
+      "kind": "package",
+      "package_id": "OBSProject.OBSStudio",
+      "evidence": [
+        "https://obsproject.com/download"
+      ],
+      "detail": "Same named upstream product or CLI, mapped to a separately reviewed Windows provider. This does not promise matching versions, binaries, build flags, extensions or configuration."
+    }
+  ]
+}

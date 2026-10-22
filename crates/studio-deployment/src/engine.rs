@@ -17,6 +17,12 @@ pub(crate) struct Tools {
     pub winget: Option<PathBuf>,
     pub dism: PathBuf,
     pub sfc: PathBuf,
+    pub developer: fn(&str) -> Result<DeveloperTool>,
+}
+pub(crate) struct DeveloperTool {
+    pub program: PathBuf,
+    pub cargo_root: Option<PathBuf>,
+    pub vscode_cli: Option<PathBuf>,
 }
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
@@ -35,6 +41,9 @@ fn log(history: &mut impl History, value: impl Serialize) -> Result<()> {
         .context("Persist deployment history; no further command may run")
 }
 fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
+    if matches!(task.kind.as_str(), "cargo" | "uv" | "vscode") {
+        return developer_invocation(tools, task, inspect);
+    }
     let (program, args) = match task.kind.as_str() {
         "package" => {
             let id = task.package_id.as_ref().context("Missing package ID")?;
@@ -109,7 +118,148 @@ fn invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
         }
         _ => anyhow::bail!("Unsupported deployment kind"),
     };
-    Ok(Invocation { program, args })
+    Ok(Invocation {
+        program,
+        args,
+        vscode_node: false,
+    })
+}
+fn developer_invocation(tools: &Tools, task: &Task, inspect: bool) -> Result<Invocation> {
+    let id = task
+        .package_id
+        .as_deref()
+        .context("Missing developer package ID")?;
+    ensure!(
+        crate::developer_ids::valid(&task.kind, id),
+        "Invalid developer package identifier"
+    );
+    // Resolution is deliberately per task, after any selected WinGet prerequisites.
+    let tool = (tools.developer)(&task.kind)?;
+    ensure!(
+        tool.program.is_absolute(),
+        "Developer provider must have an absolute path"
+    );
+    let args = match task.kind.as_str() {
+        "cargo" => {
+            let root = tool
+                .cargo_root
+                .context("Missing fixed Cargo install root")?;
+            ensure!(root.is_absolute(), "Cargo install root must be absolute");
+            let mut args = vec![
+                "install".into(),
+                "--root".into(),
+                root.to_string_lossy().into_owned(),
+            ];
+            if inspect {
+                args.push("--list".into());
+            } else {
+                args.extend([
+                    "--locked".into(),
+                    "--registry".into(),
+                    "crates-io".into(),
+                    id.into(),
+                ]);
+            }
+            args
+        }
+        "uv" => {
+            let mut args = vec![
+                "tool".into(),
+                if inspect { "list" } else { "install" }.into(),
+                "--no-config".into(),
+                "--no-progress".into(),
+                "--color".into(),
+                "never".into(),
+            ];
+            if !inspect {
+                args.extend(["--no-python-downloads".into(), id.into()]);
+            }
+            args
+        }
+        "vscode" => {
+            let cli = tool.vscode_cli.context("Missing official VS Code cli.js")?;
+            ensure!(
+                cli.is_absolute(),
+                "VS Code cli.js must have an absolute path"
+            );
+            let mut args = vec![
+                cli.to_string_lossy().into_owned(),
+                if inspect {
+                    "--list-extensions"
+                } else {
+                    "--install-extension"
+                }
+                .into(),
+            ];
+            if !inspect {
+                args.push(id.into());
+            }
+            args
+        }
+        _ => anyhow::bail!("Unsupported developer provider"),
+    };
+    Ok(Invocation {
+        program: tool.program,
+        args,
+        vscode_node: task.kind == "vscode",
+    })
+}
+fn installed_developer(task: &Task, stdout: &str) -> Result<bool> {
+    let wanted = task
+        .package_id
+        .as_deref()
+        .context("Missing developer package ID")?;
+    let mut found = false;
+    let mut listed_header = false;
+    for raw in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        if task.kind == "vscode" {
+            let id = raw.trim();
+            ensure!(
+                crate::developer_ids::valid("vscode", id),
+                "VS Code returned an unrecognized extension list line"
+            );
+            found |= id.eq_ignore_ascii_case(wanted);
+        } else {
+            if raw.starts_with(char::is_whitespace) || (task.kind == "uv" && raw.starts_with('-')) {
+                ensure!(
+                    listed_header,
+                    "Provider listed an executable without its package identity"
+                );
+                continue;
+            }
+            let line = raw.trim();
+            let Some((id, version)) = line.split_once(" v") else {
+                anyhow::bail!("Provider returned an unrecognized installed-tool list line");
+            };
+            ensure!(
+                crate::developer_ids::valid(&task.kind, id)
+                    && version.as_bytes().first().is_some_and(u8::is_ascii_digit)
+                    && (task.kind != "cargo" || line.ends_with(':')),
+                "Malformed installed-tool identity or version"
+            );
+            listed_header = true;
+            // Cargo crate IDs are exact; Python distribution names normalize [-_.].
+            found |= if task.kind == "uv" {
+                normalize_python(id) == normalize_python(wanted)
+            } else {
+                id == wanted
+            };
+        }
+    }
+    Ok(found)
+}
+fn normalize_python(value: &str) -> String {
+    let mut normalized = String::new();
+    for c in value.chars() {
+        if matches!(c, '-' | '_' | '.') {
+            if !normalized.ends_with('-') {
+                normalized.push('-');
+            }
+        } else {
+            normalized.push(c.to_ascii_lowercase());
+        }
+    }
+    normalized
 }
 fn complete_output(output: &Output) -> Result<()> {
     ensure!(
@@ -158,7 +308,18 @@ pub(crate) fn detect(
     }
     let output = runner.run(&invocation(tools, task, true)?, cancel)?;
     complete_output(&output)?;
-    let state = if task.kind == "package" {
+    let state = if matches!(task.kind.as_str(), "cargo" | "uv" | "vscode") {
+        ensure!(
+            output.code == 0,
+            "Developer provider inspection failed, not an absent tool: {}",
+            output.diagnostic()
+        );
+        if installed_developer(task, &output.stdout)? {
+            "installed"
+        } else {
+            "not_installed"
+        }
+    } else if task.kind == "package" {
         // Microsoft AppInstallerErrors.h: NO_APPLICATIONS_FOUND, not arbitrary nonzero.
         if output.code == 0x8a150014 {
             "not_installed"
@@ -200,13 +361,14 @@ fn checked_success(task: &Task, output: &Output) -> Result<bool> {
         task.kind == "package" && matches!(output.code, 0x8a150061 | 0x8a15010d | 0x8a15002b);
     ensure!(
         output.code == 0 || reboot || already,
-        "Task command failed: {}. Licences/source terms are never auto-accepted; complete any required agreement manually using official WinGet, then inspect again.",
+        "Task command failed: {}. No installer/provider agreements are automatically accepted; review the provider prerequisite and recorded output before retrying.",
         output.diagnostic()
     );
     Ok(reboot)
 }
 fn completed_with_reboot(task: &Task, code: u32) -> bool {
-    code == 3010 || (task.kind == "package" && code == 0x8a150109)
+    (matches!(task.kind.as_str(), "package" | "feature" | "maintenance") && code == 3010)
+        || (task.kind == "package" && code == 0x8a150109)
 }
 fn any_reboot_required(task: &Task, code: u32) -> bool {
     completed_with_reboot(task, code)
@@ -268,7 +430,7 @@ pub(crate) fn run_plan(
             let command = invocation(tools, task, false)?;
             log(
                 history,
-                serde_json::json!({"event":"intent","task_id":task.id,"program":command.program,"args":command.args,"warning":"No automatic rollback. OS servicing and installer descendants may continue after cancellation."}),
+                serde_json::json!({"event":"intent","task_id":task.id,"program":command.program,"args":command.args,"environment":if command.vscode_node {"ELECTRON_RUN_AS_NODE=1; VSCODE_DEV and VSCODE_PORTABLE removed"}else{"inherited"},"warning":"No automatic rollback. OS servicing and installer descendants may continue after cancellation."}),
             )?;
             if cancel.load(Ordering::Acquire) {
                 return Ok((false, "cancelled before command".into()));
@@ -420,7 +582,20 @@ mod tests {
             winget: Some("/trusted/winget.exe".into()),
             dism: "/trusted/dism.exe".into(),
             sfc: "/trusted/sfc.exe".into(),
+            developer: fake_developer,
         }
+    }
+    fn fake_developer(kind: &str) -> Result<DeveloperTool> {
+        Ok(DeveloperTool {
+            program: format!(
+                "/trusted/{}",
+                if kind == "vscode" { "Code.exe" } else { kind }
+            )
+            .into(),
+            cargo_root: (kind == "cargo").then(|| PathBuf::from("/trusted/.cargo")),
+            vscode_cli: (kind == "vscode")
+                .then(|| PathBuf::from("/trusted/resources/app/out/cli.js")),
+        })
     }
     fn plan(kind: &str) -> DeploymentPlan {
         let c = crate::catalog().unwrap();
@@ -645,5 +820,190 @@ mod tests {
         assert!(invocation(&tools(), &task, false).is_err());
         task.kind = "shell".into();
         assert!(invocation(&tools(), &task, false).is_err());
+    }
+    fn developer_task(kind: &str, id: &str) -> Task {
+        let mut task = plan("package").tasks.remove(0);
+        task.id = format!("test-{kind}");
+        task.kind = kind.into();
+        task.category = "developer".into();
+        task.requires_admin = false;
+        task.package_id = Some(id.into());
+        task.feature_name = None;
+        task
+    }
+    #[test]
+    fn developer_argv_is_direct_exact_and_uses_fixed_vscode_environment() {
+        let cargo = invocation(&tools(), &developer_task("cargo", "ripgrep"), false).unwrap();
+        assert_eq!(
+            cargo.args,
+            [
+                "install",
+                "--root",
+                "/trusted/.cargo",
+                "--locked",
+                "--registry",
+                "crates-io",
+                "ripgrep"
+            ]
+        );
+        assert!(!cargo.vscode_node);
+        let uv = invocation(&tools(), &developer_task("uv", "ruff"), false).unwrap();
+        assert_eq!(uv.args.last().unwrap(), "ruff");
+        assert!(uv.args.contains(&"--no-python-downloads".into()));
+        let vscode = invocation(
+            &tools(),
+            &developer_task("vscode", "rust-lang.rust-analyzer"),
+            false,
+        )
+        .unwrap();
+        assert_eq!(vscode.program, PathBuf::from("/trusted/Code.exe"));
+        assert_eq!(
+            vscode.args,
+            [
+                "/trusted/resources/app/out/cli.js",
+                "--install-extension",
+                "rust-lang.rust-analyzer"
+            ]
+        );
+        assert!(vscode.vscode_node);
+        for kind in ["cargo", "uv", "vscode"] {
+            assert!(invocation(&tools(), &developer_task(kind, "--version"), false).is_err());
+        }
+    }
+    #[test]
+    fn developer_detection_matches_exact_listed_identity_not_substrings() {
+        for (kind, id, present, other) in [
+            (
+                "cargo",
+                "ripgrep",
+                "ripgrep v14.1.0:\n    rg\n",
+                "ripgrep-all v1.0.0:\n    rga\n",
+            ),
+            (
+                "uv",
+                "pre-commit",
+                "pre_commit v4.0.0\n- pre-commit\n",
+                "pre-commit-hooks v5.0.0\n- hook\n",
+            ),
+            (
+                "vscode",
+                "ms-python.python",
+                "ms-python.python\n",
+                "ms-python.python-debugger\n",
+            ),
+        ] {
+            let task = developer_task(kind, id);
+            assert!(installed_developer(&task, present).unwrap());
+            assert!(!installed_developer(&task, other).unwrap());
+            assert!(installed_developer(&task, "installation succeeded").is_err());
+            let mut fake = Fake {
+                outputs: VecDeque::from([output(5, "provider error")]),
+                calls: vec![],
+                cancel: None,
+            };
+            assert!(
+                detect(
+                    &task,
+                    &tools(),
+                    &mut fake,
+                    &Arc::new(AtomicBool::new(false))
+                )
+                .is_err()
+            );
+        }
+    }
+    #[test]
+    fn developer_zero_exit_requires_readback_and_cancellation_is_partial() {
+        for kind in ["cargo", "uv", "vscode"] {
+            let task = developer_task(
+                kind,
+                match kind {
+                    "cargo" => "ripgrep",
+                    "uv" => "ruff",
+                    _ => "ms-python.python",
+                },
+            );
+            let plan = DeploymentPlan {
+                schema_version: 1,
+                catalog_revision: "fixture".into(),
+                target: studio_core::Target::Win11Ltsc2024,
+                tasks: vec![task],
+            };
+            let mut fake = Fake {
+                outputs: VecDeque::from([output(0, ""), output(0, "done"), output(0, "")]),
+                calls: vec![],
+                cancel: None,
+            };
+            let outcome = run_plan(
+                &plan,
+                &tools(),
+                &mut fake,
+                &mut Log::default(),
+                &Arc::new(AtomicBool::new(false)),
+                None,
+            )
+            .unwrap();
+            assert_eq!(outcome.failed, 1);
+            assert_eq!(outcome.completed, 0);
+            let cancel = Arc::new(AtomicBool::new(false));
+            let mut fake = Fake {
+                outputs: VecDeque::from([output(0, ""), output(0, "done"), output(0, "")]),
+                calls: vec![],
+                cancel: Some(cancel.clone()),
+            };
+            let outcome = run_plan(
+                &plan,
+                &tools(),
+                &mut fake,
+                &mut Log::default(),
+                &cancel,
+                None,
+            )
+            .unwrap();
+            assert!(outcome.cancelled);
+            assert_eq!(outcome.completed, 0);
+        }
+    }
+    #[test]
+    fn providers_are_resolved_after_selected_prerequisite_tasks() {
+        use std::sync::atomic::AtomicUsize;
+        static RESOLVED: AtomicUsize = AtomicUsize::new(0);
+        fn late(kind: &str) -> Result<DeveloperTool> {
+            RESOLVED.fetch_add(1, Ordering::Relaxed);
+            fake_developer(kind)
+        }
+        let mut tools = tools();
+        tools.developer = late;
+        let cargo = developer_task("cargo", "ripgrep");
+        let mut plan = plan("package");
+        let package = plan.tasks[0].package_id.clone().unwrap();
+        plan.tasks.push(cargo);
+        struct Ordered {
+            calls: usize,
+            package: String,
+        }
+        impl Runner for Ordered {
+            fn run(&mut self, _: &Invocation, _: &Arc<AtomicBool>) -> Result<Output> {
+                self.calls += 1;
+                if self.calls == 1 {
+                    assert_eq!(RESOLVED.load(Ordering::Relaxed), 0);
+                    output(0, &self.package)
+                } else {
+                    assert!(RESOLVED.load(Ordering::Relaxed) > 0);
+                    output(0, "ripgrep v14.1.0:\n    rg\n")
+                }
+            }
+        }
+        RESOLVED.store(0, Ordering::Relaxed);
+        let outcome = run_plan(
+            &plan,
+            &tools,
+            &mut Ordered { calls: 0, package },
+            &mut Log::default(),
+            &Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+        assert_eq!(outcome.completed, 2);
     }
 }

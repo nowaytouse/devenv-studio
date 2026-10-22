@@ -1,17 +1,22 @@
 mod catalog_locale;
 mod gui;
+mod migration;
+mod migration_locale;
 mod prefs;
+mod solutions;
 mod workspace_io;
 
 use anyhow::{Context, Result, bail};
 use std::{collections::BTreeSet, path::PathBuf, process::ExitCode};
 use studio_core::{Profile, Target, load_catalog};
 
-const HELP: &str = "LTSC Studio 0.3
+const HELP: &str = "LTSC Studio 0.4
 Native desktop: ltsc-studio
 List reviewed settings and presets: ltsc-studio catalog
 List software/features/maintenance: ltsc-studio tasks
 Build mixed plan: ltsc-studio plan --target win11-ltsc-2024 --select explorer-extensions --tasks software-git-git
+Mixed workspace recipe: ltsc-studio plan --target win11-ltsc-2024 --recipe rust
+Review legacy migration: ltsc-studio migrate --target win11-ltsc-2024 --input legacy.json --output migration-report.json
 Choose an editable settings preset: ltsc-studio plan --target win11-ltsc-2024 --preset essentials
 Inspect selected current states: ltsc-studio inspect --target win11-ltsc-2024 --select explorer-extensions
 Preview JSON plan: ltsc-studio plan --target win11-ltsc-2024 --select explorer-extensions,privacy-advertising-id
@@ -29,6 +34,7 @@ struct PlanArgs {
     selected: BTreeSet<String>,
     tasks: BTreeSet<String>,
     preset: Option<String>,
+    recipe: Option<String>,
     profile: Option<PathBuf>,
     output: Option<PathBuf>,
 }
@@ -47,6 +53,7 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
         selected: BTreeSet::new(),
         tasks: BTreeSet::new(),
         preset: None,
+        recipe: None,
         profile: None,
         output: None,
     };
@@ -56,7 +63,13 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
         let flag = &args[index];
         if !matches!(
             flag.as_str(),
-            "--target" | "--select" | "--tasks" | "--preset" | "--profile" | "--output"
+            "--target"
+                | "--select"
+                | "--tasks"
+                | "--preset"
+                | "--recipe"
+                | "--profile"
+                | "--output"
         ) {
             bail!("Unknown plan option '{flag}'. See --help.");
         }
@@ -86,6 +99,7 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
                 }
             }
             "--preset" => result.preset = Some(value.to_owned()),
+            "--recipe" => result.recipe = Some(value.to_owned()),
             "--profile" => result.profile = Some(PathBuf::from(value)),
             "--output" => result.output = Some(PathBuf::from(value)),
             _ => unreachable!(),
@@ -96,7 +110,8 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
         && (result.target.is_some()
             || !result.selected.is_empty()
             || !result.tasks.is_empty()
-            || result.preset.is_some())
+            || result.preset.is_some()
+            || result.recipe.is_some())
     {
         bail!("Use --profile on its own, or --target with --select.");
     }
@@ -106,6 +121,36 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs> {
     Ok(result)
 }
 
+fn parse_migration_args(args: &[String]) -> Result<(Target, PathBuf, Option<PathBuf>)> {
+    let mut values = std::collections::BTreeMap::new();
+    let (pairs, remainder) = args.as_chunks::<2>();
+    if !remainder.is_empty() {
+        bail!("Every option requires a value");
+    }
+    for pair in pairs {
+        let flag = pair[0].as_str();
+        if !matches!(flag, "--target" | "--input" | "--output") {
+            bail!("Unknown migration option {flag}");
+        }
+        if pair[1].is_empty()
+            || pair[1].starts_with("--")
+            || values.insert(flag, pair[1].as_str()).is_some()
+        {
+            bail!("Missing or duplicate migration option {flag}");
+        }
+    }
+    let target = parse_target(
+        values
+            .get("--target")
+            .context("Migration requires --target")?,
+    )?;
+    let input = PathBuf::from(
+        values
+            .get("--input")
+            .context("Migration requires --input")?,
+    );
+    Ok((target, input, values.get("--output").map(PathBuf::from)))
+}
 fn execute(args: &[String]) -> Result<()> {
     let Some(command) = args.first() else {
         return gui::run().map_err(|error| anyhow::anyhow!("Cannot start desktop: {error}"));
@@ -141,6 +186,15 @@ fn execute(args: &[String]) -> Result<()> {
                 );
             }
         }
+        "migrate" => {
+            let (target, input, output) = parse_migration_args(&args[1..])?;
+            let report = migration::load(&input, target)?;
+            if let Some(path) = output {
+                studio_core::export_document(&report, &path)?;
+            } else {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            }
+        }
         "plan" | "inspect" => {
             let options = parse_plan_args(&args[1..])?;
             let catalog = load_catalog()?;
@@ -148,6 +202,17 @@ fn execute(args: &[String]) -> Result<()> {
                 Some(path) => workspace_io::load(&path, &catalog)?,
                 None => {
                     let mut selected = options.selected;
+                    let mut tasks = options.tasks;
+                    if let Some(recipe_id) = options.recipe {
+                        let recipe = solutions::RECIPES
+                            .iter()
+                            .find(|recipe| recipe.id == recipe_id)
+                            .context("Unknown recipe")?;
+                        let (recipe_settings, recipe_tasks) =
+                            solutions::resolve(recipe, options.target.context("Missing target")?)?;
+                        selected.extend(recipe_settings);
+                        tasks.extend(recipe_tasks);
+                    }
                     if let Some(preset_id) = options.preset {
                         let preset = catalog
                             .presets
@@ -163,7 +228,7 @@ fn execute(args: &[String]) -> Result<()> {
                             target: options.target.context("Missing target")?,
                             selected,
                         },
-                        deployment: options.tasks,
+                        deployment: tasks,
                     }
                 }
             };
@@ -293,6 +358,57 @@ mod tests {
         );
         assert_eq!(options.preset.as_deref(), Some("essentials"));
         assert!(parse_plan_args(&strings(&["--tasks", "software-git-git"])).is_err());
+    }
+
+    #[test]
+    fn migration_arguments_require_unambiguous_input_and_target() {
+        let (target, path, output) = parse_migration_args(&strings(&[
+            "--target",
+            "win11-ltsc-2024",
+            "--input",
+            "old profile.json",
+            "--output",
+            "report.json",
+        ]))
+        .unwrap();
+        assert_eq!(target, Target::Win11Ltsc2024);
+        assert_eq!(path, PathBuf::from("old profile.json"));
+        assert_eq!(output, Some(PathBuf::from("report.json")));
+        for args in [
+            vec!["--target", "win11-ltsc-2024", "--input"],
+            vec!["--input", "old.json"],
+            vec![
+                "--target",
+                "win11-ltsc-2024",
+                "--input",
+                "old.json",
+                "--input",
+                "other.json",
+            ],
+            vec![
+                "--target",
+                "win11-ltsc-2024",
+                "--input",
+                "old.json",
+                "--execute",
+                "yes",
+            ],
+        ] {
+            assert!(parse_migration_args(&strings(&args)).is_err());
+        }
+        assert!(parse_plan_args(&strings(&["--profile", "old.json", "--recipe", "rust"])).is_err());
+        assert_eq!(
+            parse_plan_args(&strings(&[
+                "--target",
+                "win11-ltsc-2024",
+                "--recipe",
+                "rust"
+            ]))
+            .unwrap()
+            .recipe
+            .as_deref(),
+            Some("rust")
+        );
     }
 
     #[test]

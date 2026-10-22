@@ -1,5 +1,11 @@
 # LTSC Studio — design record
 
+## 0.4 mixed workflows and legacy migration
+
+Recipes compose canonical settings and deployment IDs into one v2 workspace. Merging is transactional: validate all added identities, resolve mutually exclusive setting groups, preserve unrelated selections, then validate the complete result before assigning GUI state. Migration reads only explicitly supplied SetupProfile2.2.0 or MacInventory1 JSON, rejects duplicate keys and input bounds violations, and reports every requested, false, empty, custom or unsupported field. Imports start unchecked. Only selected mapped rows enter the same merge path; private configuration values and arbitrary commands never become executable payloads. Analyzed path and target identify the report; either changing disables merge pending reanalysis.
+
+The pinned WinUtil applications snapshot supplies234native WinGet IDs. Original task identities and historical records remain stable. Cargo, uv and VS Code task kinds use strict provider-specific IDs and the existing bounded runner, cancellation, durable history and exact readback. Plans order WinGet before developer tasks, then features and maintenance. Developer tools resolve fixed known-folder locations per task so prerequisites explicitly installed earlier can become available without restarting the app. uv automatic Python download is disabled. No package-manager bootstrap or imported script execution is introduced. Provider presence does not prove a functioning compiler/linker/SDK/Python environment. Catalog bounds grow to2048; native inspection/execution remains capped at128tasks.
+
 ## 0.3 application shell and preferences
 
 The desktop now groups eleven pages into Workspace, Execution and Application. A compact header replaces the decorative hero. Shared tokens supply five accent palettes for light and dark appearance, including the native system preference, while interface zoom preserves display DPI and density affects spacing. Navigation and each page scroll independently.

@@ -1,0 +1,65 @@
+{
+  "profile_version": "2.2.0",
+  "metadata": {
+    "description": "Synthetic migration review example; no personal data."
+  },
+  "git_config": {
+    "user_name": "Example Developer",
+    "user_email": "developer@example.invalid",
+    "post_buffer_bytes": 0,
+    "safe_directory": "",
+    "enable_long_paths": false,
+    "enable_autocrlf": false,
+    "global_gitignore_rules": []
+  },
+  "powershell_profile": {
+    "enable_utf8_encoding": false,
+    "init_starship": false,
+    "init_zoxide": false,
+    "aliases": {}
+  },
+  "environment_mirrors": {
+    "cargo_sparse_index": "",
+    "pip_index_url": "",
+    "npm_registry": ""
+  },
+  "vscode_config": {
+    "user_settings": {},
+    "extensions": [
+      "rust-lang.rust-analyzer"
+    ]
+  },
+  "packages": {
+    "winget_core": [
+      {
+        "id": "Git.Git",
+        "name": "Git"
+      }
+    ],
+    "winget_dev": [],
+    "cargo_packages": [
+      "ripgrep"
+    ],
+    "uv_tools": [
+      "ruff"
+    ],
+    "npm_globals": [
+      "example-unmapped-tool"
+    ],
+    "pip_packages": [],
+    "scoop_tools": []
+  },
+  "system_tweaks": {
+    "create_rollback_journal": true,
+    "disable_advertising_id": true,
+    "explorer_show_file_extensions": true,
+    "disable_telemetry": false
+  },
+  "windows_features": {
+    "enable_wsl2": true,
+    "enable_netfx3": false,
+    "enable_windows_sandbox": false,
+    "enable_hyper_v": false
+  },
+  "ollama_models": []
+}

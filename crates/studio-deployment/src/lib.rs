@@ -8,6 +8,7 @@ use std::{
 };
 use studio_core::Target;
 
+mod developer_ids;
 #[cfg(any(windows, test))]
 mod engine;
 mod history;
@@ -54,6 +55,12 @@ pub struct Capability {
     pub detail: String,
 }
 #[derive(Debug, Clone)]
+pub struct ProviderCapability {
+    pub provider: String,
+    pub available: bool,
+    pub detail: String,
+}
+#[derive(Debug, Clone)]
 pub struct Detection {
     pub id: String,
     pub state: String,
@@ -94,11 +101,12 @@ pub fn catalog() -> Result<Catalog> {
     let catalog: Catalog = serde_json::from_str(include_str!("../../../data/deployment.json"))
         .context("Invalid embedded deployment catalog")?;
     ensure!(
-        !catalog.revision.is_empty() && catalog.tasks.len() <= 128 && !catalog.tasks.is_empty(),
+        !catalog.revision.is_empty() && catalog.tasks.len() <= 2048 && !catalog.tasks.is_empty(),
         "Invalid deployment catalog bounds"
     );
     let mut ids = BTreeSet::new();
     let mut packages = BTreeSet::new();
+    let mut developer_packages = BTreeSet::new();
     let mut features = BTreeSet::new();
     for task in &catalog.tasks {
         ensure!(
@@ -168,6 +176,24 @@ pub fn catalog() -> Result<Catalog> {
                     "Invalid feature task"
                 );
             }
+            "cargo" | "uv" | "vscode" => {
+                let id = task
+                    .package_id
+                    .as_deref()
+                    .context("Missing developer package ID")?;
+                ensure!(
+                    task.category == "developer"
+                        && !task.requires_admin
+                        && task.feature_name.is_none()
+                        && developer_ids::valid(&task.kind, id),
+                    "Invalid developer task {}",
+                    task.id
+                );
+                ensure!(
+                    developer_packages.insert((task.kind.as_str(), id)),
+                    "Duplicate package identifier in developer catalog"
+                );
+            }
             "maintenance" => {
                 ensure!(
                     task.category == "maintenance"
@@ -207,16 +233,26 @@ pub fn build_plan(target: Target, selected: &BTreeSet<String>) -> Result<Deploym
             target.label()
         );
     }
+    let mut tasks: Vec<_> = catalog
+        .tasks
+        .into_iter()
+        .filter(|t| selected.contains(&t.id))
+        .collect();
+    tasks.sort_by_key(|task| task_order(&task.kind));
     Ok(DeploymentPlan {
         schema_version: 1,
         catalog_revision: catalog.revision,
         target,
-        tasks: catalog
-            .tasks
-            .into_iter()
-            .filter(|t| selected.contains(&t.id))
-            .collect(),
+        tasks,
     })
+}
+fn task_order(kind: &str) -> u8 {
+    match kind {
+        "package" => 0,
+        "cargo" | "uv" | "vscode" => 1,
+        "feature" => 2,
+        _ => 3,
+    }
 }
 fn validate_plan(plan: &DeploymentPlan) -> Result<()> {
     let selected: BTreeSet<_> = plan.tasks.iter().map(|t| t.id.clone()).collect();
@@ -240,12 +276,27 @@ pub fn winget_capability() -> Capability {
         Capability {available:false,detail:"WinGet is inspected only on Windows. Preview does not detect installed Windows applications. See https://learn.microsoft.com/windows/package-manager/winget/ for App Installer prerequisites.".into()}
     }
 }
+/// Cheap fixed-location provider discovery. Never launches a process or installs a prerequisite.
+pub fn provider_capabilities() -> Vec<ProviderCapability> {
+    #[cfg(windows)]
+    {
+        windows::provider_capabilities()
+    }
+    #[cfg(not(windows))]
+    {
+        ["winget","cargo","uv","vscode"].into_iter().map(|provider|ProviderCapability{provider:provider.into(),available:false,detail:"Windows deployment provider discovery is unavailable in preview. No local developer tools or Windows installations were inspected.".into()}).collect()
+    }
+}
 pub fn inspect(
     target: Target,
     selected: &BTreeSet<String>,
     cancel: Arc<AtomicBool>,
 ) -> Result<Vec<Detection>> {
     let plan = build_plan(target, selected)?;
+    ensure!(
+        plan.tasks.len() <= 128,
+        "An inspection session supports at most 128 tasks; split the selection into separate runs"
+    );
     #[cfg(windows)]
     {
         windows::inspect(plan, cancel)
@@ -274,6 +325,10 @@ pub fn execute(
     events: Option<Sender<DeploymentEvent>>,
 ) -> Result<DeploymentReport> {
     validate_plan(&plan)?;
+    ensure!(
+        plan.tasks.len() <= 128,
+        "A deployment session supports at most 128 tasks; split the selection into separate reviewed runs"
+    );
     ensure!(
         !plan.tasks.is_empty(),
         "Select at least one deployment task"
@@ -313,7 +368,7 @@ mod tests {
             }
             assert!(matches!(
                 task.kind.as_str(),
-                "package" | "feature" | "maintenance"
+                "package" | "feature" | "maintenance" | "cargo" | "uv" | "vscode"
             ));
         }
     }
@@ -328,6 +383,36 @@ mod tests {
         .unwrap();
         p.tasks[0].package_id = Some("Unexpected.Installer".into());
         assert!(validate_plan(&p).is_err());
+    }
+    #[test]
+    fn dependency_order_and_session_bounds_are_explicit() {
+        let catalog = catalog().unwrap();
+        let selected: BTreeSet<_> = catalog
+            .tasks
+            .iter()
+            .filter(|task| task.targets.contains(&Target::Win11Ltsc2024))
+            .map(|task| task.id.clone())
+            .collect();
+        let plan = build_plan(Target::Win11Ltsc2024, &selected).unwrap();
+        assert!(
+            plan.tasks
+                .windows(2)
+                .all(|tasks| task_order(&tasks[0].kind) <= task_order(&tasks[1].kind))
+        );
+        assert_eq!(plan.tasks.len(), selected.len());
+        if plan.tasks.len() > 128 {
+            let error = execute(plan, Arc::new(AtomicBool::new(false)), None).unwrap_err();
+            assert!(error.to_string().contains("at most 128"));
+        }
+        let original = catalog
+            .tasks
+            .iter()
+            .find(|task| matches!(task.kind.as_str(), "cargo" | "uv" | "vscode"))
+            .unwrap();
+        let mut plan =
+            build_plan(original.targets[0], &BTreeSet::from([original.id.clone()])).unwrap();
+        plan.tasks[0].package_id = Some("--untrusted-option".into());
+        assert!(validate_plan(&plan).is_err());
     }
     #[test]
     fn preview_never_mutates_or_claims_detection() {

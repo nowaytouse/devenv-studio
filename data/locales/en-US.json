@@ -617,6 +617,1574 @@
       "category": "Maintenance",
       "restart": "Follow command output; no automatic restart.",
       "limitations": "Execution history stores command results; it is not a system image or rollback point. Command completion does not prove the system is healthy or that repair succeeded. Review DISM/CBS logs and actual output. Cancellation terminates the launched process, but Windows servicing or installer descendants may continue. Each command has a 90-minute limit."
+    },
+    "software-winutil-abdownloadmanager": {
+      "title": "AB Download Manager",
+      "description": "WinUtil lists this under utilities. Installs AB Download Manager through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-adobe": {
+      "title": "Adobe Acrobat Reader",
+      "description": "WinUtil lists this under document tools. Installs Adobe Acrobat Reader through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-advancedip": {
+      "title": "Advanced IP Scanner",
+      "description": "WinUtil lists this under professional tools. Installs Advanced IP Scanner through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-aimp": {
+      "title": "AIMP (Music Player)",
+      "description": "WinUtil lists this under multimedia tools. Installs AIMP (Music Player) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-angryipscanner": {
+      "title": "Angry IP Scanner",
+      "description": "WinUtil lists this under professional tools. Installs Angry IP Scanner through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-anydesk": {
+      "title": "AnyDesk",
+      "description": "WinUtil lists this under utilities. Installs AnyDesk through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-autoruns": {
+      "title": "Autoruns",
+      "description": "WinUtil lists this under Microsoft tools. Installs Autoruns through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-rdcman": {
+      "title": "RDCMan",
+      "description": "WinUtil lists this under Microsoft tools. Installs RDCMan through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-autohotkey": {
+      "title": "AutoHotkey",
+      "description": "WinUtil lists this under utilities. Installs AutoHotkey through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-battlenet": {
+      "title": "Battle.net",
+      "description": "WinUtil lists this under games. Installs Battle.net through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-bruno": {
+      "title": "Bruno",
+      "description": "WinUtil lists this under development tools. Installs Bruno through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-bulkcrapuninstaller": {
+      "title": "Bulk Crap Uninstaller",
+      "description": "WinUtil lists this under utilities. Installs Bulk Crap Uninstaller through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-blurautoclicker": {
+      "title": "BlurAutoClicker",
+      "description": "WinUtil lists this under utilities. Installs BlurAutoClicker through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-cemu": {
+      "title": "Cemu",
+      "description": "WinUtil lists this under games. Installs Cemu through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-chatterino": {
+      "title": "Chatterino",
+      "description": "WinUtil lists this under communications. Installs Chatterino through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-chromium": {
+      "title": "Chromium",
+      "description": "WinUtil lists this under browsers. Installs Chromium through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-cinebenchr23": {
+      "title": "Cinebench R23",
+      "description": "WinUtil lists this under professional tools. Installs Cinebench R23 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-claude": {
+      "title": "Claude Desktop",
+      "description": "WinUtil lists this under development tools. Installs Claude Desktop through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-claude-code": {
+      "title": "Claude Code",
+      "description": "WinUtil lists this under development tools. Installs Claude Code through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-cmake": {
+      "title": "CMake",
+      "description": "WinUtil lists this under development tools. Installs CMake through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-codex": {
+      "title": "Codex",
+      "description": "WinUtil lists this under development tools. Installs Codex through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-cpuz": {
+      "title": "CPU-Z",
+      "description": "WinUtil lists this under professional tools. Installs CPU-Z through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-crystaldiskmark": {
+      "title": "Crystal Disk Mark",
+      "description": "WinUtil lists this under utilities. Installs Crystal Disk Mark through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-cursor": {
+      "title": "Cursor",
+      "description": "WinUtil lists this under development tools. Installs Cursor through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ddu": {
+      "title": "Display Driver Uninstaller",
+      "description": "WinUtil lists this under professional tools. Installs Display Driver Uninstaller through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-discord": {
+      "title": "Discord",
+      "description": "WinUtil lists this under communications. Installs Discord through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dismtools": {
+      "title": "DISMTools",
+      "description": "WinUtil lists this under Microsoft tools. Installs DISMTools through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ntlite": {
+      "title": "NTLite",
+      "description": "WinUtil lists this under Microsoft tools. Installs NTLite through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dorion": {
+      "title": "Dorion",
+      "description": "WinUtil lists this under communications. Installs Dorion through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dockerdesktop": {
+      "title": "Docker Desktop",
+      "description": "WinUtil lists this under development tools. Installs Docker Desktop through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dotnet6": {
+      "title": ".NET Desktop Runtime 6",
+      "description": "WinUtil lists this under Microsoft tools. Installs .NET Desktop Runtime 6 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dotnet8": {
+      "title": ".NET Desktop Runtime 8",
+      "description": "WinUtil lists this under Microsoft tools. Installs .NET Desktop Runtime 8 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dotnet9": {
+      "title": ".NET Desktop Runtime 9",
+      "description": "WinUtil lists this under Microsoft tools. Installs .NET Desktop Runtime 9 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dotnet10": {
+      "title": ".NET Desktop Runtime 10",
+      "description": "WinUtil lists this under Microsoft tools. Installs .NET Desktop Runtime 10 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-dropbox": {
+      "title": "Dropbox",
+      "description": "WinUtil lists this under utilities. Installs Dropbox through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-eaapp": {
+      "title": "EA App",
+      "description": "WinUtil lists this under games. Installs EA App through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-eartrumpet": {
+      "title": "EarTrumpet (Audio)",
+      "description": "WinUtil lists this under multimedia tools. Installs EarTrumpet (Audio) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-edge": {
+      "title": "Edge",
+      "description": "WinUtil lists this under browsers. Installs Edge through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-es-de": {
+      "title": "EmulationStation Desktop Edition",
+      "description": "WinUtil lists this under games. Installs EmulationStation Desktop Edition through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-enteauth": {
+      "title": "Ente Auth",
+      "description": "WinUtil lists this under utilities. Installs Ente Auth through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-epicgames": {
+      "title": "Epic Games Launcher",
+      "description": "WinUtil lists this under games. Installs Epic Games Launcher through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-files": {
+      "title": "Files",
+      "description": "WinUtil lists this under utilities. Installs Files through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-fileconverter": {
+      "title": "File Converter",
+      "description": "WinUtil lists this under multimedia tools. Installs File Converter through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-firefoxesr": {
+      "title": "Firefox ESR",
+      "description": "WinUtil lists this under browsers. Installs Firefox ESR through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-floorp": {
+      "title": "Floorp",
+      "description": "WinUtil lists this under browsers. Installs Floorp through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-flux": {
+      "title": "F.lux",
+      "description": "WinUtil lists this under utilities. Installs F.lux through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-foobar": {
+      "title": "foobar2000 (Music Player)",
+      "description": "WinUtil lists this under multimedia tools. Installs foobar2000 (Music Player) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-fnm": {
+      "title": "Fast Node Manager",
+      "description": "WinUtil lists this under development tools. Installs Fast Node Manager through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-foxpdfreader": {
+      "title": "Foxit PDF Reader",
+      "description": "WinUtil lists this under document tools. Installs Foxit PDF Reader through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-geforcenow": {
+      "title": "GeForce NOW",
+      "description": "WinUtil lists this under games. Installs GeForce NOW through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-gitextensions": {
+      "title": "Git Extensions",
+      "description": "WinUtil lists this under development tools. Installs Git Extensions through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-githubcli": {
+      "title": "GitHub CLI",
+      "description": "WinUtil lists this under development tools. Installs GitHub CLI through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-githubdesktop": {
+      "title": "GitHub Desktop",
+      "description": "WinUtil lists this under development tools. Installs GitHub Desktop through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-gog": {
+      "title": "GOG Galaxy",
+      "description": "WinUtil lists this under games. Installs GOG Galaxy through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-golang": {
+      "title": "Go",
+      "description": "WinUtil lists this under development tools. Installs Go through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-googledrive": {
+      "title": "Google Drive",
+      "description": "WinUtil lists this under utilities. Installs Google Drive through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-gpuz": {
+      "title": "GPU-Z",
+      "description": "WinUtil lists this under professional tools. Installs GPU-Z through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-gsudo": {
+      "title": "gsudo",
+      "description": "WinUtil lists this under professional tools. Installs gsudo through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-helium": {
+      "title": "Helium",
+      "description": "WinUtil lists this under browsers. Installs Helium through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-hugo": {
+      "title": "Hugo",
+      "description": "WinUtil lists this under utilities. Installs Hugo through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-handbrake": {
+      "title": "HandBrake",
+      "description": "WinUtil lists this under multimedia tools. Installs HandBrake through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-heroiclauncher": {
+      "title": "Heroic Games Launcher",
+      "description": "WinUtil lists this under games. Installs Heroic Games Launcher through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-hwinfo": {
+      "title": "HWiNFO",
+      "description": "WinUtil lists this under professional tools. Installs HWiNFO through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-hwmonitor": {
+      "title": "HWMonitor",
+      "description": "WinUtil lists this under professional tools. Installs HWMonitor through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-imageglass": {
+      "title": "ImageGlass (Image Viewer)",
+      "description": "WinUtil lists this under multimedia tools. Installs ImageGlass (Image Viewer) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-internetdownloadmanager": {
+      "title": "Internet Download Manager",
+      "description": "WinUtil lists this under utilities. Installs Internet Download Manager through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-irfanview": {
+      "title": "IrfanView",
+      "description": "WinUtil lists this under multimedia tools. Installs IrfanView through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-itch": {
+      "title": "Itch.io",
+      "description": "WinUtil lists this under games. Installs Itch.io through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-itunes": {
+      "title": "iTunes",
+      "description": "WinUtil lists this under multimedia tools. Installs iTunes through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-java8": {
+      "title": "Amazon Corretto 8 (LTS)",
+      "description": "WinUtil lists this under development tools. Installs Amazon Corretto 8 (LTS) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-java21": {
+      "title": "Amazon Corretto 21 (LTS)",
+      "description": "WinUtil lists this under development tools. Installs Amazon Corretto 21 (LTS) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-java25": {
+      "title": "Amazon Corretto 25 (LTS)",
+      "description": "WinUtil lists this under development tools. Installs Amazon Corretto 25 (LTS) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-jellyfinmediaplayer": {
+      "title": "Jellyfin Media Player",
+      "description": "WinUtil lists this under self-hosted tools. Installs Jellyfin Media Player through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-jellyfinserver": {
+      "title": "Jellyfin Server",
+      "description": "WinUtil lists this under self-hosted tools. Installs Jellyfin Server through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-jetbrains": {
+      "title": "Jetbrains Toolbox",
+      "description": "WinUtil lists this under development tools. Installs Jetbrains Toolbox through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-jpegview": {
+      "title": "JPEG View",
+      "description": "WinUtil lists this under utilities. Installs JPEG View through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-joplin": {
+      "title": "Joplin",
+      "description": "WinUtil lists this under document tools. Installs Joplin through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-klite": {
+      "title": "K-Lite Codec Standard",
+      "description": "WinUtil lists this under multimedia tools. Installs K-Lite Codec Standard through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-kodi": {
+      "title": "Kodi Media Center",
+      "description": "WinUtil lists this under self-hosted tools. Installs Kodi Media Center through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-lazygit": {
+      "title": "Lazygit",
+      "description": "WinUtil lists this under development tools. Installs Lazygit through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-librewolf": {
+      "title": "LibreWolf",
+      "description": "WinUtil lists this under browsers. Installs LibreWolf through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-localsend": {
+      "title": "LocalSend",
+      "description": "WinUtil lists this under self-hosted tools. Installs LocalSend through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-mpc-qt": {
+      "title": "mpc-qt",
+      "description": "WinUtil lists this under multimedia tools. Installs mpc-qt through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-mpv": {
+      "title": "mpv",
+      "description": "WinUtil lists this under multimedia tools. Installs mpv through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-matrix": {
+      "title": "Element",
+      "description": "WinUtil lists this under communications. Installs Element through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-minitoolpartitionwizard": {
+      "title": "MiniTool Partition Wizard",
+      "description": "WinUtil lists this under utilities. Installs MiniTool Partition Wizard through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-modrinth": {
+      "title": "Modrinth App",
+      "description": "WinUtil lists this under games. Installs Modrinth App through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-moonlight": {
+      "title": "Moonlight/GameStream Client",
+      "description": "WinUtil lists this under self-hosted tools. Installs Moonlight/GameStream Client through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-mpchc": {
+      "title": "Media Player Classic - Home Cinema",
+      "description": "WinUtil lists this under multimedia tools. Installs Media Player Classic - Home Cinema through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-msedgeredirect": {
+      "title": "MSEdgeRedirect",
+      "description": "WinUtil lists this under utilities. Installs MSEdgeRedirect through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-msiafterburner": {
+      "title": "MSI Afterburner",
+      "description": "WinUtil lists this under utilities. Installs MSI Afterburner through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-mullvadvpn": {
+      "title": "Mullvad VPN",
+      "description": "WinUtil lists this under professional tools. Installs Mullvad VPN through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-mullvadbrowser": {
+      "title": "Mullvad Browser",
+      "description": "WinUtil lists this under browsers. Installs Mullvad Browser through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nomacs": {
+      "title": "nomacs",
+      "description": "WinUtil lists this under multimedia tools. Installs nomacs through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nanazip": {
+      "title": "NanaZip",
+      "description": "WinUtil lists this under utilities. Installs NanaZip through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-netbird": {
+      "title": "NetBird",
+      "description": "WinUtil lists this under self-hosted tools. Installs NetBird through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-tailscale": {
+      "title": "Tailscale",
+      "description": "WinUtil lists this under utilities. Installs Tailscale through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-naps2": {
+      "title": "NAPS2 (Scanner)",
+      "description": "WinUtil lists this under document tools. Installs NAPS2 (Scanner) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-neovim": {
+      "title": "Neovim",
+      "description": "WinUtil lists this under development tools. Installs Neovim through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nextclouddesktop": {
+      "title": "Nextcloud Desktop",
+      "description": "WinUtil lists this under self-hosted tools. Installs Nextcloud Desktop through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nmap": {
+      "title": "Nmap",
+      "description": "WinUtil lists this under professional tools. Installs Nmap through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nodejs": {
+      "title": "NodeJS",
+      "description": "WinUtil lists this under development tools. Installs NodeJS through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-pnpm": {
+      "title": "pnpm",
+      "description": "WinUtil lists this under development tools. Installs pnpm through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nuget": {
+      "title": "NuGet",
+      "description": "WinUtil lists this under Microsoft tools. Installs NuGet through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nvclean": {
+      "title": "NVCleanstall",
+      "description": "WinUtil lists this under utilities. Installs NVCleanstall through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-okular": {
+      "title": "Okular",
+      "description": "WinUtil lists this under document tools. Installs Okular through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-onedrive": {
+      "title": "OneDrive",
+      "description": "WinUtil lists this under Microsoft tools. Installs OneDrive through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-onlyoffice": {
+      "title": "ONLYOFFICE Desktop",
+      "description": "WinUtil lists this under document tools. Installs ONLYOFFICE Desktop through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-opautoclicker": {
+      "title": "OPAutoClicker",
+      "description": "WinUtil lists this under utilities. Installs OPAutoClicker through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-openrgb": {
+      "title": "OpenRGB",
+      "description": "WinUtil lists this under utilities. Installs OpenRGB through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-openvpn": {
+      "title": "OpenVPN Connect",
+      "description": "WinUtil lists this under professional tools. Installs OpenVPN Connect through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ovirtualbox": {
+      "title": "Oracle VirtualBox",
+      "description": "WinUtil lists this under utilities. Installs Oracle VirtualBox through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-policyplus": {
+      "title": "Policy Plus",
+      "description": "WinUtil lists this under utilities. Installs Policy Plus through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-processexplorer": {
+      "title": "Process Explorer",
+      "description": "WinUtil lists this under Microsoft tools. Installs Process Explorer through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-paintdotnet": {
+      "title": "Paint.NET",
+      "description": "WinUtil lists this under multimedia tools. Installs Paint.NET through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-parsec": {
+      "title": "Parsec",
+      "description": "WinUtil lists this under utilities. Installs Parsec through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-peazip": {
+      "title": "PeaZip",
+      "description": "WinUtil lists this under utilities. Installs PeaZip through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-pdf-xchange": {
+      "title": "PDF-XChange Editor",
+      "description": "WinUtil lists this under document tools. Installs PDF-XChange Editor through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-pdf24creator": {
+      "title": "PDF24 Creator",
+      "description": "WinUtil lists this under document tools. Installs PDF24 Creator through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-pdfgear": {
+      "title": "PDFgear",
+      "description": "WinUtil lists this under document tools. Installs PDFgear through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-pdfsam": {
+      "title": "PDFsam Basic",
+      "description": "WinUtil lists this under document tools. Installs PDFsam Basic through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-playnite": {
+      "title": "Playnite",
+      "description": "WinUtil lists this under games. Installs Playnite through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-plex": {
+      "title": "Plex Media Server",
+      "description": "WinUtil lists this under self-hosted tools. Installs Plex Media Server through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-plexdesktop": {
+      "title": "Plex Desktop",
+      "description": "WinUtil lists this under self-hosted tools. Installs Plex Desktop through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-posh": {
+      "title": "Oh My Posh (Prompt)",
+      "description": "WinUtil lists this under development tools. Installs Oh My Posh (Prompt) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-postman": {
+      "title": "Postman",
+      "description": "WinUtil lists this under development tools. Installs Postman through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-prismlauncher": {
+      "title": "Prism Launcher",
+      "description": "WinUtil lists this under games. Installs Prism Launcher through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-processlasso": {
+      "title": "Process Lasso",
+      "description": "WinUtil lists this under utilities. Installs Process Lasso through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-protonauth": {
+      "title": "Proton Authenticator",
+      "description": "WinUtil lists this under utilities. Installs Proton Authenticator through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-protonmail": {
+      "title": "Proton Mail",
+      "description": "WinUtil lists this under communications. Installs Proton Mail through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-protondrive": {
+      "title": "Proton Drive",
+      "description": "WinUtil lists this under utilities. Installs Proton Drive through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-protonpass": {
+      "title": "Proton Pass",
+      "description": "WinUtil lists this under utilities. Installs Proton Pass through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-protonvpn": {
+      "title": "Proton VPN",
+      "description": "WinUtil lists this under professional tools. Installs Proton VPN through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-processmonitor": {
+      "title": "Process Monitor",
+      "description": "WinUtil lists this under Microsoft tools. Installs Process Monitor through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-python3": {
+      "title": "Python3",
+      "description": "WinUtil lists this under development tools. Installs Python3 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-qbittorrent": {
+      "title": "qBittorrent",
+      "description": "WinUtil lists this under utilities. Installs qBittorrent through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-qownnotes": {
+      "title": "QOwnNotes",
+      "description": "WinUtil lists this under document tools. Installs QOwnNotes through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-qtox": {
+      "title": "QTox",
+      "description": "WinUtil lists this under communications. Installs QTox through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-revo": {
+      "title": "Revo Uninstaller",
+      "description": "WinUtil lists this under utilities. Installs Revo Uninstaller through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-wiseprogramuninstaller": {
+      "title": "Wise Program Uninstaller (WiseCleaner)",
+      "description": "WinUtil lists this under utilities. Installs Wise Program Uninstaller (WiseCleaner) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-rustlang": {
+      "title": "Rust",
+      "description": "WinUtil lists this under development tools. Installs Rust through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-sdio": {
+      "title": "Snappy Driver Installer Origin",
+      "description": "WinUtil lists this under utilities. Installs Snappy Driver Installer Origin through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-nilesoftshell": {
+      "title": "Nilesoft Shell",
+      "description": "WinUtil lists this under utilities. Installs Nilesoft Shell through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-systeminformer": {
+      "title": "System Informer",
+      "description": "WinUtil lists this under development tools. Installs System Informer through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-signal": {
+      "title": "Signal",
+      "description": "WinUtil lists this under communications. Installs Signal through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-signalrgb": {
+      "title": "SignalRGB",
+      "description": "WinUtil lists this under utilities. Installs SignalRGB through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-simplenote": {
+      "title": "Simplenote",
+      "description": "WinUtil lists this under document tools. Installs Simplenote through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-simplewall": {
+      "title": "Simplewall",
+      "description": "WinUtil lists this under professional tools. Installs Simplewall through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-slack": {
+      "title": "Slack",
+      "description": "WinUtil lists this under communications. Installs Slack through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-startallback": {
+      "title": "StartAllBack",
+      "description": "WinUtil lists this under utilities. Installs StartAllBack through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-starship": {
+      "title": "Starship (Shell Prompt)",
+      "description": "WinUtil lists this under development tools. Installs Starship (Shell Prompt) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-steam": {
+      "title": "Steam",
+      "description": "WinUtil lists this under games. Installs Steam through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-roblox": {
+      "title": "Roblox",
+      "description": "WinUtil lists this under games. Installs Roblox through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-sublimetext": {
+      "title": "Sublime Text",
+      "description": "WinUtil lists this under development tools. Installs Sublime Text through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-sunshine": {
+      "title": "Sunshine/GameStream Server",
+      "description": "WinUtil lists this under self-hosted tools. Installs Sunshine/GameStream Server through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-synctrayzor": {
+      "title": "SyncTrayzor",
+      "description": "WinUtil lists this under self-hosted tools. Installs SyncTrayzor through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-syncthing": {
+      "title": "Syncthing (CLI / Web UI)",
+      "description": "WinUtil lists this under self-hosted tools. Installs Syncthing (CLI / Web UI) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-tcpview": {
+      "title": "TCPView",
+      "description": "WinUtil lists this under Microsoft tools. Installs TCPView through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-teams": {
+      "title": "Teams",
+      "description": "WinUtil lists this under communications. Installs Teams through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-teamviewer": {
+      "title": "TeamViewer",
+      "description": "WinUtil lists this under utilities. Installs TeamViewer through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-teamspeak3": {
+      "title": "TeamSpeak 3",
+      "description": "WinUtil lists this under communications. Installs TeamSpeak 3 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-teamspeak6": {
+      "title": "TeamSpeak 6",
+      "description": "WinUtil lists this under communications. Installs TeamSpeak 6 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-telegram": {
+      "title": "Telegram",
+      "description": "WinUtil lists this under communications. Installs Telegram through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-thunderbird": {
+      "title": "Thunderbird",
+      "description": "WinUtil lists this under communications. Installs Thunderbird through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-betterbird": {
+      "title": "Betterbird",
+      "description": "WinUtil lists this under communications. Installs Betterbird through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-tor": {
+      "title": "Tor Browser",
+      "description": "WinUtil lists this under browsers. Installs Tor Browser through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-totalcommander": {
+      "title": "Total Commander",
+      "description": "WinUtil lists this under utilities. Installs Total Commander through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-treesize": {
+      "title": "TreeSize Free",
+      "description": "WinUtil lists this under utilities. Installs TreeSize Free through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ttaskbar": {
+      "title": "TranslucentTB",
+      "description": "WinUtil lists this under utilities. Installs TranslucentTB through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ubisoft": {
+      "title": "Ubisoft Connect",
+      "description": "WinUtil lists this under games. Installs Ubisoft Connect through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ungoogled": {
+      "title": "Ungoogled Chromium",
+      "description": "WinUtil lists this under browsers. Installs Ungoogled Chromium through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-unity": {
+      "title": "Unity Game Engine",
+      "description": "WinUtil lists this under development tools. Installs Unity Game Engine through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-vagrant": {
+      "title": "Vagrant",
+      "description": "WinUtil lists this under development tools. Installs Vagrant through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-vc2015-32": {
+      "title": "Visual C++ 2015-2022 32-bit",
+      "description": "WinUtil lists this under Microsoft tools. Installs Visual C++ 2015-2022 32-bit through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-vc2015-64": {
+      "title": "Visual C++ 2015-2022 64-bit",
+      "description": "WinUtil lists this under Microsoft tools. Installs Visual C++ 2015-2022 64-bit through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ventoy": {
+      "title": "Ventoy",
+      "description": "WinUtil lists this under professional tools. Installs Ventoy through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-vesktop": {
+      "title": "Vesktop",
+      "description": "WinUtil lists this under communications. Installs Vesktop through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-viber": {
+      "title": "Viber",
+      "description": "WinUtil lists this under communications. Installs Viber through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-visualstudio2022": {
+      "title": "Visual Studio 2022",
+      "description": "WinUtil lists this under development tools. Installs Visual Studio 2022 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-visualstudio2026": {
+      "title": "Visual Studio 2026",
+      "description": "WinUtil lists this under development tools. Installs Visual Studio 2026 through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-vivaldi": {
+      "title": "Vivaldi",
+      "description": "WinUtil lists this under browsers. Installs Vivaldi through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-vrdesktopstreamer": {
+      "title": "Virtual Desktop Streamer",
+      "description": "WinUtil lists this under games. Installs Virtual Desktop Streamer through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-vscodium": {
+      "title": "VS Codium",
+      "description": "WinUtil lists this under development tools. Installs VS Codium through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-waterfox": {
+      "title": "Waterfox",
+      "description": "WinUtil lists this under browsers. Installs Waterfox through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-wingetui": {
+      "title": "UniGetUI",
+      "description": "WinUtil lists this under utilities. Installs UniGetUI through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-winrar": {
+      "title": "WinRAR",
+      "description": "WinUtil lists this under utilities. Installs WinRAR through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-wireguard": {
+      "title": "WireGuard",
+      "description": "WinUtil lists this under professional tools. Installs WireGuard through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-wireshark": {
+      "title": "Wireshark",
+      "description": "WinUtil lists this under professional tools. Installs Wireshark through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-wiztree": {
+      "title": "WizTree",
+      "description": "WinUtil lists this under utilities. Installs WizTree through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-xeheditor": {
+      "title": "HxD Hex Editor",
+      "description": "WinUtil lists this under utilities. Installs HxD Hex Editor through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-xournal": {
+      "title": "Xournal++",
+      "description": "WinUtil lists this under document tools. Installs Xournal++ through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-yarn": {
+      "title": "Yarn",
+      "description": "WinUtil lists this under development tools. Installs Yarn through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-zoom": {
+      "title": "Zoom",
+      "description": "WinUtil lists this under communications. Installs Zoom through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-uv": {
+      "title": "uv",
+      "description": "WinUtil lists this under development tools. Installs uv through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-tightvnc": {
+      "title": "TightVNC",
+      "description": "WinUtil lists this under utilities. Installs TightVNC through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-glazewm": {
+      "title": "GlazeWM",
+      "description": "WinUtil lists this under utilities. Installs GlazeWM through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-overwolf": {
+      "title": "CurseForge",
+      "description": "WinUtil lists this under games. Installs CurseForge through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ofgb": {
+      "title": "OFGB (Oh Frick Go Back)",
+      "description": "WinUtil lists this under utilities. Installs OFGB (Oh Frick Go Back) through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-zenbrowser": {
+      "title": "Zen Browser",
+      "description": "WinUtil lists this under browsers. Installs Zen Browser through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-zed": {
+      "title": "Zed",
+      "description": "WinUtil lists this under development tools. Installs Zed through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-deskflow": {
+      "title": "Deskflow",
+      "description": "WinUtil lists this under utilities. Installs Deskflow through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-ruby": {
+      "title": "Ruby",
+      "description": "WinUtil lists this under development tools. Installs Ruby through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-lua": {
+      "title": "Lua",
+      "description": "WinUtil lists this under development tools. Installs Lua through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "software-winutil-cloudflarewarp": {
+      "title": "Cloudflare WARP",
+      "description": "WinUtil lists this under utilities. Installs Cloudflare WARP through WinGet; review the publisher's terms, setup, and suitability before proceeding.",
+      "category": "Software",
+      "restart": "Follow the installer result; no automatic restart.",
+      "limitations": "Requires the user-configured App Installer/WinGet and configured WinGet sources; network access may be needed. The installed version is whichever version the source currently offers and may request administrator approval. The app does not automatically accept source or software agreements. If an agreement must be accepted, review and accept it manually in official WinGet first. Registry restoration cannot uninstall software."
+    },
+    "developer-cargo-ripgrep": {
+      "title": "ripgrep (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-cargo-fd-find": {
+      "title": "fd-find (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-cargo-bat": {
+      "title": "bat (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-cargo-eza": {
+      "title": "eza (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-cargo-zoxide": {
+      "title": "zoxide (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-cargo-starship": {
+      "title": "starship (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-cargo-just": {
+      "title": "just (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-cargo-git-delta": {
+      "title": "git-delta (Cargo crate)",
+      "description": "Install the named Rust crate as a command-line tool with Cargo.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses the current user's Rust/Cargo toolchain and crates.io network source; installs the current version without a version pin. Review the crate's license and Windows compatibility first. Cargo builds may run crate-provided build scripts. The task does not change system PATH."
+    },
+    "developer-uv-ruff": {
+      "title": "ruff (uv tool)",
+      "description": "Install the named Python command-line tool with uv.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed uv and the current user's Python environment with access to PyPI; installs the current version without a version pin. Review the package license and suitability first. Package installation or build backends may run publisher-provided code. The task does not change system PATH."
+    },
+    "developer-uv-yamllint": {
+      "title": "yamllint (uv tool)",
+      "description": "Install the named Python command-line tool with uv.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed uv and the current user's Python environment with access to PyPI; installs the current version without a version pin. Review the package license and suitability first. Package installation or build backends may run publisher-provided code. The task does not change system PATH."
+    },
+    "developer-uv-httpie": {
+      "title": "httpie (uv tool)",
+      "description": "Install the named Python command-line tool with uv.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed uv and the current user's Python environment with access to PyPI; installs the current version without a version pin. Review the package license and suitability first. Package installation or build backends may run publisher-provided code. The task does not change system PATH."
+    },
+    "developer-uv-pre-commit": {
+      "title": "pre-commit (uv tool)",
+      "description": "Install the named Python command-line tool with uv.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed uv and the current user's Python environment with access to PyPI; installs the current version without a version pin. Review the package license and suitability first. Package installation or build backends may run publisher-provided code. The task does not change system PATH."
+    },
+    "developer-vscode-rust-lang-rust-analyzer": {
+      "title": "rust-lang.rust-analyzer (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-vscode-tamasfe-even-better-toml": {
+      "title": "tamasfe.even-better-toml (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-vscode-ms-python-python": {
+      "title": "ms-python.python (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-vscode-charliermarsh-ruff": {
+      "title": "charliermarsh.ruff (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-vscode-esbenp-prettier-vscode": {
+      "title": "esbenp.prettier-vscode (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-vscode-dbaeumer-vscode-eslint": {
+      "title": "dbaeumer.vscode-eslint (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-vscode-ms-vscode-powershell": {
+      "title": "ms-vscode.powershell (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
+    },
+    "developer-vscode-ms-azuretools-vscode-docker": {
+      "title": "ms-azuretools.vscode-docker (VS Code extension)",
+      "description": "Install the named extension in the current user's Visual Studio Code profile.",
+      "category": "Developer tools",
+      "restart": "Usually no restart is needed; a new command or extension may require reopening the terminal or editor.",
+      "limitations": "Uses an installed Visual Studio Code and its Marketplace network source; the extension version is whatever the source offers at execution time. Review publisher, permissions, license, and compatibility first. Extensions can run code inside VS Code; their permissions are not changed automatically."
     }
   }
 }
