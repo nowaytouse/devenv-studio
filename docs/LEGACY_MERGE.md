@@ -30,7 +30,7 @@ DevEnv Studio 是后续唯一维护入口。旧 [LTSC_Tools_Backup](https://gith
 
 ## Git 历史与未提交工作的保留
 
-主项目在完成源码适配提交后，以保留当前工作树的历史合并，将旧 main `a8523abbe08147b4d5de8746f26d99d056057ab0` 及其 41 个可达提交并入 main ancestry。功能由 `studio-legacy` 与主界面实际接线提供；历史合并不覆盖新项目源码，也不导入本地代理检查点引用。不得把整个旧目录无差别复制为新的 MIT 资产集合，不重写旧历史。交付时以 ancestry 检查与远端提交确认该历史已保留。
+主项目在完成源码适配提交后，以保留当前工作树的历史合并，将旧 main `a8523abbe08147b4d5de8746f26d99d056057ab0` 的全部 32 个可达提交并入 main ancestry。功能由 `studio-legacy` 与主界面实际接线提供；历史合并不覆盖新项目源码，也不导入本地代理检查点引用。不得把整个旧目录无差别复制为新的 MIT 资产集合，不重写旧历史。交付时以 ancestry 检查与远端提交确认该历史已保留。
 
 退役准备已在旧仓库之外创建 `.devenv-retirement-20261023T131732Z`：完整 `git bundle --all`、原始 `Cargo.toml` / `Cargo.lock`、`Cargo-worktree.patch` 和 `SHA256SUMS`。bundle 通过 `git bundle verify`，四项摘要全部匹配；其内包含 agents/codex 检查点引用，仅留在本地私有备份。远端历史导入仅选择经过审核的旧 main 可达历史，不发布本地检查点 bundle。
 
