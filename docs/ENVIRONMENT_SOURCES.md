@@ -27,6 +27,14 @@
 - [mise core tools](https://mise.jdx.dev/core-tools.html)、[CLI lock](https://mise.jdx.dev/cli/lock.html)与[Windows 支持说明](https://mise.jdx.dev/faq.html#does-mise-work-on-windows)：仅管理 Bun、Deno、.NET、Go、Java、Node、Python、Ruby、Zig；逐项选择精确版本/前缀或 latest、stable、LTS、beta、nightly 请求。渠道是否可用由各 core runtime 决定，解析失败时不会开始安装。运行前隔离配置与插件/任务/钩子，在私有临时清单中生成 macOS arm64/x64 与 Windows x64 锁文件，随后按 locked 安装并回读实际版本。安装写入标准 per-user mise 数据目录，不更改 Shell activation、全局或项目配置；导出的已解析 mise.toml 与 mise.lock 配套。锁文件只提供各 core 后端可提供的 URL/校验信息，不锁项目依赖或完整构建输入。Rust 继续走 rustup；任意 Git URL、提交与分支仍由来源专属工作流处理。
 - [twpayne/chezmoi](https://github.com/twpayne/chezmoi/tree/da3406f7aa2a114322334578639812684016d352) 继续作为设计参考；不导入 dotfiles、模板、秘密或钩子。
 
+## Cargo CLI tools：macOS 固定来源重部署
+
+来源仅限八个已审核的 Cargo 包：ripgrep（[BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep)）、fd-find（[sharkdp/fd](https://github.com/sharkdp/fd)）、bat（[sharkdp/bat](https://github.com/sharkdp/bat)）、eza（[eza-community/eza](https://github.com/eza-community/eza)）、zoxide（[ajeetdsouza/zoxide](https://github.com/ajeetdsouza/zoxide)）、starship（[starship/starship](https://github.com/starship/starship)）、just（[casey/just](https://github.com/casey/just)）和 git-delta（[dandavison/delta](https://github.com/dandavison/delta)）。不接受用户提供的 crate 名、Git URL、分支或提交。
+
+每项可留空版本以跟随审核 Cargo registry 的滚动版本，或输入精确 semver（包括上游发布的 beta 预发布版本）；Git HEAD 选项只读取固定 HTTPS 仓库默认分支，解析一个完整提交 SHA 后以 `--rev` 安装。Cargo home 与子进程工作目录使用私有临时目录，安装根固定为 `~/.cargo`；执行前记录当前安装清单和请求，HEAD 解析结果在任何写入前单独落盘，完成后再次读取清单并核对包身份/精确版本。Git HEAD 报告中的 SHA 证明传给 Cargo 的安装请求，不是从二进制读取的提交指纹。滚动版不构成锁定，构建脚本以当前用户权限执行且没有自动回滚；HEAD 会覆盖同名可执行文件。
+
+Cargo registry 镜像适用于 registry 源和依赖；Git HEAD 保持固定 GitHub HTTPS 地址，仅使用本应用网络方案中的代理设置。Windows 继续使用现有逐项审核的 Cargo 任务。
+
 ## 尚未覆盖
 
-原生 Mac 配置接入 Homebrew formula/cask，Rust 工具链有独立跨平台流程；Cargo、uv、NPM、VS Code 独立来源可备份和向 Windows 可信任务映射，尚未通过 Mac 配置器安装。任意 Git URL、分支或提交重部署尚未接入；Homebrew HEAD 仅跟随公式定义，Rust beta/nightly 走 rustup 官方渠道。备份不复制项目、配置文件、二进制、缓存、密钥或虚拟环境；Windows 软件全集与 WinGet 安装清单采集未实现。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。
+原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。NPM 与 VS Code 扩展仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。备份不复制项目、配置文件、二进制、缓存、密钥或虚拟环境；Windows 软件全集与 WinGet 安装清单采集未实现。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。

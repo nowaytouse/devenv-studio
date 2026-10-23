@@ -18,6 +18,7 @@ mod i18n;
 use i18n::{lf, t, tx};
 mod app_pages;
 mod backup;
+mod cargo_tools;
 mod compatibility;
 mod environment;
 mod hybrid;
@@ -97,6 +98,9 @@ enum FileOperation {
     SavePythonRequest,
     LoadPythonRequest,
     SavePythonReport,
+    SaveCargoRequest,
+    LoadCargoRequest,
+    SaveCargoReport,
     SaveMiseRuntimeRequest,
     LoadMiseRuntimeRequest,
     ExportMiseRuntimeManifest,
@@ -134,6 +138,9 @@ impl FileOperation {
             Self::SavePythonRequest => tx("保存 Python 工具请求", "Save Python tools request"),
             Self::LoadPythonRequest => tx("载入 Python 工具请求", "Load Python tools request"),
             Self::SavePythonReport => tx("保存 Python 重部署结果", "Save Python deployment result"),
+            Self::SaveCargoRequest => tx("保存 Cargo 工具请求", "Save Cargo tools request"),
+            Self::LoadCargoRequest => tx("载入 Cargo 工具请求", "Load Cargo tools request"),
+            Self::SaveCargoReport => tx("保存 Cargo 重部署结果", "Save Cargo deployment result"),
             Self::SaveMiseRuntimeRequest => tx("保存 mise 运行时请求", "Save mise runtime request"),
             Self::LoadMiseRuntimeRequest => tx("载入 mise 运行时请求", "Load mise runtime request"),
             Self::ExportMiseRuntimeManifest => {
@@ -184,6 +191,7 @@ enum WorkerResult {
     RustInventory(Vec<String>),
     PythonTools(studio_deployment::python_tools::Report),
     PythonToolsInventory(Vec<studio_deployment::backup::Package>),
+    CargoTools(studio_deployment::cargo_tools::Report),
     MiseRuntime(studio_deployment::mise_tools::Report),
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
     Inspection {
@@ -431,6 +439,14 @@ impl Studio {
                         ),
                         error: false,
                     }
+                }
+                Ok(WorkerResult::CargoTools(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.cargo_tools.report = Some(report);
+                    notice
                 }
                 Ok(WorkerResult::MiseRuntime(report)) => {
                     let notice = Notice {
@@ -2136,6 +2152,14 @@ impl Studio {
         }
         if matches!(
             operation,
+            FileOperation::SaveCargoRequest
+                | FileOperation::LoadCargoRequest
+                | FileOperation::SaveCargoReport
+        ) {
+            return self.cargo_tools_file_operation(operation, &path);
+        }
+        if matches!(
+            operation,
             FileOperation::SavePythonRequest
                 | FileOperation::LoadPythonRequest
                 | FileOperation::SavePythonReport
@@ -2194,6 +2218,11 @@ impl Studio {
             | FileOperation::LoadPythonRequest
             | FileOperation::SavePythonReport => {
                 Err("Python tools operation was not dispatched".into())
+            }
+            FileOperation::SaveCargoRequest
+            | FileOperation::LoadCargoRequest
+            | FileOperation::SaveCargoReport => {
+                Err("Cargo tools operation was not dispatched".into())
             }
             FileOperation::SaveMiseRuntimeRequest
             | FileOperation::LoadMiseRuntimeRequest

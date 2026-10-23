@@ -119,10 +119,31 @@ fn network_provider(invocation: &Invocation) -> Option<&'static str> {
         "brew" => Some("brew"),
         "rustup" => Some("rustup"),
         "cargo" => Some("cargo"),
+        "git" => Some("git"),
         "uv" => Some("uv"),
         "mise" => Some("mise"),
         _ => None,
     }
+}
+
+fn sensitive_environment_name(name: &std::ffi::OsStr) -> bool {
+    let upper = name.to_string_lossy().to_ascii_uppercase();
+    matches!(
+        upper.as_str(),
+        "TOKEN" | "PASSWORD" | "PASSWD" | "SSH_AUTH_SOCK" | "GPG_AGENT_INFO"
+    ) || upper.contains("_ACCESS_KEY")
+        || [
+            "_TOKEN",
+            "_SECRET",
+            "_PASSWORD",
+            "_PASSWD",
+            "_API_KEY",
+            "_ACCESS_KEY",
+            "_CREDENTIALS",
+            "_AUTH",
+        ]
+        .iter()
+        .any(|suffix| upper.ends_with(suffix))
 }
 fn network_arguments(
     invocation: &Invocation,
@@ -370,6 +391,80 @@ pub(crate) fn run_python_tools(
 ) -> Result<Output> {
     run_configured(invocation, cancel, timeout, configure_python_tools)
 }
+
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn run_cargo_tools(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+    cargo_home: &Path,
+) -> Result<Output> {
+    ensure!(
+        invocation
+            .program
+            .file_name()
+            .is_some_and(|name| name == "cargo"),
+        "Cargo tool environment is restricted to the supported Cargo executable"
+    );
+    run_configured(invocation, cancel, timeout, |command| {
+        for (name, _) in std::env::vars_os() {
+            let upper = name.to_string_lossy().to_ascii_uppercase();
+            if upper.starts_with("CARGO_")
+                || upper.starts_with("GIT_")
+                || sensitive_environment_name(&name)
+            {
+                command.env_remove(name);
+            }
+        }
+        command
+            .current_dir(cargo_home)
+            .env("CARGO_HOME", cargo_home)
+            .env("CARGO_TERM_COLOR", "never")
+            .env("RUSTUP_AUTO_INSTALL", "0")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", "/usr/bin/false")
+            .env("SSH_ASKPASS", "/usr/bin/false")
+            .env("GIT_ALLOW_PROTOCOL", "https");
+    })
+}
+
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn run_git_tools(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+    isolated_home: &Path,
+) -> Result<Output> {
+    ensure!(
+        invocation
+            .program
+            .file_name()
+            .is_some_and(|name| name == "git"),
+        "Git environment is restricted to the supported Git executable"
+    );
+    run_configured(invocation, cancel, timeout, |command| {
+        for (name, _) in std::env::vars_os() {
+            let upper = name.to_string_lossy().to_ascii_uppercase();
+            if upper.starts_with("GIT_")
+                || matches!(upper.as_str(), "SSH_ASKPASS")
+                || sensitive_environment_name(&name)
+            {
+                command.env_remove(name);
+            }
+        }
+        command
+            .current_dir(isolated_home)
+            .env("HOME", isolated_home)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", "/usr/bin/false")
+            .env("SSH_ASKPASS", "/usr/bin/false")
+            .env("GIT_ALLOW_PROTOCOL", "https");
+    })
+}
 #[cfg(any(windows, target_os = "macos", test))]
 fn configure_python_tools(command: &mut Command) {
     for (name, _) in std::env::vars_os() {
@@ -588,6 +683,96 @@ mod tests {
         fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
             Err(io::Error::other("injected pipe error"))
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn cargo_and_git_tools_use_isolated_working_directories() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        let root = std::env::temp_dir().join(format!(
+            "devenv-studio-isolated-cwd-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let cargo_home = root.join("cargo-home");
+        let git_home = root.join("git-home");
+        fs::create_dir(&cargo_home).unwrap();
+        fs::create_dir(&git_home).unwrap();
+        let cargo = root.join("cargo");
+        let git = root.join("git");
+        for executable in [&cargo, &git] {
+            fs::write(executable, "#!/bin/sh\npwd\n").unwrap();
+            let mut permissions = fs::metadata(executable).unwrap().permissions();
+            permissions.set_mode(0o700);
+            fs::set_permissions(executable, permissions).unwrap();
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let invocation = |program: PathBuf| Invocation {
+            program,
+            args: Vec::new(),
+            vscode_node: false,
+            npm_node: false,
+        };
+        let cargo_output = run_cargo_tools(
+            &invocation(cargo),
+            &cancel,
+            Duration::from_secs(5),
+            &cargo_home,
+        )
+        .unwrap();
+        assert_eq!(
+            cargo_output.stdout.trim(),
+            fs::canonicalize(&cargo_home).unwrap().to_string_lossy()
+        );
+        let git_output =
+            run_git_tools(&invocation(git), &cancel, Duration::from_secs(5), &git_home).unwrap();
+        assert_eq!(
+            git_output.stdout.trim(),
+            fs::canonicalize(&git_home).unwrap().to_string_lossy()
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn git_head_uses_fixed_https_arguments_and_scrubs_credentials() {
+        use crate::network::{NetworkProfile, ProxyMode};
+        let invocation = Invocation {
+            program: PathBuf::from("/usr/bin/git"),
+            args: vec![
+                "ls-remote".into(),
+                "--symref".into(),
+                "https://github.com/BurntSushi/ripgrep.git".into(),
+                "HEAD".into(),
+            ],
+            vscode_node: false,
+            npm_node: false,
+        };
+        let profile = NetworkProfile {
+            mode: ProxyMode::Manual,
+            proxy_url: "http://127.0.0.1:7890".into(),
+            cargo_index: "sparse+https://packages.example/crates/".into(),
+            ..NetworkProfile::default()
+        };
+        assert_eq!(network_provider(&invocation), Some("git"));
+        assert_eq!(
+            network_arguments(&invocation, &profile).unwrap(),
+            invocation.args
+        );
+        for name in [
+            "GITHUB_TOKEN",
+            "AWS_ACCESS_KEY_ID",
+            "OPENAI_API_KEY",
+            "DB_PASSWORD",
+            "SSH_AUTH_SOCK",
+        ] {
+            assert!(sensitive_environment_name(std::ffi::OsStr::new(name)));
+        }
+        assert!(!sensitive_environment_name(std::ffi::OsStr::new("PATH")));
     }
 
     #[test]

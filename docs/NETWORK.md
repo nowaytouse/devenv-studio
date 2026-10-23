@@ -18,13 +18,13 @@ npm、Python 和 Cargo 可分别选择 HTTPS 软件源；初始值使用已有�
 
 ## 真正接入的执行范围
 
-- macOS：GUI 中的 Homebrew 补齐、滚动与 HEAD 部署，以及 Rustup 渠道重部署。
-- Windows：GUI 中的 Cargo、npm、Pip、uv 开发工具部署，以及 Rustup 渠道重部署。
+- macOS：GUI 中的 Homebrew 补齐、滚动与 HEAD 部署，Rustup 渠道、mise core、uv 工具，以及审核过的 Cargo CLI 重部署。
+- Windows：GUI 中的 Cargo、npm、Pip、uv 开发工具部署、Rustup 渠道与 mise core 重部署。
 - 各提供程序继续保留既有的固定可执行文件定位、安装范围、参数校验、结果回读与隔离要求；npm 仍禁止生命周期脚本，Pip 仍要求受支持解释器、用户范围与 wheel 包，uv 仍不自动下载 Python。
 
-读取备份和本机清单、CLI 命令不启用这份 GUI 部署配置。WinGet、DISM、VS Code 扩展、SSH、系统网络设置及其他应用不列为受支持执行范围。Homebrew 公式和 Cargo 软件包的构建步骤可能访问额外网络；环境配置是提供给受支持工具的 HTTP(S) 路由设置，不能充当网络沙箱或阻止任意子程序自行联网。
+读取备份和本机清单、CLI 命令不启用这份 GUI 部署配置。WinGet、DISM、VS Code 扩展、SSH、系统网络设置及其他应用不列为受支持执行范围。Homebrew 公式和 Cargo 软件包的构建步骤可能访问额外网络；环境配置是提供给受支持工具的 HTTP(S) 路由设置，不能充当网络沙箱或阻止任意子程序自行联网。macOS Cargo 的 Git HEAD 查询仅访问目录中固定的 GitHub HTTPS 仓库，Cargo registry 镜像只影响 crates.io 依赖源，不会改写 Git URL。
 
-提供程序差异由适配器明确处理：npm 的固定 registry 参数会替换为审核后的值；Pip 的隔离模式继续有效，因此通过命令行传入索引和代理；uv 使用明确默认索引；Cargo 保留 `--registry crates-io` 逻辑身份并加入本次 `--config` source replacement。网络值在提供程序安全清理之后应用，避免界面已启用而子进程实际丢失配置。
+提供程序差异由适配器明确处理：npm 的固定 registry 参数会替换为审核后的值；Pip 的隔离模式继续有效，因此通过命令行传入索引和代理；uv 使用明确默认索引；Cargo registry 安装通过 `--config` source replacement 应用 crates.io 镜像，Git HEAD 使用同一代理方案并保留固定 HTTPS 仓库地址。网络值在提供程序安全清理之后应用，避免界面已启用而子进程实际丢失配置。
 
 ## 保存、导入和执行记录
 

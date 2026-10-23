@@ -1,5 +1,14 @@
 # 验证记录
 
+## Unreleased — macOS Cargo CLI 工具重部署，2026-10-24
+
+- 305 项工作区测试通过，2 项子进程辅助测试按设计忽略；格式检查、工作区全目标严格 Clippy 与工作区构建通过。
+- 本地 macOS 预览已打开并进入环境配置页；Cargo 面板显示 8 项固定来源、0/8 选择，Git HEAD 授权确认未勾选，未开始安装。
+- 支持 crates.io 精确版本和滚动版本，以及固定 GitHub HTTPS 上游的 HEAD；HEAD 在写入前解析并保存完整提交 SHA。使用私有临时 Cargo home 与隔离子进程工作目录，固定安装根为 `~/.cargo`，前后读取工具清单并保存请求/结果证据。
+- Git HEAD 的 SHA 只证明传给 Cargo 的固定请求；Cargo 安装清单无法验证二进制提交指纹。没有自动回滚，crate 构建脚本以当前用户权限执行。
+- 版本保持 0.10.0 / Unreleased；未新增外部依赖或修改 Cargo.lock。Windows GNU Rust 目标未安装，未做 Windows 目标检查。
+- 未执行真实 Cargo 安装、Windows 实机验收、CI 检查或签名、公证；新预览仅作本地界面验收。
+
 ## Unreleased — mise 核心运行时备份与锁定重部署，2026-10-24
 
 - 299 项工作区测试通过，2 项子进程辅助测试按设计忽略；格式检查、严格 Clippy 与工作区二进制构建通过。

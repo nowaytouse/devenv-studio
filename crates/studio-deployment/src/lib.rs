@@ -9,6 +9,7 @@ use std::{
 use studio_core::Target;
 
 pub mod backup;
+pub mod cargo_tools;
 mod developer_ids;
 #[cfg(any(windows, test))]
 mod engine;

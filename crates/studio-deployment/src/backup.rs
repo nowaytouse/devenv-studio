@@ -122,6 +122,13 @@ pub(crate) fn parse_uv_output(text: &str) -> Result<Vec<Package>> {
     Ok(packages)
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
+pub(crate) fn parse_cargo_output(text: &str) -> Result<Vec<Package>> {
+    let (packages, omitted) = capture::parse_packages("cargo", text, None)?;
+    ensure!(!omitted, "Incomplete Cargo tool inventory");
+    Ok(packages)
+}
+
 fn valid_name(kind: &str, value: &str) -> bool {
     if matches!(kind, "brew_formula" | "brew_cask") {
         !value.is_empty()

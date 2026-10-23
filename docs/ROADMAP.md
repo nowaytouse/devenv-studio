@@ -2,7 +2,7 @@
 
 本文件保留原定集成方向并记录0.10的推进状态。未实现项目不会出现在 GUI 中冒充可用开关。
 
-0.8已提供234个固定上游WinGet软件标识、63个Cargo/uv/Pip/NPM/VS Code任务、7个DISM功能、4个系统维护和4个存储任务，以及58个注册表设置选择和16个独立电源取值；混合组合、SetupProfile/Mac清单审核导入、v3档案、电源原值恢复及旧v1/v2兼容已接入同一工作区。存储分析/按介质优化及NTFS/ReFS通知策略只读检查已接入，TRIM策略修改与恢复仍待实现。Mac端六类、Windows端五类本机清单采集与版本备份、保存/载入及可信任务审核已接入。Mac原生配置使用Homebrew Bundle安装及独立检查所选formula/cask，可导出Brewfile；Windows所选软件可导出WinGet原生JSON。0.9新增Homebrew补齐/滚动/HEAD原生策略与独立渠道核对、macOS/Windows Rust工具链重部署及请求往返，支持stable/beta/nightly/固定版本/按日nightly。mise已接入Rust原生清单导出，执行与锁定尚未接入；chezmoi继续仅作设计参考，Mac独立Cargo/uv/NPM/扩展安装、dotfiles及精确还原尚未接入。0.10新增应用内部署网络方案、代理与软件源、原值备份/回读/历史恢复及五种工具原生配置导出；不涉及系统级代理/DNS/VPN配置。界面已有中英文、主题色、状态、帮助及关于。Windows实际执行和系统效果仍待设备验收。以下事项按各自剩余边界推进。
+0.8已提供234个固定上游WinGet软件标识、63个Cargo/uv/Pip/NPM/VS Code任务、7个DISM功能、4个系统维护和4个存储任务，以及58个注册表设置选择和16个独立电源取值；混合组合、SetupProfile/Mac清单审核导入、v3档案、电源原值恢复及旧v1/v2兼容已接入同一工作区。存储分析/按介质优化及NTFS/ReFS通知策略只读检查已接入，TRIM策略修改与恢复仍待实现。Mac端六类、Windows端五类本机清单采集与版本备份、保存/载入及可信任务审核已接入。Mac原生配置使用Homebrew Bundle安装及独立检查所选formula/cask，可导出Brewfile；Windows所选软件可导出WinGet原生JSON。0.9新增Homebrew补齐/滚动/HEAD原生策略与独立渠道核对、macOS/Windows Rust工具链重部署及请求往返，支持stable/beta/nightly/固定版本/按日nightly。mise core 与 uv 已接入 macOS/Windows 重部署；chezmoi继续仅作设计参考，macOS新增受审核Cargo CLI工具重部署；Mac仍未接入NPM与VS Code扩展独立安装、dotfiles及精确还原尚未接入。0.10新增应用内部署网络方案、代理与软件源、原值备份/回读/历史恢复及五种工具原生配置导出；不涉及系统级代理/DNS/VPN配置。界面已有中英文、主题色、状态、帮助及关于。Windows实际执行和系统效果仍待设备验收。以下事项按各自剩余边界推进。
 
 1. **Windows LTSC 验收（待完成）**：分别在 2021/2024 的干净虚拟机测试用户权限、应用、退出、取消、故障中断与恢复，核对每个设置在系统界面的实际效果；保存脱敏证据。
 2. **继续迁移原工具的软件配置能力**：现有WinGet/Cargo/uv/Pip/NPM/VS Code计划、检查、可取消执行及逐项导入已实现；仍需处理Scoop、Mac配置文件/虚拟环境备份与恢复及更多经过审核的包、Shell与编辑器设置合并、代理/模型等能力，并独立验证来源、权限、隐私及恢复边界。个人电脑清单须由用户明确选择导入。

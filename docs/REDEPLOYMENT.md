@@ -1,6 +1,6 @@
 # 开发环境重部署（0.10 Unreleased）
 
-重部署先保存明确的安装请求，再执行并回读结果。已有包的观测版本是清单证据；它本身不构成安装锁文件。当前接入 Homebrew、rustup、mise core、uv 和 Windows 可信部署适配器，并输出对应原生格式。
+重部署先保存明确的安装请求，再执行并回读结果。已有包的观测版本是清单证据；它本身不构成安装锁文件。当前接入 Homebrew、rustup、mise core、uv、macOS 固定来源 Cargo CLI 工具和 Windows 可信部署适配器，并输出对应原生格式。
 
 ## Homebrew：补齐、滚动和 HEAD
 
@@ -31,6 +31,14 @@ Rust 请求独立保存为严格验证的 JSON。接受 `stable`、`beta`、`nig
 精确请求已满足时跳过；其他精确请求使用 `uv tool install --force <name>==<version>`。uv 的强制安装会重建该工具环境，并可能替换执行目录中同名入口，因此 GUI 在执行前提示并要求确认。滚动请求统一使用不带版本约束的 `uv tool install <name>`；这里不用 `uv tool upgrade`，因为 uv 会保留工具原先的版本约束，可能使“滚动最新版”继续受旧约束限制。未选中的工具不卸载或修改。原有入口冲突仍由 uv 拒绝，除精确请求明确授权的 force 行为之外不覆盖其他入口。
 
 执行要求标准位置已有 uv 与系统可用 Python，应用禁用配置文件发现和 uv 自动下载 Python；网络请求采用已启用的应用 Python 源与代理快照。PyPI 包构建后端可能运行第三方代码；中途失败/取消可能留下部分变化，没有通用回滚。pipx 的环境不读取、不卸载，也不自动迁移；清单导入与迁移报告暂缓，避免同时维护两种隔离环境的隐式所有权。Python 项目依赖、虚拟环境及逐字节恢复不在此流程。
+
+## Cargo CLI tools：macOS 固定来源重部署
+
+来源仅限八个已审核的 Cargo 包：ripgrep（[BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep)）、fd-find（[sharkdp/fd](https://github.com/sharkdp/fd)）、bat（[sharkdp/bat](https://github.com/sharkdp/bat)）、eza（[eza-community/eza](https://github.com/eza-community/eza)）、zoxide（[ajeetdsouza/zoxide](https://github.com/ajeetdsouza/zoxide)）、starship（[starship/starship](https://github.com/starship/starship)）、just（[casey/just](https://github.com/casey/just)）和 git-delta（[dandavison/delta](https://github.com/dandavison/delta)）。不接受用户提供的 crate 名、Git URL、分支或提交。
+
+每项可留空版本以跟随审核 Cargo registry 的滚动版本，或输入精确 semver（包括上游发布的 beta 预发布版本）；Git HEAD 选项只读取固定 HTTPS 仓库默认分支，解析一个完整提交 SHA 后以 `--rev` 安装。Cargo home 与子进程工作目录使用私有临时目录，安装根固定为 `~/.cargo`；执行前记录当前安装清单和请求，HEAD 解析结果在任何写入前单独落盘，完成后再次读取清单并核对包身份/精确版本。Git HEAD 报告中的 SHA 证明传给 Cargo 的安装请求，不是从二进制读取的提交指纹。滚动版不构成锁定，构建脚本以当前用户权限执行且没有自动回滚；HEAD 会覆盖同名可执行文件。
+
+Cargo registry 镜像适用于 registry 源和依赖；Git HEAD 保持固定 GitHub HTTPS 地址，仅使用本应用网络方案中的代理设置。Windows 继续使用现有逐项审核的 Cargo 任务。
 
 ## mise core：macOS 与 Windows 开发运行时
 
