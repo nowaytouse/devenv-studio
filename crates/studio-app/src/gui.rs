@@ -680,34 +680,91 @@ impl Studio {
         self.deployment_states.clear();
     }
 
+    fn navigate_to(&mut self, page: Page) {
+        self.page = page;
+        self.query.clear();
+        self.hybrid.visible_tasks = 60;
+    }
+
     fn rail(&mut self, ui: &mut egui::Ui) {
         egui::Panel::left("navigation")
-            .exact_size(210.0)
+            .exact_size(224.0)
             .resizable(false)
             .frame(
                 egui::Frame::new()
-                    .fill(palette().surface)
+                    .fill(palette().sidebar)
                     .inner_margin(14.0)
                     .stroke(Stroke::new(1.0, palette().line)),
             )
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    logo(ui, 25.0);
-                    ui.label(RichText::new("DevEnv Studio").size(18.0).strong());
+                    logo(ui, 29.0);
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("DevEnv Studio").size(17.0).strong());
+                        ui.label(
+                            RichText::new(format!(
+                                "{} · {}",
+                                tx("开发预览", "Development"),
+                                env!("CARGO_PKG_VERSION")
+                            ))
+                            .size(11.0)
+                            .color(palette().muted),
+                        );
+                    });
                 });
-                ui.label(
-                    RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
-                        .size(11.0)
-                        .color(palette().muted),
-                );
-                ui.add_space(14.0);
+                ui.add_space(18.0);
+                egui::Panel::bottom("navigation-tools")
+                    .resizable(false)
+                    .frame(egui::Frame::new())
+                    .show(ui, |ui| {
+                        ui.separator();
+                        ui.add_space(4.0);
+                        let width = (ui.available_width() - 8.0) / 2.0;
+                        egui::Grid::new("navigation-tool-grid")
+                            .spacing([8.0, 5.0])
+                            .show(ui, |ui| {
+                                for (index, (page, title)) in [
+                                    (Page::Settings, tx("设置", "Settings")),
+                                    (Page::Help, tx("帮助", "Help")),
+                                    (Page::About, tx("关于", "About")),
+                                    (Page::Sources, tx("项目来源", "Sources")),
+                                ]
+                                .into_iter()
+                                .enumerate()
+                                {
+                                    if navigation_button(ui, title, self.page == page, width)
+                                        .clicked()
+                                    {
+                                        self.navigate_to(page);
+                                    }
+                                    if index % 2 == 1 {
+                                        ui.end_row();
+                                    }
+                                }
+                            });
+                        if ui
+                            .add_sized(
+                                [ui.available_width(), 28.0],
+                                egui::Button::new(
+                                    RichText::new(tx("退出 DevEnv Studio", "Quit DevEnv Studio"))
+                                        .size(12.0)
+                                        .color(palette().muted),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                        {
+                            self.request_close(ui.ctx());
+                        }
+                    });
                 egui::ScrollArea::vertical()
                     .id_salt("navigation-scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 4.0;
                         for (group, pages) in [
                             (
-                                tx("跨平台环境", "Cross-platform environments"),
+                                tx("跨平台环境", "Environments"),
                                 vec![
                                     (
                                         Page::Environment,
@@ -739,75 +796,51 @@ impl Studio {
                                     (Page::Status, tx("状态", "Status")),
                                 ],
                             ),
-                            (
-                                tx("应用", "Application"),
-                                vec![
-                                    (Page::Settings, tx("设置", "Settings")),
-                                    (Page::Help, tx("帮助", "Help")),
-                                    (Page::About, tx("关于", "About")),
-                                    (Page::Sources, t("项目来源")),
-                                ],
-                            ),
                         ] {
                             ui.label(RichText::new(group).size(11.0).color(palette().muted));
+                            ui.add_space(4.0);
                             for (page, title) in pages {
-                                let active = self.page == page;
-                                if ui
-                                    .add_sized(
-                                        [180.0, 32.0],
-                                        egui::Button::new(
-                                            RichText::new(title)
-                                                .color(if active {
-                                                    palette().accent
-                                                } else {
-                                                    palette().ink
-                                                })
-                                                .strong(),
-                                        )
-                                        .fill(if active {
-                                            palette().wash
-                                        } else {
-                                            palette().surface
-                                        })
-                                        .stroke(Stroke::NONE)
-                                        .corner_radius(6),
-                                    )
-                                    .clicked()
+                                if navigation_button(
+                                    ui,
+                                    title,
+                                    self.page == page,
+                                    ui.available_width(),
+                                )
+                                .clicked()
                                 {
-                                    self.page = page;
-                                    self.query.clear();
-                                    self.hybrid.visible_tasks = 60;
+                                    self.navigate_to(page);
                                 }
                             }
-                            ui.add_space(10.0);
+                            ui.add_space(12.0);
                         }
-                        ui.separator();
-                        if ui
-                            .button(tx("退出 DevEnv Studio", "Quit DevEnv Studio"))
-                            .clicked()
-                        {
-                            self.request_close(ui.ctx());
-                        }
-                        ui.label(
-                            RichText::new(tx("所有操作均需明确选择", "Every operation is opt-in"))
-                                .size(11.0)
-                                .color(palette().muted),
-                        );
                     });
             });
     }
 
     fn tray(&mut self, ui: &mut egui::Ui) {
+        if matches!(
+            self.page,
+            Page::Environment
+                | Page::Backup
+                | Page::Network
+                | Page::Settings
+                | Page::Help
+                | Page::About
+                | Page::Sources
+                | Page::Status
+        ) {
+            return;
+        }
         egui::Panel::bottom("selection-tray")
             .resizable(false)
             .frame(
                 egui::Frame::new()
                     .fill(palette().surface)
                     .stroke(Stroke::new(1.0, palette().line))
-                    .inner_margin(egui::Margin::symmetric(28, 16)),
+                    .inner_margin(egui::Margin::symmetric(24, 12)),
             )
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label(
                         RichText::new(lf!(
                             "已选择 {} 项",
@@ -815,7 +848,7 @@ impl Studio {
                             self.selection_count()
                         ))
                         .strong()
-                        .size(17.0),
+                        .size(15.0),
                     );
                     ui.label(
                         RichText::new(lf!(
@@ -825,35 +858,35 @@ impl Studio {
                             self.power_selected.len(),
                             self.deployment_selected.len()
                         ))
-                        .size(13.0)
+                        .size(12.0)
                         .color(palette().muted),
                     );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if primary(
-                            ui,
-                            t("检查变更方案"),
+                });
+                ui.horizontal_wrapped(|ui| {
+                    if primary(
+                        ui,
+                        t("检查变更方案"),
+                        self.selection_count() > 0 && self.worker.is_none(),
+                    )
+                    .clicked()
+                    {
+                        self.page = Page::Plan;
+                    }
+                    if ui
+                        .add_enabled(
                             self.selection_count() > 0 && self.worker.is_none(),
+                            egui::Button::new(t("清空选择")).frame(false),
                         )
                         .clicked()
-                        {
-                            self.page = Page::Plan;
-                        }
-                        if ui
-                            .add_enabled(
-                                self.selection_count() > 0 && self.worker.is_none(),
-                                egui::Button::new(t("清空选择")).frame(false),
-                            )
-                            .clicked()
-                        {
-                            self.clear_selection();
-                        }
-                    });
+                    {
+                        self.clear_selection();
+                    }
                 });
             });
     }
 
     fn header(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(
                 RichText::new(match self.page {
                     Page::Recipes => tx("方案工作区", "Workspace recipes"),
@@ -2099,7 +2132,7 @@ impl eframe::App for Studio {
         self.rail(ui);
         self.tray(ui);
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(palette().canvas).inner_margin(22.0))
+            .frame(egui::Frame::new().fill(palette().canvas).inner_margin(26.0))
             .show(ui, |ui| {
                 self.header(ui);
                 egui::ScrollArea::vertical()
@@ -2478,6 +2511,55 @@ fn preview_explanation() -> &'static str {
     }
 }
 
+fn surface_frame() -> egui::Frame {
+    egui::Frame::new()
+        .fill(palette().surface)
+        .stroke(Stroke::new(1.0, palette().line))
+        .corner_radius(12)
+        .inner_margin(18.0)
+}
+
+fn navigation_button(ui: &mut egui::Ui, title: &str, active: bool, width: f32) -> egui::Response {
+    let response = ui.add_sized(
+        [width, 32.0],
+        egui::Button::new((
+            RichText::new(title).size(13.0).color(if active {
+                palette().ink
+            } else {
+                palette().muted
+            }),
+            egui::Atom::grow(),
+        ))
+        .selected(active)
+        .fill(if active {
+            palette().wash
+        } else {
+            Color32::TRANSPARENT
+        })
+        .stroke(Stroke::NONE)
+        .corner_radius(7),
+    );
+    if active {
+        let x = response.rect.left() + 1.0;
+        ui.painter().line_segment(
+            [
+                egui::pos2(x, response.rect.top() + 9.0),
+                egui::pos2(x, response.rect.bottom() - 9.0),
+            ],
+            Stroke::new(3.0, palette().accent),
+        );
+    }
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            response.rect,
+            7,
+            Stroke::new(1.5, palette().accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+    response
+}
+
 fn primary(ui: &mut egui::Ui, title: &str, enabled: bool) -> egui::Response {
     ui.add_enabled(
         enabled,
@@ -2491,8 +2573,8 @@ fn primary(ui: &mut egui::Ui, title: &str, enabled: bool) -> egui::Response {
 fn badge(ui: &mut egui::Ui, text: &str, fill: Color32, ink: Color32) {
     egui::Frame::new()
         .fill(fill)
-        .corner_radius(5)
-        .inner_margin(egui::Margin::symmetric(8, 5))
+        .corner_radius(255)
+        .inner_margin(egui::Margin::symmetric(10, 5))
         .show(ui, |ui| {
             ui.label(RichText::new(text).size(11.0).color(ink));
         });
@@ -2515,20 +2597,15 @@ fn empty(ui: &mut egui::Ui, title: &str, description: &str) {
 
 fn logo(ui: &mut egui::Ui, size: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), egui::Sense::hover());
-    let gap = 3.0;
-    let pane = (size - gap) / 2.0;
-    for (x, y, color) in [
-        (0.0, 0.0, palette().accent),
-        (pane + gap, 0.0, Color32::from_rgb(101, 139, 245)),
-        (0.0, pane + gap, Color32::from_rgb(101, 139, 245)),
-        (pane + gap, pane + gap, palette().accent),
-    ] {
-        ui.painter().rect_filled(
-            egui::Rect::from_min_size(rect.min + Vec2::new(x, y), Vec2::splat(pane)),
-            2.0,
-            color,
-        );
-    }
+    let stroke = Stroke::new((size / 14.0).max(1.5), palette().accent);
+    ui.painter().rect_filled(rect, 7, palette().wash);
+    let at = |x: f32, y: f32| rect.min + Vec2::new(size * x, size * y);
+    ui.painter()
+        .line_segment([at(0.26, 0.31), at(0.45, 0.5)], stroke);
+    ui.painter()
+        .line_segment([at(0.45, 0.5), at(0.26, 0.69)], stroke);
+    ui.painter()
+        .line_segment([at(0.54, 0.69), at(0.76, 0.69)], stroke);
 }
 
 #[cfg(test)]
@@ -2915,6 +2992,71 @@ mod tests {
                 .flat_map(|output| &output.commands)
                 .any(|command| matches!(command, egui::ViewportCommand::Close))
         );
+    }
+
+    #[test]
+    fn application_tools_remain_visible_at_minimum_size_and_large_scale() {
+        for language in [Language::ZhCn, Language::EnUs] {
+            for scale in [100, 125] {
+                let mut app = preview();
+                app.page = Page::Environment;
+                app.preferences.language = language;
+                app.preferences.scale_percent = scale;
+                i18n::set_language(language);
+                let context = egui::Context::default();
+                context.enable_accesskit();
+                theme::apply(&context, &app.preferences);
+                let mut nodes = BTreeMap::new();
+                for _ in 0..2 {
+                    let mut output = context.run_ui(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                egui::vec2(980.0, 680.0),
+                            )),
+                            ..Default::default()
+                        },
+                        |ui| {
+                            app.rail(ui);
+                            app.tray(ui);
+                            egui::CentralPanel::default().show(ui, |ui| {
+                                ui.label("content");
+                            });
+                        },
+                    );
+                    output.textures_delta.clear();
+                    nodes.extend(
+                        output
+                            .platform_output
+                            .accesskit_update
+                            .expect("accessibility update")
+                            .nodes,
+                    );
+                }
+                for title in [
+                    tx("设置", "Settings"),
+                    tx("帮助", "Help"),
+                    tx("关于", "About"),
+                    tx("项目来源", "Sources"),
+                ] {
+                    let bounds = nodes
+                        .values()
+                        .find(|node| node.label() == Some(title))
+                        .and_then(|node| node.bounds())
+                        .expect("visible application tool");
+                    assert!(
+                        bounds.x0 >= 0.0
+                            && bounds.y0 >= 0.0
+                            && bounds.x1 <= 980.0
+                            && bounds.y1 <= 680.0,
+                        "{title}: {bounds:?}"
+                    );
+                }
+                assert!(app.worker.is_none());
+                assert_eq!(app.selection_count(), 0);
+            }
+        }
+        i18n::set_language(Language::ZhCn);
     }
 
     #[test]

@@ -48,15 +48,28 @@ impl Studio {
         });
         settings_section(ui, tx("外观", "Appearance"), |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label(tx("主题", "Theme"));
                 for (value, zh, en) in [
                     (Appearance::System, "跟随系统", "System"),
                     (Appearance::Light, "浅色", "Light"),
                     (Appearance::Dark, "深色", "Dark"),
                 ] {
-                    ui.radio_value(&mut self.preferences.appearance, value, tx(zh, en));
+                    ui.vertical(|ui| {
+                        ui.set_width(136.0);
+                        appearance_preview(ui, value, self.preferences.accent);
+                        if ui
+                            .add_sized(
+                                [136.0, 32.0],
+                                egui::Button::new(tx(zh, en))
+                                    .selected(self.preferences.appearance == value),
+                            )
+                            .clicked()
+                        {
+                            self.preferences.appearance = value;
+                        }
+                    });
                 }
             });
+            ui.add_space(8.0);
             ui.label(tx("强调色", "Accent color"));
             ui.horizontal_wrapped(|ui| {
                 for (value, zh, en) in [
@@ -69,20 +82,27 @@ impl Studio {
                     let selected = self.preferences.accent == value;
                     let swatch =
                         theme::Palette::for_theme(ui.ctx().theme() == egui::Theme::Dark, value);
-                    let label = format!("{} {}", if selected { "●" } else { "○" }, tx(zh, en));
+                    let label = format!("{}{}", tx(zh, en), if selected { " ✓" } else { "" });
                     if ui
                         .add(
-                            egui::Button::new(RichText::new(label).color(if selected {
-                                swatch.on_accent
-                            } else {
-                                palette().ink
-                            }))
+                            egui::Button::new((
+                                RichText::new("●").color(swatch.accent),
+                                RichText::new(label).color(palette().ink),
+                            ))
+                            .selected(selected)
                             .fill(if selected {
-                                swatch.accent
+                                swatch.wash
                             } else {
-                                palette().surface
+                                palette().canvas
                             })
-                            .stroke(Stroke::new(1.0, swatch.accent)),
+                            .stroke(Stroke::new(
+                                1.0,
+                                if selected {
+                                    swatch.accent
+                                } else {
+                                    palette().line
+                                },
+                            )),
                         )
                         .clicked()
                     {
@@ -155,13 +175,19 @@ impl Studio {
                 self.preferences = Preferences::default();
             }
             ui.label(
-                RichText::new(if self.preferences == self.saved_preferences {
+                RichText::new(if self.preferences_error.is_some() {
+                    tx("设置文件不可用", "Preferences unavailable")
+                } else if self.preferences == self.saved_preferences {
                     tx("已保存", "Saved")
                 } else {
                     tx("有未保存的界面设置", "Unsaved interface settings")
                 })
                 .size(12.0)
-                .color(palette().muted),
+                .color(if self.preferences_error.is_some() {
+                    palette().danger
+                } else {
+                    palette().muted
+                }),
             );
         });
         if let Some(error) = &self.preferences_error {
@@ -619,19 +645,57 @@ impl Studio {
     }
 }
 
+fn appearance_preview(ui: &mut egui::Ui, appearance: Appearance, accent: Accent) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(136.0, 58.0), egui::Sense::hover());
+    let colors = theme::Palette::for_theme(matches!(appearance, Appearance::Dark), accent);
+    let painter = ui.painter();
+    painter.rect_filled(rect, 7, colors.canvas);
+    let sidebar =
+        egui::Rect::from_min_size(rect.min + egui::vec2(4.0, 4.0), egui::vec2(29.0, 50.0));
+    painter.rect_filled(sidebar, 4, colors.sidebar);
+    painter.rect_filled(
+        egui::Rect::from_min_size(sidebar.min + egui::vec2(4.0, 10.0), egui::vec2(21.0, 5.0)),
+        2,
+        colors.accent,
+    );
+    for (offset, width) in [(10.0, 65.0), (22.0, 88.0), (36.0, 88.0)] {
+        painter.rect_filled(
+            egui::Rect::from_min_size(rect.min + egui::vec2(40.0, offset), egui::vec2(width, 7.0)),
+            3,
+            colors.surface,
+        );
+    }
+    if matches!(appearance, Appearance::System) {
+        let dark = theme::Palette::for_theme(true, accent);
+        painter.rect_filled(
+            egui::Rect::from_min_max(rect.center_top(), rect.right_bottom()),
+            7,
+            dark.surface,
+        );
+        painter.line_segment(
+            [
+                rect.center_top() + egui::vec2(8.0, 18.0),
+                rect.center_top() + egui::vec2(48.0, 18.0),
+            ],
+            Stroke::new(3.0, dark.accent),
+        );
+    }
+    painter.rect_stroke(
+        rect,
+        7,
+        Stroke::new(1.0, palette().line),
+        egui::StrokeKind::Inside,
+    );
+}
+
 fn settings_section(ui: &mut egui::Ui, title: &str, content: impl FnOnce(&mut egui::Ui)) {
     ui.add_space(10.0);
-    egui::Frame::new()
-        .fill(palette().surface)
-        .stroke(Stroke::new(1.0, palette().line))
-        .corner_radius(8)
-        .inner_margin(16.0)
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(RichText::new(title).size(16.0).strong());
-            ui.add_space(5.0);
-            content(ui);
-        });
+    surface_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(title).size(16.0).strong());
+        ui.add_space(5.0);
+        content(ui);
+    });
 }
 fn property(ui: &mut egui::Ui, label: &str, value: &str) {
     ui.horizontal_wrapped(|ui| {

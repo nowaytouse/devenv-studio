@@ -1,5 +1,13 @@
 # Dependency review — 2026-10-23
 
+## Unreleased GUI checkpoint: cc 1.9.0 → 1.10.0
+
+The existing external lockfile update was reviewed separately from the GUI changes. Only the cc package version and checksum change; other external package entries remain identical. The official [crates.io record](https://crates.io/api/v1/crates/cc/1.10.0) was not yanked at review time. Its checksum `86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0` matches both Cargo.lock and the cached published archive. All 39 archive files match the extracted source cache, and the [upstream tag](https://github.com/rust-lang/cc-rs/tree/cc-v1.10.0) resolves to `8d06fcb73f6938c35c9bc59edbdcb9fb56f04d71`, matching the archive VCS metadata.
+
+The normalized manifests differ only in version: dependencies, features, MIT OR Apache-2.0 license and Rust 1.65 minimum remain unchanged. The inbound android-activity, blake3 and wayland-backend constraints permit 1.10.0. The upstream changelog covers libtool archive support, parallel child-status debug output, target metadata and codegen-flag caching. No static compatibility blocker was found; local native and Windows-target checks remain separate validation evidence. This review does not claim a RustSec audit or Windows device acceptance.
+
+## Previous 0.9 dependency checkpoint
+
 Reviewed the existing `Cargo.lock` delta against `636a5e3d9b3a1e93622ab3b19f8014f5672efcb4`. Reviewed lockfile SHA-256: `bf1c1868f77dc3ffc78c29a68c2b298bd96d8634228a50e58c5aa2f22c046be1`.
 
 **Result:** no checksum, declared dependency-constraint, declared MSRV, or license-identifier-change blocker found in this delta. This is a static dependency review; repository checks and Windows LTSC runtime acceptance remain separate evidence.

@@ -80,44 +80,57 @@ impl Studio {
 
     pub(super) fn environment_page(&mut self, ui: &mut egui::Ui) {
         ui.heading(tx("开发环境配置", "Developer environment configuration"));
-        self.network_summary(ui);
-        ui.label(tx("选择目标平台，再审核该平台实际使用的工具清单。备份、配置和结果分别保留。", "Choose a platform and review its native tool inventory. Backups, configuration and results are separate."));
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .button(tx("备份 / 载入环境", "Back up / load environment"))
-                .clicked()
-            {
-                self.page = Page::Backup;
-            }
-            if ui
-                .button(tx("Windows 配置工作区", "Windows configuration workspace"))
-                .clicked()
-            {
-                self.page = Page::Recipes;
-            }
-            if ui
-                .button(tx(
-                    "导出所选 WinGet 清单…",
-                    "Export selected WinGet inventory…",
-                ))
-                .clicked()
-            {
-                self.open_file(FileOperation::ExportWinget);
-            }
+        ui.label(
+            RichText::new(tx(
+                "保留熟悉的工具，在下一台机器继续工作。",
+                "Keep your tools ready for your next machine.",
+            ))
+            .color(palette().muted),
+        );
+        ui.add_space(14.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("从环境清单开始", "Start with an environment inventory"));
+            ui.label(tx(
+                "先备份或载入清单，再选择需要配置的工具与渠道。",
+                "Back up or load an inventory, then choose your tools and channels.",
+            ));
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                if primary(ui, tx("备份 / 载入环境", "Back up / load environment"), true).clicked() {
+                    self.page = Page::Backup;
+                }
+                if ui.button(tx("Windows 配置工作区", "Windows configuration workspace")).clicked() {
+                    self.page = Page::Recipes;
+                }
+            });
+            ui.add_space(8.0);
+            self.network_summary(ui);
+            egui::CollapsingHeader::new(tx("Windows 清单与导出", "Windows inventory and export"))
+                .show(ui, |ui| {
+                    ui.label(tx("Windows 使用 WinGet、Cargo、uv、Pip、NPM 与 VS Code 的可信目录；在 Windows 方案中逐项选择并审核。WinGet 导出只含所选软件身份，其他提供程序仍保存在应用档案中。", "Windows uses reviewed WinGet, Cargo, uv, Pip, NPM and VS Code tasks. Select and review them in the Windows workspace. WinGet exports contain selected application identities; other providers remain in the app profile."));
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button(tx("导出所选 WinGet 清单…", "Export selected WinGet inventory…")).clicked() {
+                            self.open_file(FileOperation::ExportWinget);
+                        }
+                    });
+                });
         });
-        ui.label(RichText::new(tx("Windows 使用 WinGet、Cargo、uv、Pip、NPM 与 VS Code 的可信目录；在 Windows 方案中逐项选择并审核。WinGet 导出只含所选软件身份，其他提供程序仍保存在应用档案中。", "Windows uses reviewed WinGet, Cargo, uv, Pip, NPM and VS Code tasks. Select and review them in the Windows workspace. WinGet exports contain selected application identities; other providers remain in the app profile.")).size(12.0).color(palette().muted));
-        ui.separator();
-        egui::CollapsingHeader::new(tx(
-            "跨平台 · Rust 工具链重部署",
-            "Cross-platform · Rust toolchain redeployment",
-        ))
-        .default_open(true)
-        .show(ui, |ui| self.rust_toolchains_page(ui));
-        ui.separator();
-        ui.heading(tx(
-            "macOS · Homebrew Bundle / HEAD",
-            "macOS · Homebrew Bundle / HEAD",
-        ));
+        ui.add_space(16.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("Rust 工具链", "Rust toolchains"));
+            ui.label(RichText::new("macOS · Windows · rustup").color(palette().muted));
+            ui.add_space(8.0);
+            self.rust_toolchains_page(ui);
+        });
+        ui.add_space(16.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+        ui.heading(tx("Homebrew 工具", "Homebrew tools"));
+        ui.label(RichText::new("macOS · Bundle · HEAD").color(palette().muted));
+        ui.add_space(8.0);
+        ui.label(tx("从基础工具或 Mac 备份中选择 formula / cask，再审核安装清单。", "Choose formulae / casks from starter tools or a Mac backup, then review the install inventory."));
         let old_policy = self.backup.brew_policy;
         egui::ComboBox::from_label(tx("重部署策略", "Redeployment policy"))
             .selected_text(brew_policy_label(self.backup.brew_policy))
@@ -137,9 +150,7 @@ impl Studio {
         if old_policy != self.backup.brew_policy {
             self.backup.brew_confirm = false;
         }
-        ui.label(tx("补齐模式保留已有包；滚动模式允许更新所选包；HEAD 模式只接受定义了开发源码的 formula，并独立回查 HEAD 已安装。稳定版链接冲突会停止，不强制切换。以上均不保证 PATH 激活或固定 Git 提交。", "Missing-only preserves installed entries; rolling permits selected package upgrades; HEAD accepts formulae with a development source and independently checks the installed HEAD channel. Stable-link conflicts stop without forced switching. PATH activation and fixed Git commits are not guaranteed."));
-        ui.label(tx("从基础开发工具或 Mac 备份中选择 formula/cask。版本仅作备份记录；通过原生 Bundle 安装缺少的工具，再独立检查已安装状态。", "Select formulae/casks from starter tools or a Mac backup. Versions remain backup evidence. Native Bundle installs missing tools and independently checks their presence."));
-        ui.label(RichText::new(tx("需要已安装且可用的 Homebrew。配置可以下载软件、运行安装器并改变依赖；--no-upgrade 不保证依赖完全不升级。不执行清理、卸载或导入文件中的任意 Ruby / Shell / 钩子，也没有自动回滚；取消后子安装器可能仍在运行。Cargo/uv/NPM/扩展的原生 Mac 配置尚未接入。", "A working Homebrew installation is required. Configuration may download software, run installers and change dependencies; --no-upgrade cannot guarantee unchanged dependencies. No cleanup, uninstall, or arbitrary Ruby, shell or hooks from imported files are run. Descendant installers may continue after cancellation. Native Mac configuration of Cargo/uv/NPM/extensions is not yet integrated.")).size(12.0).color(palette().muted));
+        ui.add_space(8.0);
         let candidates = match native::brew_candidates(self.backup.snapshot.as_ref()) {
             Ok(value) => value,
             Err(error) => {
@@ -225,8 +236,13 @@ impl Studio {
                     native::brewfile_with_policy(&entries, self.backup.brew_policy)?;
                     Ok(entries)
                 });
-        if let Err(error) = &entries {
-            ui.label(RichText::new(error.to_string()).color(palette().muted));
+        if self.backup.brew_selected.is_empty() {
+            ui.label(RichText::new(tx(
+                "还未选择 Mac 工具。可先选择基础工具，或在备份页面载入已有清单。",
+                "No Mac tools selected. Choose starter tools or load an inventory from the backup page.",
+            )).color(palette().muted));
+        } else if let Err(error) = &entries {
+            ui.colored_label(palette().danger, error.to_string());
         }
         if let Ok(entries) = &entries {
             egui::CollapsingHeader::new(tx("审核生成的 Brewfile", "Review generated Brewfile"))
@@ -257,7 +273,18 @@ impl Studio {
                 self.open_file(FileOperation::SaveBundleReport);
             }
         });
+        egui::CollapsingHeader::new(tx("Homebrew 范围与限制", "Homebrew scope and limits"))
+            .show(ui, |ui| {
+                ui.label(tx("补齐模式保留已有包；滚动模式允许更新所选包；HEAD 模式只接受定义了开发源码的 formula，并独立回查 HEAD 已安装。稳定版链接冲突会停止，不强制切换。以上均不保证 PATH 激活或固定 Git 提交。", "Missing-only preserves installed entries; rolling permits selected package upgrades; HEAD accepts formulae with a development source and independently checks the installed HEAD channel. Stable-link conflicts stop without forced switching. PATH activation and fixed Git commits are not guaranteed."));
+                ui.label(tx("版本仅作备份记录。通过原生 Bundle 安装并独立检查已安装状态。需要已安装且可用的 Homebrew；--no-upgrade 不保证依赖完全不升级。", "Versions remain backup evidence. Native Bundle installs tools and independently checks their presence. A working Homebrew installation is required; --no-upgrade cannot guarantee unchanged dependencies."));
+                ui.label(tx("不执行清理、卸载或导入文件中的任意 Ruby / Shell / 钩子；取消后子安装器可能仍在运行。Cargo/uv/NPM/扩展的原生 Mac 配置尚未接入。", "No cleanup, uninstall, or arbitrary Ruby, shell or hooks from imported files are run. Descendant installers may continue after cancellation. Native Mac configuration of Cargo/uv/NPM/extensions is not yet integrated."));
+            });
+        ui.add_space(8.0);
         ui.label(tx("执行前需要保存并审核 Mac 清单。载入的清单可以来自另一台 Mac，不能代表本机当前状态。现有备份不被覆盖。", "Save and review a Mac inventory before applying. Loaded backups may come from another Mac and do not prove this machine's current state. Existing backups are preserved."));
+        ui.label(RichText::new(tx(
+            "配置可能下载软件、运行安装器并改变依赖；没有自动回滚。",
+            "Configuration may download software, run installers and change dependencies; automatic rollback is unavailable.",
+        )).color(palette().danger));
         ui.checkbox(&mut self.backup.brew_confirm, tx("我已审核所选工具，并了解依赖变更与无自动回滚的范围", "I reviewed the selected tools and understand dependency changes and the lack of automatic rollback"));
         if primary(
             ui,
@@ -290,6 +317,7 @@ impl Studio {
             ));
             ui.label(&report.detail);
         }
+        });
     }
 }
 

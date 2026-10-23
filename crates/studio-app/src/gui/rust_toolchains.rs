@@ -77,7 +77,10 @@ impl Studio {
         });
     }
     pub(super) fn rust_toolchains_page(&mut self, ui: &mut egui::Ui) {
-        ui.label(tx("在 macOS 与 Windows 上使用官方 rustup 重部署。固定版本与按日 nightly 可保持请求不变；stable、beta、nightly 在执行时解析为该渠道当前版本。", "Redeploy with official rustup on macOS and Windows. Exact releases and dated nightly retain fixed requests; stable, beta and nightly resolve their current channel version when applied."));
+        ui.label(tx(
+            "选择稳定版、预览渠道或固定版本，审核后重部署。",
+            "Choose a stable, preview or exact toolchain, then review before redeployment.",
+        ));
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(
@@ -186,7 +189,11 @@ impl Studio {
                 }
             }
         });
-        ui.label(RichText::new(tx("需要标准位置的 rustup 和已有默认工具链。使用 minimal 配置安装，不更改默认工具链或项目覆盖。执行前保存本机清单与请求，完成后核对工具链身份、编译器版本及提交标识。读取清单不包含自定义链接工具链、组件或额外编译目标。mise 目前接入原生清单导出，尚未执行 mise 安装或生成锁文件。", "Requires rustup in a standard location with an existing default toolchain. Installs the minimal profile without changing the default or project overrides. Saves a local baseline and request before installation, then checks toolchain identity, compiler release and commit. Inventory excludes custom linked toolchains, components and extra compilation targets. mise integration currently exports its native manifest; mise installation and lock generation are not integrated.")).size(12.0).color(palette().muted));
+        egui::CollapsingHeader::new(tx("Rust 渠道与部署范围", "Rust channels and deployment scope")).show(ui, |ui| {
+            ui.label(tx("固定版本与按日 nightly 可保持请求不变；stable、beta、nightly 在执行时解析为该渠道当前版本。", "Exact releases and dated nightly retain fixed requests; stable, beta and nightly resolve their current channel version when applied."));
+            ui.label(tx("使用 minimal 配置安装，不更改默认工具链或项目覆盖。执行前保存本机清单与请求，完成后核对工具链身份、编译器版本及提交标识。读取清单不包含自定义链接工具链、组件或额外编译目标。mise 目前接入原生清单导出，尚未执行 mise 安装或生成锁文件。", "Installs the minimal profile without changing the default or project overrides. Saves a local baseline and request before installation, then checks toolchain identity, compiler release and commit. Inventory excludes custom linked toolchains, components and extra compilation targets. mise integration exports its native manifest; installation and lock generation are not integrated."));
+        });
+        ui.label(RichText::new(tx("需要标准位置的 rustup 和已有默认工具链；下载与安装没有自动回滚。", "Requires rustup in a standard location with an existing default toolchain; downloads and installation have no automatic rollback.")).size(12.0).color(palette().muted));
         ui.checkbox(&mut self.backup.rust.confirmed, tx("已审核渠道与版本；允许下载并安装所选工具链，无自动回滚", "Reviewed channel/version; allow download and installation of this toolchain, without automatic rollback"));
         if primary(
             ui,

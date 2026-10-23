@@ -1,5 +1,11 @@
 # DevEnv Studio — design record
 
+## Unreleased — native GUI hierarchy
+
+The owner's LTSC_Tools_Backup GUI at a8523abbe08147b4d5de8746f26d99d056057ab0 supplies visual reference for layered surfaces, selection markers and card spacing. The current implementation adapts those ideas to both appearance modes and all five accent colors, without importing its font assets, execution logic or fixed-width log sidebar. The palette distinguishes canvas, navigation and working surfaces; accent is reserved for selection, focus and primary actions. System fonts remain in use.
+
+Application tools stay in a fixed navigation footer while workspace pages scroll independently. Windows selection controls only occupy Windows-related workspaces. The environment landing page groups inventory, Rust and Homebrew work into separate surfaces, with secondary detail expandable; confirmation, scope, result and failure states continue to use the existing backend state. Settings retain explicit saving, safe cancellation of unsaved previews and corrupt-file protection. No new dependency, schema or mutation pathway is introduced by these layout changes.
+
 ## Unreleased — DevEnv Studio identity and release cadence
 
 DevEnv Studio is the current macOS/Windows development-environment product name, with `devenv-studio` as its canonical package/command and nowaytouse/devenv-studio as its repository. The old `ltsc-studio` command remains a wrapper around the same implementation. Product branding is separate from compatibility identity: the existing LTSC Studio data directory, io.github.nowaytouse.ltsc-studio bundle identity, profile schemas, task IDs and authenticated history stay stable. This preserves existing preferences, network profiles and recovery keys without moving user data.

@@ -10,7 +10,7 @@ DevEnv Studio is an independent MIT-licensed Rust application. Selected registry
 
 The application does not download or execute upstream scripts. Per-action evidence and intentionally narrower behavior are documented in [INTEGRATIONS.md](docs/INTEGRATIONS.md). All selected original mapping and notice information remains attributed to its respective author.
 
-[LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) is a design predecessor. No code or personal inventory files from that repository have been copied. Its previous Windows-only GUI constraints do not apply to this newly requested cross-platform project.
+[LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup/tree/a8523abbe08147b4d5de8746f26d99d056057ab0) is the owner's design predecessor. With the owner's explicit permission, its layered surfaces, navigation selection and card layout inform this application's adapted native GUI. The predecessor has no standalone license declaration and is not represented here as a third-party MIT dependency. No bundled font, personal inventory or execution code is imported from it. Its previous Windows-only GUI constraints do not apply to this cross-platform project.
 
 ## Development-environment integrations
 
