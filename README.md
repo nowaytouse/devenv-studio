@@ -1,5 +1,11 @@
 # LTSC Workspace
 
+> **已退役：后续维护统一移至 [DevEnv Studio](https://github.com/nowaytouse/devenv-studio)。** 新项目同时面向 macOS 与 Windows 开发环境；该仓库目前为私有，未获访问权限的用户可能无法打开。旧仓库保留源码、历史、内置清单和旧 EXE 供追溯，不再独立新增功能。退役依据、产物来源与兼容性边界见 [ARCHIVED.md](ARCHIVED.md)。GitHub 只读归档在新主仓整合提交推送后执行；本文档不表示所有功能已经等价迁移或完成 Windows/LTSC 实机验收。
+
+## 旧版本历史使用说明
+
+以下内容描述旧 LTSC Workspace 的使用与限制；新版本请以 DevEnv Studio 的文档和实际迁移报告为准。
+
 给个人设备用的 Windows LTSC 部署器。源 Mac 提供工具清单；Windows 程序按映射补齐软件和开发工具。网络、存储、电源、Windows 功能等系统调优是另外的显式选择，不会因为“同步工具”而自动执行。
 
 Windows 端是 Rust 编译的桌面程序，没有 WebView、Electron 或网页服务。部署流程、清单处理、超时与取消、回滚记录都在 Rust 中；WinGet、DISM 等系统工具以独立参数调用。Scoop 上游本身使用 PowerShell，本项目不再附带或执行部署用的外置 PS1。
