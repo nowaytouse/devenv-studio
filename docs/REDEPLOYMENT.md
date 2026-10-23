@@ -1,6 +1,6 @@
 # 开发环境重部署（0.10 Unreleased）
 
-重部署先保存明确的安装请求，再执行并回读结果。已有包的观测版本是清单证据；它本身不构成安装锁文件。当前接入 Homebrew、rustup、uv 和 Windows 可信部署适配器，并输出对应原生格式。
+重部署先保存明确的安装请求，再执行并回读结果。已有包的观测版本是清单证据；它本身不构成安装锁文件。当前接入 Homebrew、rustup、mise core、uv 和 Windows 可信部署适配器，并输出对应原生格式。
 
 ## Homebrew：补齐、滚动和 HEAD
 
@@ -32,15 +32,23 @@ Rust 请求独立保存为严格验证的 JSON。接受 `stable`、`beta`、`nig
 
 执行要求标准位置已有 uv 与系统可用 Python，应用禁用配置文件发现和 uv 自动下载 Python；网络请求采用已启用的应用 Python 源与代理快照。PyPI 包构建后端可能运行第三方代码；中途失败/取消可能留下部分变化，没有通用回滚。pipx 的环境不读取、不卸载，也不自动迁移；清单导入与迁移报告暂缓，避免同时维护两种隔离环境的隐式所有权。Python 项目依赖、虚拟环境及逐字节恢复不在此流程。
 
+## mise core：macOS 与 Windows 开发运行时
+
+mise 清单读取使用 mise --no-config ls --installed --json --backend core，只记录运行时身份、已安装版本和清理候选状态，不保存安装路径。用户可选择全部显示的已安装版本（或逐项勾选）并保存为 JSON 重部署备份。界面逐项支持九种经本项目核对的 core runtime：Bun、Deno、.NET、Go、Java、Node.js、Python、Ruby、Zig。请求可用 JSON 保存/载入；精确版本、前缀以及 latest、stable、lts、beta、nightly 先由 mise core 解析为具体版本。特定 runtime 不支持的渠道会在锁定/安装前以错误停止。任意 Git URL、HEAD 提交与分支不适用于所有 core runtime，不伪装成通用能力；Rust 继续由 rustup 面板管理。
+
+执行仅用应用生成的 [tools] 清单，并为 macos-arm64、macos-x64、windows-x64 生成 mise.lock，保存清单、锁文件、安装前/后清单与终态结果。每一步忽略继承的 MISE_* 与 XDG 配置/数据路径，使用临时隔离的 global/system 配置根，停用配置环境变量和 hooks，不运行用户任务或插件；运行时仍安装到 mise 标准 per-user 数据目录。安装后重新读取版本并逐项核对。显式 --locked 要求当前平台已有锁定下载 URL；backend 无法提供时失败关闭，不回退到未锁定安装。
+
+导出请求清单时保留用户渠道；部署完成后导出的已解析 mise.toml 固定本次具体版本，必须与该结果的 mise.lock 一起使用。安装不会改 Shell activation、全局/项目配置或 PATH；用户可审核并将导出的清单和锁文件放入目标项目。mise.lock 对部分 core backend 记录下载 URL 和可用校验值；它不锁项目依赖、操作系统包、构建输入，也不保证字节级复现。失败或取消可能已安装部分版本，没有自动回滚。
+
 ## 原生清单输出与成熟项目边界
 
 - `rust-toolchain.toml`：输出所选 Rust 渠道及 minimal profile，由 rustup 按其原生规则读取。应用不直接覆盖现有项目文件。
 - uv 工具请求 JSON：可保存/载入选中的 PyPI 命令包与精确/滚动渠道；执行适配器只通过现有 uv 管理所选工具，不运行导入文件中的命令。
-- `mise.toml`：仅输出受验证的 Rust `[tools]` 请求，便于加入现有 mise 项目；不含任务、插件、环境、路径、模板或钩子。不执行 mise，不生成或验证 mise.lock。
+- Rust 的 mise.toml 输出仍保留。mise core 运行时另有严格 JSON 请求与 GUI 重部署；导出的请求/已解析 mise.toml 只含受支持的 core: runtime，锁文件由 mise 实际生成并验证，不导入项目配置、任务、插件、环境或钩子。
 - `Brewfile`：输出受控所选身份及 HEAD 参数；不把 Homebrew 的已安装版本伪装为版本 pin。
 - WinGet 原生 packages 清单：保留现有可信身份导出与逐项部署；本轮未增加 WinGet 任意安装来源或版本恢复。
 
-mise 原生 `mise lock` / `mise install --locked` 可以进一步解析并锁定受支持的工具版本，但须由 mise 实际生成并验证。不能由本应用的观测清单推导出有效锁文件。mise 各后端锁定强度不同，Rust 后端主要记录工具链版本，不锁定项目依赖和所有构建输入。
+mise core 流程实际调用 mise 生成跨平台锁文件并使用 install --locked；不从观测清单伪造锁条目。锁强度因 backend 而异，虽有 core archive 下载 URL/校验值仍不锁项目依赖、操作系统包与全部构建输入。
 
 ## 官方契约与验证范围
 

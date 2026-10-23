@@ -21,6 +21,7 @@ mod backup;
 mod compatibility;
 mod environment;
 mod hybrid;
+mod mise_tools;
 mod network;
 mod power;
 mod python_tools;
@@ -96,6 +97,11 @@ enum FileOperation {
     SavePythonRequest,
     LoadPythonRequest,
     SavePythonReport,
+    SaveMiseRuntimeRequest,
+    LoadMiseRuntimeRequest,
+    ExportMiseRuntimeManifest,
+    ExportMiseRuntimeLock,
+    SaveMiseRuntimeReport,
     NetworkSave,
     NetworkLoad,
     NetworkExportConfig,
@@ -128,6 +134,13 @@ impl FileOperation {
             Self::SavePythonRequest => tx("保存 Python 工具请求", "Save Python tools request"),
             Self::LoadPythonRequest => tx("载入 Python 工具请求", "Load Python tools request"),
             Self::SavePythonReport => tx("保存 Python 重部署结果", "Save Python deployment result"),
+            Self::SaveMiseRuntimeRequest => tx("保存 mise 运行时请求", "Save mise runtime request"),
+            Self::LoadMiseRuntimeRequest => tx("载入 mise 运行时请求", "Load mise runtime request"),
+            Self::ExportMiseRuntimeManifest => {
+                tx("导出运行时 mise.toml", "Export runtime mise.toml")
+            }
+            Self::ExportMiseRuntimeLock => tx("导出运行时 mise.lock", "Export runtime mise.lock"),
+            Self::SaveMiseRuntimeReport => tx("保存 mise 运行时结果", "Save mise runtime report"),
             Self::NetworkSave => tx("保存网络方案", "Save network profile"),
             Self::NetworkLoad => tx("载入网络方案", "Load network profile"),
             Self::NetworkExportConfig => {
@@ -171,6 +184,8 @@ enum WorkerResult {
     RustInventory(Vec<String>),
     PythonTools(studio_deployment::python_tools::Report),
     PythonToolsInventory(Vec<studio_deployment::backup::Package>),
+    MiseRuntime(studio_deployment::mise_tools::Report),
+    MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
     Inspection {
         settings: Vec<studio_platform::SettingState>,
         power: Vec<studio_platform::SettingState>,
@@ -335,7 +350,8 @@ impl Studio {
                     &result,
                     Ok(WorkerResult::Backup(_)
                         | WorkerResult::RustInventory(_)
-                        | WorkerResult::PythonToolsInventory(_))
+                        | WorkerResult::PythonToolsInventory(_)
+                        | WorkerResult::MiseRuntimeInventory(_))
                 )
             {
                 result = Err(tx(
@@ -343,7 +359,13 @@ impl Studio {
                     "Environment collection cancelled; the previous inventory and saved path were preserved.",
                 ).into());
             }
-            self.notice = Some(match result {
+            let quiet_inventory_success = matches!(
+                &result,
+                Ok(WorkerResult::RustInventory(_)
+                    | WorkerResult::PythonToolsInventory(_)
+                    | WorkerResult::MiseRuntimeInventory(_))
+            );
+            let notice = match result {
                 Ok(WorkerResult::Registry(report) | WorkerResult::Power(report)) => Notice {
                     text: lf!(
                         "{}{}\n已变更 {} 项；原值已符合 {} 项。恢复日志：{}",
@@ -405,6 +427,27 @@ impl Studio {
                         text: lf!(
                             "已读取 {count} 项 uv 工具；未安装或更新。",
                             "Read {count} uv tools; no installation or update performed.",
+                            count = count
+                        ),
+                        error: false,
+                    }
+                }
+                Ok(WorkerResult::MiseRuntime(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.mise_tools.report = Some(report);
+                    notice
+                }
+                Ok(WorkerResult::MiseRuntimeInventory(installed)) => {
+                    let count = installed.len();
+                    self.backup.mise_tools.inventory = Some(installed);
+                    self.backup.mise_tools.confirmed = false;
+                    Notice {
+                        text: lf!(
+                            "已读取 {count} 项 mise 核心运行时；未安装或更新。",
+                            "Read {count} mise core runtimes; no installation or update performed.",
                             count = count
                         ),
                         error: false,
@@ -499,7 +542,8 @@ impl Studio {
                     text: error,
                     error: true,
                 },
-            });
+            };
+            self.notice = (!quiet_inventory_success).then_some(notice);
             self.last_operation = self.notice.clone();
             self.refresh_recovery();
         }
@@ -2100,6 +2144,16 @@ impl Studio {
         }
         if matches!(
             operation,
+            FileOperation::SaveMiseRuntimeRequest
+                | FileOperation::LoadMiseRuntimeRequest
+                | FileOperation::ExportMiseRuntimeManifest
+                | FileOperation::ExportMiseRuntimeLock
+                | FileOperation::SaveMiseRuntimeReport
+        ) {
+            return self.mise_file_operation(operation, &path);
+        }
+        if matches!(
+            operation,
             FileOperation::NetworkSave
                 | FileOperation::NetworkLoad
                 | FileOperation::NetworkExportConfig
@@ -2140,6 +2194,13 @@ impl Studio {
             | FileOperation::LoadPythonRequest
             | FileOperation::SavePythonReport => {
                 Err("Python tools operation was not dispatched".into())
+            }
+            FileOperation::SaveMiseRuntimeRequest
+            | FileOperation::LoadMiseRuntimeRequest
+            | FileOperation::ExportMiseRuntimeManifest
+            | FileOperation::ExportMiseRuntimeLock
+            | FileOperation::SaveMiseRuntimeReport => {
+                Err("mise runtime operation was not dispatched".into())
             }
             FileOperation::SaveBackup
             | FileOperation::LoadBackup

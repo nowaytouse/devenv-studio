@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 新增 macOS／Windows 的 mise 核心运行时采集与重部署：逐项选择 Bun、Deno、.NET、Go、Java、Node、Python、Ruby、Zig，支持精确版本、前缀及由上游支持情况决定的 latest、LTS、beta、nightly。生成跨平台 mise.lock，按锁安装并独立回读。
+- 保存/载入严格请求、导出请求或已解析固定版 mise.toml、匹配的 mise.lock 与结果；安装前后状态和锁定结果写入恢复证据。隔离用户/系统配置、XDG/MISE 环境、插件、任务和钩子；Rust 继续使用专用 rustup 流程，任意 Git HEAD 不由 mise core 代替。
+- 折叠 mise 运行时面板以缩短环境页；成功读取运行时清单时用页面内状态提示，移除重复的全局成功提示。0.10.0 仍处于 Unreleased。
 - 新增 macOS/Windows 共用的 uv Python 命令行工具采集与重部署：逐项选择 PyPI 包、精确或滚动版本，保存/载入严格请求，记录基线与网络策略并回读验证。精确版本冲突只对所选包使用原生强制重建，执行前显示入口冲突与包构建代码风险；pipx 不作为第二安装执行器，pipx 清单自动迁移暂缓。
 - 执行继承现有网络方案中的 Python 镜像与代理设置；隔离 uv 配置与环境覆盖，禁止自动下载 Python。复用备份 uv 清单解析器，不增加外部依赖。
 

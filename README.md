@@ -1,6 +1,6 @@
 # DevEnv Studio
 
-用 Rust 构建的 macOS 与 Windows 开发环境备份、配置工作台。两端采集本机工具与版本，保存、载入和审核清单；Mac 使用 Homebrew Bundle 配置所选 formula/cask，Windows 使用 WinGet、Cargo、uv、Pip、NPM 和 VS Code 的可信任务。Windows LTSC 系统设置继续作为独立区域，Linux 可载入、预览和导出。
+用 Rust 构建的 macOS 与 Windows 开发环境备份、配置工作台。两端均可采集本机开发工具并选择 mise 核心运行时重部署；macOS 另有 Homebrew Bundle，Windows 提供 WinGet、Cargo、uv、Pip、NPM 和 VS Code 的可信任务。Windows LTSC 系统设置继续作为独立区域，Linux 可载入、预览和导出。
 
 当前开发基线为 **0.10.0**；更名及后续改进记录在 **Unreleased**，不会随每轮对话递增版本。正式版本只在经过审查的发布检查点确定，规则见[版本与发布](docs/RELEASING.md)。
 
@@ -26,9 +26,9 @@ DevEnv Studio 现在是唯一维护入口。`LTSC_Tools_Backup` 的配置、映�
 
 ## 双平台开发环境
 
-环境备份页在macOS采集Homebrew formula/cask、Cargo、uv、NPM全局包、VS Code扩展；Windows采集Cargo、uv、NPM、一个已注册标准CPython可见的Pip分发和VS Code扩展。采集使用本地有界命令，不安装、更新或引导工具。每类来源显示完整、未找到或失败；失败和取消保留上次结果，未找到不等于软件已卸载。Windows软件全集、所有Python环境和项目依赖不在备份范围内。
+环境备份页在 macOS 采集 Homebrew formula/cask、Cargo、uv、NPM 全局包、VS Code 扩展；Windows 采集 Cargo、uv、NPM、一个已注册标准 CPython 可见的 Pip 分发和 VS Code 扩展。mise core 已安装运行时在环境配置页单独只读采集；可选择显示版本并保存为严格请求，作为后续重部署备份。采集使用本地有界命令，不安装、更新或引导工具。每类来源显示完整、未找到或失败；失败和取消保留上次结果，未找到不等于软件已卸载。Windows 软件全集、所有 Python 环境和项目依赖不在备份范围内。
 
-采集后可搜索、保存新JSON备份、重新载入，再进入环境配置：Mac选择基础工具或备份中的Homebrew项目，审核生成的Brewfile，导出或明确在本机配置；Windows从备份审核同提供程序的可信任务，也可选择现有混合组合和软件目录。迁移初始不勾选。只有完整采集的来源参与映射；包版本保留为观测信息，不被偷换成Windows版本锁定。备份仅包含工具清单和版本，不复制二进制、项目、密钥、配置文件或虚拟环境，也不是一键精确还原。文件保留在本地，不上传GitHub。Mac执行前需保存并审核清单，使用私有生成的Brewfile，先Bundle install --no-upgrade，再独立check；依赖仍可能改变，没有自动回滚。原生Mac配置覆盖formula/cask与uv管理的Python命令行工具；Cargo、NPM与VS Code在Mac仍是清单来源。可单独导出选中Windows软件的原生WinGet JSON，跨工具档案继续保留其他提供程序。完整范围见[环境备份说明](docs/MAC_BACKUP.md)与[成熟项目接入契约](docs/ENVIRONMENT_SOURCES.md)。
+采集后可搜索、保存新 JSON 备份、重新载入，再进入环境配置：Mac 选择基础工具或备份中的 Homebrew 项目，审核生成的 Brewfile，导出或明确在本机配置；mise 可在 macOS/Windows 安装选中的核心运行时。Windows 从备份审核可信任务，也可选择现有混合组合和软件目录；迁移初始不勾选。mise 安装不会修改 Shell 激活或项目/全局配置，完成后导出的固定版 mise.toml 与锁文件需一并审核和放入目标项目。只有完整采集的来源参与映射；包版本保留为观测信息，不被偷换成 Windows 版本锁定。备份只包含工具清单和版本，不复制二进制、项目、密钥、配置文件或虚拟环境，也不是一键精确还原。文件保留在本地，不上传 GitHub。Mac 执行前需保存并审核 Homebrew 清单，使用私有生成的 Brewfile，先 Bundle install --no-upgrade，再独立 check；依赖仍可能改变，没有自动回滚。Cargo、NPM 与 VS Code 在 Mac 仍是清单来源。可单独导出选中 Windows 软件的原生 WinGet JSON，跨工具档案继续保留其他提供程序。完整范围见[环境备份说明](docs/MAC_BACKUP.md)与[成熟项目接入契约](docs/ENVIRONMENT_SOURCES.md)。
 
 ## 开发环境重部署与渠道
 
@@ -36,7 +36,7 @@ DevEnv Studio 现在是唯一维护入口。`LTSC_Tools_Backup` 的配置、映�
 
 同一页提供 macOS/Windows 共用的 Rust 工具链重部署：读取已安装渠道，选择 stable、beta、nightly、精确版本或按日期 nightly，保存/载入请求，审核后明确安装。使用标准位置现有 rustup 和已有官方默认工具链；安装 minimal profile、不自更新，独立核对安装身份、默认工具链未变及实际编译器版本/完整提交标识/日期，持久化结果后才显示成功。额外 targets、自定义组件、任意 Git URL 与首次 rustup 引导不在本轮范围。
 
-所选请求可以导出原生 rust-toolchain.toml 和 Rust mise.toml，配合现有 Brewfile、WinGet 清单组成多个成熟项目的实际交换入口。mise 当前接入受限清单导出，尚未执行 mise 安装或生成锁文件；固定请求也不等于完整环境的字节级恢复。
+所选请求可以导出原生 rust-toolchain.toml、Rust mise.toml、mise core 运行时请求与锁定结果，配合现有 Brewfile、WinGet 清单组成多个成熟项目的实际交换入口。mise core 仅管理经核对的运行时，不导入任意配置、插件或任务；锁文件不覆盖项目依赖和完整构建输入。
 
 Python 工具区新增 macOS/Windows 共用的 uv 命令行工具重部署：读取 uv 清单，逐项选择固定版本或滚动最新版，保存/载入请求并回读安装结果。只管理所选独立 PyPI 命令工具；需要本机已有 uv 和 Python，pipx、项目依赖与 Python 运行时不自动导入。见[重部署契约](docs/REDEPLOYMENT.md)与[成熟项目接入取舍](docs/ENVIRONMENT_SOURCES.md)。
 
@@ -125,9 +125,9 @@ macOS与Windows均有本机开发清单采集入口，Mac可明确执行Homebrew
 | --- | --- | --- |
 | [Homebrew Bundle](https://github.com/Homebrew/brew) | Mac工具声明与配置 | 生成受限Brewfile，原生安装与独立检查；不执行任意导入脚本 |
 | [rustup](https://github.com/rust-lang/rustup) | macOS/Windows Rust 渠道与固定版本重部署 | 原生安装、默认保护、工具链身份与实际 rustc 版本/提交回读 |
-| [mise](https://github.com/jdx/mise) | 原生 Rust 工具版本声明 | 输出受限 mise.toml；执行与 mise.lock 尚未接入 |
+| [mise](https://github.com/jdx/mise) | 原生 Rust 工具链声明及 macOS/Windows 核心运行时重部署 | 受限 core 清单、精确/渠道请求、跨平台锁定、locked 安装与回读；不导入配置、插件或任务 |
 | [WinGet](https://github.com/microsoft/winget-cli) | Windows软件身份、安装及原生清单交换 | 可信任务执行与选中软件的packages schema2.0导出 |
-| [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) | SetupProfile 迁移、Mac 清单映射、Cargo/uv/VS Code 工作流，以及选择与恢复设计 | 逐项映射到受信任任务，加入同一份混合档案；旧仓库独立保留 |
+| [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) | SetupProfile 迁移、Mac 清单映射、Cargo/uv/VS Code 工作流，以及选择与恢复设计 | 能力已映射到同一混合工作区；旧仓库已归档，历史与来源保留在本项目 |
 | [WinUtil](https://github.com/ChrisTitusTech/winutil) | 固定版本的 234 个 WinGet 软件标识，以及拆分审查的隐私和桌面偏好 | 软件与配置进入同一份清单，由原生 Rust 引擎执行 |
 | [Sophia Script](https://github.com/farag2/Sophia-Script-for-Windows) | 隐私、Explorer 和 Windows 版本适配参考 | 精确来源随配置记录，保留 MIT 声明 |
 | [Win11Debloat](https://github.com/Raphire/Win11Debloat) | Explorer 与部分用户体验配置 | 只纳入可单独选择、可恢复的设置 |

@@ -2,7 +2,7 @@
 use anyhow::{Context, Result, ensure};
 use std::{
     io::Read,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
         Arc,
@@ -120,6 +120,7 @@ fn network_provider(invocation: &Invocation) -> Option<&'static str> {
         "rustup" => Some("rustup"),
         "cargo" => Some("cargo"),
         "uv" => Some("uv"),
+        "mise" => Some("mise"),
         _ => None,
     }
 }
@@ -321,6 +322,44 @@ pub(crate) fn run_toolchain(
             }
         }
         command.env("RUSTUP_AUTO_INSTALL", "0");
+    })
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+pub(crate) fn run_mise(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+    workspace: &Path,
+) -> Result<Output> {
+    ensure!(
+        workspace.is_absolute() && workspace.is_dir(),
+        "Mise requires an absolute isolated workspace"
+    );
+    run_configured(invocation, cancel, timeout, |command| {
+        for (name, _) in std::env::vars_os() {
+            let upper = name.to_string_lossy().to_ascii_uppercase();
+            if upper.starts_with("MISE_")
+                || matches!(
+                    upper.as_str(),
+                    "XDG_CONFIG_HOME" | "XDG_DATA_HOME" | "XDG_CACHE_HOME" | "XDG_STATE_HOME"
+                )
+            {
+                command.env_remove(name);
+            }
+        }
+        command
+            .current_dir(workspace)
+            .env("MISE_CONFIG_DIR", workspace.join("global-config"))
+            .env(
+                "MISE_SYSTEM_CONFIG_FILE",
+                workspace.join("system-config.toml"),
+            )
+            .env("MISE_CEILING_PATHS", workspace)
+            .env("MISE_NO_ENV", "1")
+            .env("MISE_NO_HOOKS", "1")
+            .env("MISE_JOBS", "1")
+            .env("NO_COLOR", "1");
     })
 }
 #[cfg(any(windows, target_os = "macos", test))]

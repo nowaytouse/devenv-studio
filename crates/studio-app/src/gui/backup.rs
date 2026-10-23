@@ -12,6 +12,7 @@ pub(super) struct BackupUiState {
     pub brew_policy: studio_deployment::environment::BrewPolicy,
     pub rust: rust_toolchains::RustUiState,
     pub python_tools: super::python_tools::UiState,
+    pub mise_tools: super::mise_tools::UiState,
     pub bundle_report: Option<studio_deployment::environment::BundleReport>,
 }
 

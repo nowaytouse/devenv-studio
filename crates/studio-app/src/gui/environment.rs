@@ -132,6 +132,17 @@ impl Studio {
             ui.add_space(8.0);
             self.python_tools_page(ui);
         });
+        ui.add_space(8.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            egui::CollapsingHeader::new(tx(
+                "其他开发运行时 · mise",
+                "Additional developer runtimes · mise",
+            ))
+            .id_salt("mise-runtime-panel")
+            .default_open(false)
+            .show(ui, |ui| self.mise_tools_page(ui));
+        });
         ui.add_space(16.0);
         surface_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
