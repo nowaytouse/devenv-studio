@@ -19,6 +19,7 @@ mod pip;
 #[cfg(any(windows, target_os = "macos", test))]
 mod process;
 mod storage;
+pub mod toolchains;
 #[cfg(windows)]
 mod windows;
 

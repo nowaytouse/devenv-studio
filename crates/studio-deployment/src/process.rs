@@ -154,6 +154,22 @@ pub(crate) fn run_inventory(
 ) -> Result<Output> {
     run_configured(invocation, cancel, timeout, configure_inventory)
 }
+#[cfg(any(windows, target_os = "macos", test))]
+pub(crate) fn run_toolchain(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+) -> Result<Output> {
+    run_configured(invocation, cancel, timeout, |command| {
+        for (name, _) in std::env::vars_os() {
+            let upper = name.to_string_lossy().to_ascii_uppercase();
+            if upper.starts_with("RUSTUP_") || upper.starts_with("CARGO_") {
+                command.env_remove(name);
+            }
+        }
+        command.env("RUSTUP_AUTO_INSTALL", "0");
+    })
+}
 #[cfg(any(windows, test))]
 fn configure_inventory(command: &mut Command) {
     for (name, _) in std::env::vars_os() {

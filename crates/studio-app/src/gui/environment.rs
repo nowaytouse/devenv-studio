@@ -11,7 +11,10 @@ impl Studio {
         let result = match operation {
             FileOperation::ExportBrewfile => {
                 native::selected_brew(self.backup.snapshot.as_ref(), &self.backup.brew_selected)
-                    .and_then(|entries| native::export_brewfile(&entries, path))
+                    .and_then(|entries| {
+                        native::brewfile_with_policy(&entries, self.backup.brew_policy)
+                    })
+                    .and_then(|text| studio_core::export_bytes(text.as_bytes(), path))
             }
             FileOperation::ExportWinget => self
                 .deployment_catalog
@@ -52,14 +55,18 @@ impl Studio {
                 &studio_deployment::backup::load(path)? == snapshot,
                 "Saved backup changed; capture or load it again"
             );
-            native::selected_brew(Some(snapshot), &self.backup.brew_selected)
+            let entries = native::selected_brew(Some(snapshot), &self.backup.brew_selected)?;
+            native::brewfile_with_policy(&entries, self.backup.brew_policy)?;
+            Ok(entries)
         })();
         match prepared {
             Ok(entries) => {
                 self.backup.bundle_report = None;
                 self.backup.brew_confirm = false;
+                let policy = self.backup.brew_policy;
                 self.start_worker("正在配置 macOS 开发环境", move |cancel| {
-                    native::configure_brew(entries, cancel).map(WorkerResult::Bundle)
+                    native::configure_brew_with_policy(entries, policy, cancel)
+                        .map(WorkerResult::Bundle)
                 });
             }
             Err(error) => {
@@ -99,7 +106,37 @@ impl Studio {
         });
         ui.label(RichText::new(tx("Windows 使用 WinGet、Cargo、uv、Pip、NPM 与 VS Code 的可信目录；在 Windows 方案中逐项选择并审核。WinGet 导出只含所选软件身份，其他提供程序仍保存在应用档案中。", "Windows uses reviewed WinGet, Cargo, uv, Pip, NPM and VS Code tasks. Select and review them in the Windows workspace. WinGet exports contain selected application identities; other providers remain in the app profile.")).size(12.0).color(palette().muted));
         ui.separator();
-        ui.heading(tx("macOS · Homebrew Bundle", "macOS · Homebrew Bundle"));
+        egui::CollapsingHeader::new(tx(
+            "跨平台 · Rust 工具链重部署",
+            "Cross-platform · Rust toolchain redeployment",
+        ))
+        .default_open(true)
+        .show(ui, |ui| self.rust_toolchains_page(ui));
+        ui.separator();
+        ui.heading(tx(
+            "macOS · Homebrew Bundle / HEAD",
+            "macOS · Homebrew Bundle / HEAD",
+        ));
+        let old_policy = self.backup.brew_policy;
+        egui::ComboBox::from_label(tx("重部署策略", "Redeployment policy"))
+            .selected_text(brew_policy_label(self.backup.brew_policy))
+            .show_ui(ui, |ui| {
+                for policy in [
+                    native::BrewPolicy::Missing,
+                    native::BrewPolicy::Rolling,
+                    native::BrewPolicy::Head,
+                ] {
+                    ui.selectable_value(
+                        &mut self.backup.brew_policy,
+                        policy,
+                        brew_policy_label(policy),
+                    );
+                }
+            });
+        if old_policy != self.backup.brew_policy {
+            self.backup.brew_confirm = false;
+        }
+        ui.label(tx("补齐模式保留已有包；滚动模式允许更新所选包；HEAD 模式只接受定义了开发源码的 formula，并独立回查 HEAD 已安装。稳定版链接冲突会停止，不强制切换。以上均不保证 PATH 激活或固定 Git 提交。", "Missing-only preserves installed entries; rolling permits selected package upgrades; HEAD accepts formulae with a development source and independently checks the installed HEAD channel. Stable-link conflicts stop without forced switching. PATH activation and fixed Git commits are not guaranteed."));
         ui.label(tx("从基础开发工具或 Mac 备份中选择 formula/cask。版本仅作备份记录；通过原生 Bundle 安装缺少的工具，再独立检查已安装状态。", "Select formulae/casks from starter tools or a Mac backup. Versions remain backup evidence. Native Bundle installs missing tools and independently checks their presence."));
         ui.label(RichText::new(tx("需要已安装且可用的 Homebrew。配置可以下载软件、运行安装器并改变依赖；--no-upgrade 不保证依赖完全不升级。不执行清理、卸载或导入文件中的任意 Ruby / Shell / 钩子，也没有自动回滚；取消后子安装器可能仍在运行。Cargo/uv/NPM/扩展的原生 Mac 配置尚未接入。", "A working Homebrew installation is required. Configuration may download software, run installers and change dependencies; --no-upgrade cannot guarantee unchanged dependencies. No cleanup, uninstall, or arbitrary Ruby, shell or hooks from imported files are run. Descendant installers may continue after cancellation. Native Mac configuration of Cargo/uv/NPM/extensions is not yet integrated.")).size(12.0).color(palette().muted));
         let candidates = match native::brew_candidates(self.backup.snapshot.as_ref()) {
@@ -182,11 +219,19 @@ impl Studio {
                 },
             );
         let entries =
-            native::selected_brew(self.backup.snapshot.as_ref(), &self.backup.brew_selected);
+            native::selected_brew(self.backup.snapshot.as_ref(), &self.backup.brew_selected)
+                .and_then(|entries| {
+                    native::brewfile_with_policy(&entries, self.backup.brew_policy)?;
+                    Ok(entries)
+                });
+        if let Err(error) = &entries {
+            ui.label(RichText::new(error.to_string()).color(palette().muted));
+        }
         if let Ok(entries) = &entries {
             egui::CollapsingHeader::new(tx("审核生成的 Brewfile", "Review generated Brewfile"))
                 .show(ui, |ui| {
-                    if let Ok(text) = native::brewfile(entries) {
+                    if let Ok(text) = native::brewfile_with_policy(entries, self.backup.brew_policy)
+                    {
                         ui.monospace(text);
                     }
                 });
@@ -244,6 +289,14 @@ impl Studio {
             ));
             ui.label(&report.detail);
         }
+    }
+}
+
+fn brew_policy_label(policy: native::BrewPolicy) -> &'static str {
+    match policy {
+        native::BrewPolicy::Missing => tx("只补齐缺少项", "Install missing only"),
+        native::BrewPolicy::Rolling => tx("滚动更新所选包", "Roll selected packages forward"),
+        native::BrewPolicy::Head => tx("HEAD 开发源码", "HEAD development source"),
     }
 }
 
@@ -319,6 +372,53 @@ mod tests {
             "../../../../examples/mac-development-backup.json"
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn rust_requests_are_opt_in_and_export_native_formats_without_changing_windows_selection()
+    -> anyhow::Result<()> {
+        let directory = TestDir::new()?;
+        let mut app = preview();
+        app.deployment_selected
+            .insert("existing-windows-task".into());
+        assert!(!app.backup.rust.confirmed);
+        app.start_rust_redeploy();
+        assert!(app.worker.is_none());
+        app.backup.rust.channel = "nightly-2026-10-20".into();
+        let path = directory.0.join("request.json");
+        app.file_operation(FileOperation::SaveRustRequest, path.clone())
+            .map_err(anyhow::Error::msg)?;
+        app.backup.rust.channel = "stable".into();
+        app.backup.rust.confirmed = true;
+        app.file_operation(FileOperation::LoadRustRequest, path)
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(app.backup.rust.channel, "nightly-2026-10-20");
+        assert!(!app.backup.rust.confirmed);
+        for (operation, name, expected) in [
+            (
+                FileOperation::ExportRustToolchain,
+                "rust-toolchain.toml",
+                "[toolchain]",
+            ),
+            (FileOperation::ExportMise, "mise.toml", "[tools]"),
+        ] {
+            let output = directory.0.join(name);
+            app.file_operation(operation, output.clone())
+                .map_err(anyhow::Error::msg)?;
+            let text = std::fs::read_to_string(&output)?;
+            assert!(text.contains(expected) && text.contains("nightly-2026-10-20"));
+            assert!(app.file_operation(operation, output.clone()).is_err());
+            assert_eq!(std::fs::read_to_string(output)?, text);
+        }
+        app.backup.rust.channel = "--help".into();
+        app.backup.rust.confirmed = true;
+        app.start_rust_redeploy();
+        assert!(app.worker.is_none());
+        assert_eq!(
+            app.deployment_selected,
+            BTreeSet::from(["existing-windows-task".into()])
+        );
+        Ok(())
     }
 
     #[test]

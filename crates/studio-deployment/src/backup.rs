@@ -130,7 +130,10 @@ pub(crate) fn valid_version(value: &str) -> bool {
         && value
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b".,_+~-".contains(&b))
-        && value.bytes().any(|b| b.is_ascii_digit())
+        && (value.bytes().any(|b| b.is_ascii_digit())
+            || value.strip_prefix("HEAD-").is_some_and(|commit| {
+                !commit.is_empty() && commit.bytes().all(|b| b.is_ascii_hexdigit())
+            }))
 }
 pub fn validate(snapshot: &Snapshot) -> Result<()> {
     ensure!(
@@ -317,6 +320,8 @@ mod tests {
         assert!(validate(&invalid).is_err());
         assert!(!valid_name("brew_formula", "private/tap/tool"));
         assert!(!valid_version("1.0 (/private/home)"));
+        assert!(valid_version("HEAD-deadbeef"));
+        assert!(!valid_version("HEAD-"));
     }
     #[test]
     fn platform_provider_contracts_preserve_macos_and_reject_cross_platform_lists() {

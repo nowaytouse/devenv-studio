@@ -9,6 +9,8 @@ pub(super) struct BackupUiState {
     pub brew_selected: BTreeSet<String>,
     pub brew_query: String,
     pub brew_confirm: bool,
+    pub brew_policy: studio_deployment::environment::BrewPolicy,
+    pub rust: rust_toolchains::RustUiState,
     pub bundle_report: Option<studio_deployment::environment::BundleReport>,
 }
 

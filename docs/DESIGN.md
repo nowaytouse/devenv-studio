@@ -1,5 +1,11 @@
 # LTSC Studio — design record
 
+## 0.9 channel-aware redeployment
+
+Homebrew policies distinguish missing-only Bundle configuration, rolling updates using local metadata, and native HEAD installation/update with independent installed-channel readback. Existing HEAD upgrades require a matching linked HEAD keg; ambiguous stable/HEAD or keg-only opt state fails before mutation. No forced unlink, overwrite, cleanup or revision-lock claim is introduced.
+
+A separate portable Rust request accepts official rolling channels, exact releases and dated nightly. Standard rustup capture and redeployment work on macOS/Windows, with a durable baseline/request/result, a preserved preexisting default, minimal profile and independent explicit-channel rustc release/hash/date evidence. Rust requests round-trip independently from Windows workspace profiles. Native rust-toolchain.toml and Rust mise.toml exports contain only validated fields; mise execution/locking and arbitrary Git source configuration remain outside this implementation.
+
 ## 0.8 native developer inventory and configuration on macOS and Windows
 
 macOS is now a real inventory source with an explicit collect/review/save/load workflow. Six provider categories preserve identities, installed versions and independent complete/unavailable/failed states. Bounded read-only commands use standard paths and suppress auto-update/bootstrap behavior; raw diagnostics are sanitized. A distinct versioned backup document never includes projects, credentials, configuration or environments and is published without overwriting prior files. Cancellation or collection errors preserve the current draft. Saved backups feed the same trusted Windows mapping workbench with no selected rows; failed lists never authorize suggestions and source versions do not enter executable arguments. Large snapshots are mapped in bounded batches without truncation.

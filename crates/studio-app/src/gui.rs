@@ -21,6 +21,7 @@ mod backup;
 mod environment;
 mod hybrid;
 mod power;
+mod rust_toolchains;
 mod storage;
 mod theme;
 
@@ -80,6 +81,11 @@ enum FileOperation {
     ExportBrewfile,
     ExportWinget,
     SaveBundleReport,
+    SaveRustRequest,
+    LoadRustRequest,
+    ExportRustToolchain,
+    ExportMise,
+    SaveRustReport,
 }
 
 impl FileOperation {
@@ -93,6 +99,13 @@ impl FileOperation {
             Self::ExportBrewfile => tx("导出 Brewfile", "Export Brewfile"),
             Self::ExportWinget => tx("导出 WinGet 清单", "Export WinGet inventory"),
             Self::SaveBundleReport => tx("保存 Mac 配置结果", "Save Mac configuration result"),
+            Self::SaveRustRequest => tx("保存 Rust 重部署请求", "Save Rust redeployment request"),
+            Self::LoadRustRequest => tx("载入 Rust 重部署请求", "Load Rust redeployment request"),
+            Self::ExportRustToolchain => {
+                tx("导出 rust-toolchain.toml", "Export rust-toolchain.toml")
+            }
+            Self::ExportMise => tx("导出 mise.toml", "Export mise.toml"),
+            Self::SaveRustReport => tx("保存 Rust 重部署结果", "Save Rust redeployment result"),
         }
     }
 }
@@ -126,6 +139,8 @@ enum WorkerResult {
     StorageStatus(Result<studio_deployment::StorageStatus, String>),
     Backup(studio_deployment::backup::Snapshot),
     Bundle(studio_deployment::environment::BundleReport),
+    Rust(studio_deployment::toolchains::RustReport),
+    RustInventory(Vec<String>),
     Inspection {
         settings: Vec<studio_platform::SettingState>,
         power: Vec<studio_platform::SettingState>,
@@ -280,7 +295,12 @@ impl Studio {
             {
                 result = Err(t("后台任务发生异常；请检查已有恢复记录。").into());
             }
-            if cancelled && matches!(&result, Ok(WorkerResult::Backup(_))) {
+            if cancelled
+                && matches!(
+                    &result,
+                    Ok(WorkerResult::Backup(_) | WorkerResult::RustInventory(_))
+                )
+            {
                 result = Err(tx(
                     "开发环境采集已取消，保留上一次清单与保存路径。",
                     "Environment collection cancelled; the previous inventory and saved path were preserved.",
@@ -304,6 +324,26 @@ impl Studio {
                     error: report.cancelled,
                 },
                 Ok(WorkerResult::Backup(snapshot)) => self.accept_backup(snapshot),
+                Ok(WorkerResult::Rust(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.rust.report = Some(report);
+                    notice
+                }
+                Ok(WorkerResult::RustInventory(installed)) => {
+                    let count = installed.len();
+                    self.backup.rust.installed = Some(installed);
+                    Notice {
+                        text: lf!(
+                            "已读取 {count} 项 Rust 工具链；未安装或更新。",
+                            "Read {count} Rust toolchains; no installation or update performed.",
+                            count = count
+                        ),
+                        error: false,
+                    }
+                }
                 Ok(WorkerResult::Bundle(report)) => {
                     let notice = Notice {
                         text: report.detail.clone(),
@@ -1869,8 +1909,23 @@ impl Studio {
         ) {
             return self.backup_file_operation(operation, path);
         }
+        if matches!(
+            operation,
+            FileOperation::SaveRustRequest
+                | FileOperation::LoadRustRequest
+                | FileOperation::ExportRustToolchain
+                | FileOperation::ExportMise
+                | FileOperation::SaveRustReport
+        ) {
+            return self.rust_file_operation(operation, &path);
+        }
         let catalog = self.catalog.as_ref().map_err(Clone::clone)?;
         match operation {
+            FileOperation::SaveRustRequest
+            | FileOperation::LoadRustRequest
+            | FileOperation::ExportRustToolchain
+            | FileOperation::ExportMise
+            | FileOperation::SaveRustReport => Err("Rust operation was not dispatched".into()),
             FileOperation::SaveBackup
             | FileOperation::LoadBackup
             | FileOperation::ExportBrewfile

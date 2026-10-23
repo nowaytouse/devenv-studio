@@ -12,4 +12,18 @@ The application does not download or execute upstream scripts. Per-action eviden
 
 [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) is a design predecessor. No code or personal inventory files from that repository have been copied. Its previous Windows-only GUI constraints do not apply to this newly requested cross-platform project.
 
+## Development-environment integrations
+
+The following projects supply documented native formats, command contracts or design references. LTSC Studio invokes supported tools already present on the user's machine; it does not bundle their executables or copy their source code. These references do not imply that every upstream feature is integrated.
+
+| Project | Reviewed revision | Upstream license | Integration |
+| --- | --- | --- | --- |
+| [Homebrew/brew](https://github.com/Homebrew/brew/tree/9811f64e2cccd62fd8a981c1fed5248b9705fea4) | `9811f64e2cccd62fd8a981c1fed5248b9705fea4` | BSD-2-Clause | Inventory, controlled Brewfile, Bundle, rolling and formula HEAD operations |
+| [microsoft/winget-cli](https://github.com/microsoft/winget-cli/tree/bc1e9ff8b982798ab346b61416b76ae738038e57) | `bc1e9ff8b982798ab346b61416b76ae738038e57` | MIT | Trusted Windows deployment and native packages manifest |
+| [rust-lang/rustup](https://github.com/rust-lang/rustup/tree/5c8ff3f907c37688d20d9e7038a2f826042cd763) | `5c8ff3f907c37688d20d9e7038a2f826042cd763` | MIT OR Apache-2.0 | Rust channel inventory, native deployment and toolchain manifest |
+| [jdx/mise](https://github.com/jdx/mise/tree/d2e9ff8b10a98571740042aa2d2321df1b4b1817) | `d2e9ff8b10a98571740042aa2d2321df1b4b1817` | MIT | Rust tools manifest export; execution and locking are not integrated |
+| [twpayne/chezmoi](https://github.com/twpayne/chezmoi/tree/da3406f7aa2a114322334578639812684016d352) | `da3406f7aa2a114322334578639812684016d352` | MIT | Review-before-apply design reference only |
+
+The rustup revision was verified through the GitHub API on 2026-10-23. Its dual license is declared in the pinned [Cargo.toml](https://github.com/rust-lang/rustup/blob/5c8ff3f907c37688d20d9e7038a2f826042cd763/Cargo.toml), with [MIT](https://github.com/rust-lang/rustup/blob/5c8ff3f907c37688d20d9e7038a2f826042cd763/LICENSE-MIT) and [Apache-2.0](https://github.com/rust-lang/rustup/blob/5c8ff3f907c37688d20d9e7038a2f826042cd763/LICENSE-APACHE) notices retained upstream. Attribution and implementation boundaries are detailed in [ENVIRONMENT_SOURCES.md](docs/ENVIRONMENT_SOURCES.md) and [REDEPLOYMENT.md](docs/REDEPLOYMENT.md).
+
 Rust dependencies retain their own licenses. The dependency versions are fixed in Cargo.lock; package metadata includes each crate's license information. eframe/egui is available under MIT or Apache-2.0. The application uses system fonts, so it does not redistribute macOS or Windows font files.

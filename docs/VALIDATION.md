@@ -1,5 +1,15 @@
 # 验证记录
 
+## 0.9.0 — 2026-10-23
+
+- 210项工作区测试、格式检查、macOS全部目标warnings-denied Clippy与构建通过；完整工作区Windows GNU全部目标严格Clippy通过。验证使用本轮15项外部依赖更新及0.9的四个本地crate版本。
+- 15项依赖更新逐一核对版本、上下游约束、许可证、最低Rust要求及30个新旧归档摘要，无版本/校验值/声明约束冲突；静态审查不等同RustSec审计，详细证据见DEPENDENCY_REVIEW.md。
+- Homebrew补齐与滚动策略参数、HEAD受限Brewfile、cask拒绝、HEAD来源/完整身份/版本回读、预先取消零命令有回归。已安装但未链接的旧HEAD、稳定版链接及未知keg-only状态在升级前拒绝，避免升级稳定版后以旧HEAD存在冒充成功。默认无强制unlink/force/overwrite。
+- Rust严格渠道/日期/固定版本校验、原生TOML、请求保存/载入的大小/普通文件/符号链接/不覆盖边界、安装前基线与请求持久化、结果写入失败、默认工具链保护、实际发布版本/40位提交/日期、按日nightly身份、超时/失败/取消均经fake-runner或临时文件回归；nightly归档日期不错误等同编译器提交日期。
+- 原生macOS 0.9窗口实际读取4个已安装Rust渠道，选择按日nightly后生成rust-toolchain.toml与mise.toml预览；真实导出mise.toml与请求JSON至仓库外，切换beta后重新载入请求恢复nightly-2026-08-09。确认框始终关闭、执行按钮禁用。
+- 原生窗口HEAD模式选择git生成明确args:["HEAD"]；加入cask后拒绝导出，清空后恢复默认补齐策略。Mac与Windows任务选择最终为0。原447项个人备份摘要不变；本轮不上传个人清单。
+- 本地0.9 App与已构建二进制一致，旧0.8 App保留。没有执行实际Homebrew/rustup安装、默认切换或Windows设备验收，未签名/公证、未发布Windows EXE；未查询或监控CI。
+
 ## 0.8.0 — 2026-10-23
 
 - 对准备提交的精确文件集提取快照：200项工作区测试通过，格式检查、全部目标warnings-denied Clippy、macOS构建与完整工作区Windows GNU严格Clippy通过。提交锁文件只更新4个本地crate版本，外部依赖更新继续保留在工作区，未混入提交或验证快照。

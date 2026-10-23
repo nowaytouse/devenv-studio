@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 — 2026-10-23
+
+- 重部署加入明确渠道策略：Homebrew 补齐缺少项、滚动更新所选包及 HEAD 开发源码；HEAD 使用独立原生命令与安装渠道回读，拒绝 cask、未支持来源和强制链接切换。
+- 新增 macOS/Windows 共用 Rust 工具链读取、严格请求保存/载入、stable/beta/nightly/精确版本/按日 nightly 部署；私有基线、精确请求和终态证据持久化，安装后核对工具链身份、默认未变及实际编译器版本/提交/日期。
+- 可导出原生 rust-toolchain.toml 与 Rust mise.toml，复用原有 Brewfile 与 WinGet 清单；mise 执行与锁文件生成仍待接入，任意 Git URL/分支不作为可信安装请求。
+- 修复纯字母十六进制 HEAD 提交标识被版本校验误拒绝的情况；默认选择与确认均保持关闭。
+- 一并审查并纳入原有 15 项外部依赖更新，完整版本、校验值、兼容性、许可证与实际修复证据见依赖审查文档。
+
 ## 0.8.0 — 2026-10-23
 
 - 双平台本机开发环境备份与配置：Windows新增Cargo/uv/NPM/Pip/VS Code五来源，Mac新增Homebrew Bundle受限Brewfile审核、导出、本机配置与独立回查；另有原生WinGet清单导出。固定成熟上游版本与许可证，mise/chezmoi仅列设计参考。
