@@ -127,6 +127,14 @@ impl Studio {
         ui.add_space(16.0);
         surface_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
+            ui.heading(tx("Python 命令行工具", "Python command tools"));
+            ui.label(RichText::new("macOS · Windows · uv").color(palette().muted));
+            ui.add_space(8.0);
+            self.python_tools_page(ui);
+        });
+        ui.add_space(16.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
         ui.heading(tx("Homebrew 工具", "Homebrew tools"));
         ui.label(RichText::new("macOS · Bundle · HEAD").color(palette().muted));
         ui.add_space(8.0);

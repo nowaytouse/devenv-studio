@@ -76,6 +76,17 @@ pub(crate) fn homebrew_program() -> Option<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
         .find(|path| path.is_file() && capture::brew_runtime_ready(path))
 }
+#[cfg(target_os = "macos")]
+pub(crate) fn uv_program() -> Result<std::path::PathBuf> {
+    let home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .context("macOS home directory is unavailable")?;
+    capture::uv_program(&home).context("uv was not found in supported standard locations")
+}
+#[cfg(windows)]
+pub(crate) fn uv_program() -> Result<std::path::PathBuf> {
+    Ok(crate::windows::developer_tool("uv")?.program)
+}
 
 #[cfg(any(windows, test))]
 #[derive(Debug)]
@@ -103,6 +114,12 @@ pub fn collect(cancel: Arc<AtomicBool>) -> Result<Snapshot> {
         let _ = cancel;
         anyhow::bail!("Developer environment collection requires macOS or Windows");
     }
+}
+#[cfg(any(windows, target_os = "macos", test))]
+pub(crate) fn parse_uv_output(text: &str) -> Result<Vec<Package>> {
+    let (packages, omitted) = capture::parse_packages("uv", text, None)?;
+    ensure!(!omitted, "Incomplete uv tool inventory");
+    Ok(packages)
 }
 
 fn valid_name(kind: &str, value: &str) -> bool {

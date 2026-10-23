@@ -167,7 +167,9 @@ fn network_arguments(
             }
         }
         "uv" if args.first().is_some_and(|a| a == "tool")
-            && args.get(1).is_some_and(|a| a == "install") =>
+            && args
+                .get(1)
+                .is_some_and(|a| matches!(a.as_str(), "install" | "upgrade")) =>
         {
             options.push(format!("--default-index={}", profile.python_index));
         }
@@ -320,6 +322,46 @@ pub(crate) fn run_toolchain(
         }
         command.env("RUSTUP_AUTO_INSTALL", "0");
     })
+}
+#[cfg(any(windows, target_os = "macos", test))]
+pub(crate) fn run_python_tools(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+) -> Result<Output> {
+    run_configured(invocation, cancel, timeout, configure_python_tools)
+}
+#[cfg(any(windows, target_os = "macos", test))]
+fn configure_python_tools(command: &mut Command) {
+    for (name, _) in std::env::vars_os() {
+        let upper = name.to_string_lossy().to_ascii_uppercase();
+        if upper.starts_with("UV_")
+            || upper.starts_with("PYTHON")
+            || matches!(
+                upper.as_str(),
+                "CONDA_PREFIX" | "VIRTUAL_ENV" | "XDG_DATA_HOME" | "XDG_BIN_HOME"
+            )
+        {
+            command.env_remove(name);
+        }
+    }
+    command
+        .env_remove("UV_OFFLINE")
+        .env("UV_NO_CONFIG", "1")
+        .env("UV_PYTHON_DOWNLOADS", "never");
+}
+#[cfg(any(windows, target_os = "macos", test))]
+fn configure_python_inventory(command: &mut Command) {
+    configure_python_tools(command);
+    command.env("UV_OFFLINE", "1");
+}
+#[cfg(any(windows, target_os = "macos", test))]
+pub(crate) fn run_python_inventory(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+) -> Result<Output> {
+    run_configured(invocation, cancel, timeout, configure_python_inventory)
 }
 #[cfg(any(windows, test))]
 fn configure_inventory(command: &mut Command) {
@@ -557,6 +599,12 @@ mod tests {
         );
         assert!(
             network_arguments(&uv, &profile)
+                .unwrap()
+                .contains(&"--default-index=https://packages.example/simple/".into())
+        );
+        let uv_upgrade = make("uv", &["tool", "upgrade", "--no-config", "ruff"]);
+        assert!(
+            network_arguments(&uv_upgrade, &profile)
                 .unwrap()
                 .contains(&"--default-index=https://packages.example/simple/".into())
         );
@@ -829,6 +877,69 @@ mod tests {
         }
         assert_eq!(std::env::var_os("RUSTUP_AUTO_INSTALL"), prior);
     }
+    #[test]
+    fn uv_deployment_clears_offline_and_inherited_package_configuration() {
+        let inherited_uv: Vec<_> = std::env::vars_os()
+            .filter(|(name, _)| {
+                name.to_string_lossy()
+                    .to_ascii_uppercase()
+                    .starts_with("UV_")
+            })
+            .map(|(name, _)| name)
+            .collect();
+        let mut command = Command::new("unused");
+        configure_python_tools(&mut command);
+        let env: std::collections::BTreeMap<_, _> = command.get_envs().collect();
+        for name in inherited_uv {
+            if !["UV_NO_CONFIG", "UV_PYTHON_DOWNLOADS"].contains(&name.to_string_lossy().as_ref()) {
+                assert_eq!(env.get(name.as_os_str()), Some(&None), "{name:?}");
+            }
+        }
+        assert_eq!(env.get(std::ffi::OsStr::new("UV_OFFLINE")), Some(&None));
+        assert!(
+            env.get(std::ffi::OsStr::new("UV_DEFAULT_INDEX"))
+                .is_none_or(Option::is_none)
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("UV_NO_CONFIG")),
+            Some(&Some(std::ffi::OsStr::new("1")))
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("UV_PYTHON_DOWNLOADS")),
+            Some(&Some(std::ffi::OsStr::new("never")))
+        );
+    }
+
+    #[test]
+    fn uv_inventory_is_offline_and_uses_the_same_sanitized_store_paths_as_deployment() {
+        let mut command = Command::new("unused");
+        configure_python_inventory(&mut command);
+        let env: std::collections::BTreeMap<_, _> = command.get_envs().collect();
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("UV_OFFLINE")),
+            Some(&Some(std::ffi::OsStr::new("1")))
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("UV_NO_CONFIG")),
+            Some(&Some(std::ffi::OsStr::new("1")))
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("UV_PYTHON_DOWNLOADS")),
+            Some(&Some(std::ffi::OsStr::new("never")))
+        );
+        for name in [
+            "UV_TOOL_DIR",
+            "UV_TOOL_BIN_DIR",
+            "XDG_DATA_HOME",
+            "XDG_BIN_HOME",
+        ] {
+            assert!(
+                env.get(std::ffi::OsStr::new(name))
+                    .is_none_or(Option::is_none)
+            );
+        }
+    }
+
     #[test]
     fn inventory_disables_runtime_bootstrap_and_network_without_mutating_parent() {
         let mut command = Command::new("unused");

@@ -70,6 +70,15 @@ pub(super) fn brew_runtime_ready(brew: &Path) -> bool {
     check().unwrap_or(false)
 }
 #[cfg(any(target_os = "macos", test))]
+pub(super) fn uv_program(home: &Path) -> Option<PathBuf> {
+    first([
+        home.join(".local/bin/uv"),
+        home.join(".cargo/bin/uv"),
+        "/opt/homebrew/bin/uv".into(),
+        "/usr/local/bin/uv".into(),
+    ])
+}
+#[cfg(any(target_os = "macos", test))]
 fn requests(home: &Path) -> Vec<Request> {
     let brew = first([
         "/opt/homebrew/bin/brew".into(),
@@ -77,12 +86,7 @@ fn requests(home: &Path) -> Vec<Request> {
     ])
     .filter(|path| brew_runtime_ready(path));
     let cargo = first([home.join(".cargo/bin/cargo")]);
-    let uv = first([
-        home.join(".local/bin/uv"),
-        home.join(".cargo/bin/uv"),
-        "/opt/homebrew/bin/uv".into(),
-        "/usr/local/bin/uv".into(),
-    ]);
+    let uv = uv_program(home);
     let npm = ["/opt/homebrew", "/usr/local"]
         .into_iter()
         .find_map(|prefix| {

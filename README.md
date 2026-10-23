@@ -28,7 +28,7 @@ DevEnv Studio 现在是唯一维护入口。`LTSC_Tools_Backup` 的配置、映�
 
 环境备份页在macOS采集Homebrew formula/cask、Cargo、uv、NPM全局包、VS Code扩展；Windows采集Cargo、uv、NPM、一个已注册标准CPython可见的Pip分发和VS Code扩展。采集使用本地有界命令，不安装、更新或引导工具。每类来源显示完整、未找到或失败；失败和取消保留上次结果，未找到不等于软件已卸载。Windows软件全集、所有Python环境和项目依赖不在备份范围内。
 
-采集后可搜索、保存新JSON备份、重新载入，再进入环境配置：Mac选择基础工具或备份中的Homebrew项目，审核生成的Brewfile，导出或明确在本机配置；Windows从备份审核同提供程序的可信任务，也可选择现有混合组合和软件目录。迁移初始不勾选。只有完整采集的来源参与映射；包版本保留为观测信息，不被偷换成Windows版本锁定。备份仅包含工具清单和版本，不复制二进制、项目、密钥、配置文件或虚拟环境，也不是一键精确还原。文件保留在本地，不上传GitHub。Mac执行前需保存并审核清单，使用私有生成的Brewfile，先Bundle install --no-upgrade，再独立check；依赖仍可能改变，没有自动回滚。原生Mac配置目前覆盖formula/cask，其他独立工具提供程序仍待接入。可单独导出选中Windows软件的原生WinGet JSON，跨工具档案继续保留其他提供程序。完整范围见[环境备份说明](docs/MAC_BACKUP.md)与[成熟项目接入契约](docs/ENVIRONMENT_SOURCES.md)。
+采集后可搜索、保存新JSON备份、重新载入，再进入环境配置：Mac选择基础工具或备份中的Homebrew项目，审核生成的Brewfile，导出或明确在本机配置；Windows从备份审核同提供程序的可信任务，也可选择现有混合组合和软件目录。迁移初始不勾选。只有完整采集的来源参与映射；包版本保留为观测信息，不被偷换成Windows版本锁定。备份仅包含工具清单和版本，不复制二进制、项目、密钥、配置文件或虚拟环境，也不是一键精确还原。文件保留在本地，不上传GitHub。Mac执行前需保存并审核清单，使用私有生成的Brewfile，先Bundle install --no-upgrade，再独立check；依赖仍可能改变，没有自动回滚。原生Mac配置覆盖formula/cask与uv管理的Python命令行工具；Cargo、NPM与VS Code在Mac仍是清单来源。可单独导出选中Windows软件的原生WinGet JSON，跨工具档案继续保留其他提供程序。完整范围见[环境备份说明](docs/MAC_BACKUP.md)与[成熟项目接入契约](docs/ENVIRONMENT_SOURCES.md)。
 
 ## 开发环境重部署与渠道
 
@@ -36,7 +36,9 @@ DevEnv Studio 现在是唯一维护入口。`LTSC_Tools_Backup` 的配置、映�
 
 同一页提供 macOS/Windows 共用的 Rust 工具链重部署：读取已安装渠道，选择 stable、beta、nightly、精确版本或按日期 nightly，保存/载入请求，审核后明确安装。使用标准位置现有 rustup 和已有官方默认工具链；安装 minimal profile、不自更新，独立核对安装身份、默认工具链未变及实际编译器版本/完整提交标识/日期，持久化结果后才显示成功。额外 targets、自定义组件、任意 Git URL 与首次 rustup 引导不在本轮范围。
 
-所选请求可以导出原生 rust-toolchain.toml 和 Rust mise.toml，配合现有 Brewfile、WinGet 清单组成多个成熟项目的实际交换入口。mise 当前接入受限清单导出，尚未执行 mise 安装或生成锁文件；固定请求也不等于完整环境的字节级恢复。见[重部署契约](docs/REDEPLOYMENT.md)与[依赖审查](docs/DEPENDENCY_REVIEW.md)。
+所选请求可以导出原生 rust-toolchain.toml 和 Rust mise.toml，配合现有 Brewfile、WinGet 清单组成多个成熟项目的实际交换入口。mise 当前接入受限清单导出，尚未执行 mise 安装或生成锁文件；固定请求也不等于完整环境的字节级恢复。
+
+Python 工具区新增 macOS/Windows 共用的 uv 命令行工具重部署：读取 uv 清单，逐项选择固定版本或滚动最新版，保存/载入请求并回读安装结果。只管理所选独立 PyPI 命令工具；需要本机已有 uv 和 Python，pipx、项目依赖与 Python 运行时不自动导入。见[重部署契约](docs/REDEPLOYMENT.md)与[成熟项目接入取舍](docs/ENVIRONMENT_SOURCES.md)。
 
 ## 开发网络环境
 

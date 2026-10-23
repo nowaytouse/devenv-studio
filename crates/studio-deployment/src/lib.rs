@@ -19,6 +19,7 @@ pub mod network;
 mod pip;
 #[cfg(any(windows, target_os = "macos", test))]
 mod process;
+pub mod python_tools;
 mod storage;
 pub mod toolchains;
 #[cfg(windows)]

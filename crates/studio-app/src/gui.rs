@@ -23,6 +23,7 @@ mod environment;
 mod hybrid;
 mod network;
 mod power;
+mod python_tools;
 mod rust_toolchains;
 mod storage;
 mod theme;
@@ -92,6 +93,9 @@ enum FileOperation {
     ExportRustToolchain,
     ExportMise,
     SaveRustReport,
+    SavePythonRequest,
+    LoadPythonRequest,
+    SavePythonReport,
     NetworkSave,
     NetworkLoad,
     NetworkExportConfig,
@@ -121,6 +125,9 @@ impl FileOperation {
             }
             Self::ExportMise => tx("导出 mise.toml", "Export mise.toml"),
             Self::SaveRustReport => tx("保存 Rust 重部署结果", "Save Rust redeployment result"),
+            Self::SavePythonRequest => tx("保存 Python 工具请求", "Save Python tools request"),
+            Self::LoadPythonRequest => tx("载入 Python 工具请求", "Load Python tools request"),
+            Self::SavePythonReport => tx("保存 Python 重部署结果", "Save Python deployment result"),
             Self::NetworkSave => tx("保存网络方案", "Save network profile"),
             Self::NetworkLoad => tx("载入网络方案", "Load network profile"),
             Self::NetworkExportConfig => {
@@ -162,6 +169,8 @@ enum WorkerResult {
     Bundle(studio_deployment::environment::BundleReport),
     Rust(studio_deployment::toolchains::RustReport),
     RustInventory(Vec<String>),
+    PythonTools(studio_deployment::python_tools::Report),
+    PythonToolsInventory(Vec<studio_deployment::backup::Package>),
     Inspection {
         settings: Vec<studio_platform::SettingState>,
         power: Vec<studio_platform::SettingState>,
@@ -324,7 +333,9 @@ impl Studio {
             if cancelled
                 && matches!(
                     &result,
-                    Ok(WorkerResult::Backup(_) | WorkerResult::RustInventory(_))
+                    Ok(WorkerResult::Backup(_)
+                        | WorkerResult::RustInventory(_)
+                        | WorkerResult::PythonToolsInventory(_))
                 )
             {
                 result = Err(tx(
@@ -373,6 +384,27 @@ impl Studio {
                         text: lf!(
                             "已读取 {count} 项 Rust 工具链；未安装或更新。",
                             "Read {count} Rust toolchains; no installation or update performed.",
+                            count = count
+                        ),
+                        error: false,
+                    }
+                }
+                Ok(WorkerResult::PythonTools(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.python_tools.report = Some(report);
+                    notice
+                }
+                Ok(WorkerResult::PythonToolsInventory(installed)) => {
+                    let count = installed.len();
+                    self.backup.python_tools.inventory = Some(installed);
+                    self.backup.python_tools.confirmed = false;
+                    Notice {
+                        text: lf!(
+                            "已读取 {count} 项 uv 工具；未安装或更新。",
+                            "Read {count} uv tools; no installation or update performed.",
                             count = count
                         ),
                         error: false,
@@ -2060,6 +2092,14 @@ impl Studio {
         }
         if matches!(
             operation,
+            FileOperation::SavePythonRequest
+                | FileOperation::LoadPythonRequest
+                | FileOperation::SavePythonReport
+        ) {
+            return self.python_tools_file_operation(operation, &path);
+        }
+        if matches!(
+            operation,
             FileOperation::NetworkSave
                 | FileOperation::NetworkLoad
                 | FileOperation::NetworkExportConfig
@@ -2096,6 +2136,11 @@ impl Studio {
             | FileOperation::ExportRustToolchain
             | FileOperation::ExportMise
             | FileOperation::SaveRustReport => Err("Rust operation was not dispatched".into()),
+            FileOperation::SavePythonRequest
+            | FileOperation::LoadPythonRequest
+            | FileOperation::SavePythonReport => {
+                Err("Python tools operation was not dispatched".into())
+            }
             FileOperation::SaveBackup
             | FileOperation::LoadBackup
             | FileOperation::ExportBrewfile
