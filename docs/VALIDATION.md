@@ -1,5 +1,15 @@
 # 验证记录
 
+## Unreleased — DevEnv Studio 更名检查点，2026-10-23
+
+- 包版本仍为0.10.0，macOS build number仍为10；锁文件只迁移本地应用包名称，外部依赖及版本未变。后续提交先积累在Unreleased，发布规则见RELEASING.md。
+- 224项工作区测试、格式检查、macOS全部目标warnings-denied Clippy、本机双命令构建与nightly工具链完整工作区Windows GNU全部目标严格Clippy通过。默认stable工具链未安装Windows目标，不能用于该项检查；没有新增工具链或目标。
+- 主命令devenv-studio和兼容命令ltsc-studio共用同一实现；真实执行version/help及旧电源档案计划时，退出码、标准输出与错误输出逐字一致。旧档案字段、目录身份、数据目录、认证密钥和恢复日志域保持不变。
+- 原生macOS更名窗口与关于页核对DevEnv Studio品牌、0.10.0开发基线及Unreleased说明；既有中文、深色/玫瑰偏好与网络方案正常加载。偏好和网络档案前后SHA-256一致，无新建空历史或应用网络变更。
+- 实际重复打包生成同版本UTC时间预览；原0.10.0应用二进制摘要未变，新预览与最新构建二进制完全一致，名称、可执行入口、版本、build number与稳定bundle identity逐项核对。最新原生窗口默认进入环境配置，跨平台/Windows导航与关于页正确，Mac和Windows选择均为0，网络确认关闭。
+- 本地打包先校验Cargo与plist版本一致，并保留已有应用包；打包需要Python3.11或更新版本，旧解释器会收到明确提示。
+- GitHub仓库已更名为nowaytouse/devenv-studio并核对仍为私有，origin已指向新地址；本地源码目录保留原路径。未运行真实安装、Windows设备验收、签名或公证；未查询或监控CI。
+
 ## 0.10.0 — 2026-10-23
 
 - 224项工作区测试通过，格式、macOS全部目标warnings-denied Clippy、构建与完整工作区Windows GNU全部目标严格Clippy通过。外部依赖保持0.9已审查版本；锁文件仅改四个本地crate为0.10.0。

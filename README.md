@@ -1,8 +1,18 @@
-# LTSC Studio
+# DevEnv Studio
 
 用 Rust 构建的 macOS 与 Windows 开发环境备份、配置工作台。两端采集本机工具与版本，保存、载入和审核清单；Mac 使用 Homebrew Bundle 配置所选 formula/cask，Windows 使用 WinGet、Cargo、uv、Pip、NPM 和 VS Code 的可信任务。Windows LTSC 系统设置继续作为独立区域，Linux 可载入、预览和导出。
 
-当前为 0.10.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、63 个开发工具/Python包/扩展、7 个 Windows 可选功能、4 个系统维护任务、4 个存储分析/优化任务，以及五组16个插电电源选项。所有选择默认关闭。
+当前开发基线为 **0.10.0**；更名及后续改进记录在 **Unreleased**，不会随每轮对话递增版本。正式版本只在经过审查的发布检查点确定，规则见[版本与发布](docs/RELEASING.md)。
+
+将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、63 个开发工具/Python包/扩展、7 个 Windows 可选功能、4 个系统维护任务、4 个存储分析/优化任务，以及五组16个插电电源选项。所有选择默认关闭。
+
+## 名称与兼容性
+
+应用默认进入环境配置，导航分为跨平台环境、Windows 配置、执行记录与应用设置。
+
+项目现名 **DevEnv Studio**，仓库为 [nowaytouse/devenv-studio](https://github.com/nowaytouse/devenv-studio)，主命令为 `devenv-studio`。旧命令 `ltsc-studio` 继续调用同一实现；源码工作目录不需要移动。
+
+偏好、网络方案与恢复历史继续读取原有 `LTSC Studio` 应用数据目录，bundle identity `io.github.nowaytouse.ltsc-studio`、档案格式和认证标识保持稳定。它们是兼容性契约，保留旧名称不影响界面使用新品牌。
 
 ## 双平台开发环境
 
@@ -44,7 +54,7 @@
 
 ## 混合方案与迁移
 
-应用从方案工作区开始，提供日常桌面、Rust开发、Python工具、Python数据与交互、Web开发和WSL组件准备六种混合方案。每个组合同时列出设置、软件、工具或扩展；检查后明确加入当前选择，仍可逐项修改，再保存为同一份v3档案或导出完整方案。加入组合不会执行系统变更。
+Windows 配置可从方案工作区开始，提供日常桌面、Rust开发、Python工具、Python数据与交互、Web开发和WSL组件准备六种混合方案。每个组合同时列出设置、软件、工具或扩展；检查后明确加入当前选择，仍可逐项修改，再保存为同一份v3档案或导出完整方案。加入组合不会执行系统变更。
 
 迁移页面可读取旧工具的SetupProfile 2.2.0或schema 1 Mac清单JSON，也可拖入文件。报告逐项区分已映射、需手动处理和未支持；初始不勾选，由用户决定哪些映射加入当前方案。只接受当前可信目录内的精确任务，保留其他选择并校验互斥设置。未迁移的私密字段不回显其值，原文件保持不变。Mac功能映射不保证相同版本、构建选项或二进制。
 
@@ -115,29 +125,29 @@ macOS与Windows均有本机开发清单采集入口，Mac可明确执行Homebrew
 需要 Rust 1.95 或更新版本；仓库默认使用 stable。GUI 使用 eframe/egui，业务与界面均为 Rust。
 
 ```sh
-cargo run -p ltsc-studio
+cargo run -p devenv-studio
 ```
 
-本地需要应用包时，在完成构建后运行 `python3 scripts/package_macos.py --profile debug`。它生成带版本号的开发预览包，不覆盖已有版本；签名和公证另行处理。
+本地打包需要 Python 3.11 或更新版本。需要应用包时，在完成构建后运行 `python3 scripts/package_macos.py --profile debug`。它首先生成 `DevEnv Studio 0.10.0.app`；同名产物已存在时，使用 `DevEnv Studio 0.10.0-preview-<UTC>.app` 保存新的预览，保留旧包。这个时间标签用于区分构建，不递增发布版本；源码提交标识用于追溯实际代码，签名和公证另行处理。
 
 命令行也可以查看清单或生成计划：
 
 ```sh
-cargo run -p ltsc-studio -- catalog
-cargo run -p ltsc-studio -- tasks
-cargo run -p ltsc-studio -- power
-cargo run -p ltsc-studio -- providers
-cargo run -p ltsc-studio -- backup --output /absolute/path/mac-backup.json
-cargo run -p ltsc-studio -- migrate --target win11-ltsc-2024 --input examples/mac-development-backup.json
-cargo run -p ltsc-studio -- plan --target win11-ltsc-2024 --recipe python-data
-cargo run -p ltsc-studio -- storage-status
-cargo run -p ltsc-studio -- plan --profile examples/storage-workspace.json
-cargo run -p ltsc-studio -- plan --profile examples/power-workspace.json
-cargo run -p ltsc-studio -- plan --target win11-ltsc-2024 --recipe rust
-cargo run -p ltsc-studio -- migrate --target win11-ltsc-2024 --input examples/migration-profile.json
-cargo run -p ltsc-studio -- plan --target win11-ltsc-2024 --select explorer-extensions,privacy-advertising-id --tasks software-git-git,feature-netfx3
-cargo run -p ltsc-studio -- inspect --target win11-ltsc-2024 --select explorer-extensions
-cargo run -p ltsc-studio -- plan --profile my-profile.json --output my-plan.json
+cargo run -p devenv-studio -- catalog
+cargo run -p devenv-studio -- tasks
+cargo run -p devenv-studio -- power
+cargo run -p devenv-studio -- providers
+cargo run -p devenv-studio -- backup --output /absolute/path/mac-backup.json
+cargo run -p devenv-studio -- migrate --target win11-ltsc-2024 --input examples/mac-development-backup.json
+cargo run -p devenv-studio -- plan --target win11-ltsc-2024 --recipe python-data
+cargo run -p devenv-studio -- storage-status
+cargo run -p devenv-studio -- plan --profile examples/storage-workspace.json
+cargo run -p devenv-studio -- plan --profile examples/power-workspace.json
+cargo run -p devenv-studio -- plan --target win11-ltsc-2024 --recipe rust
+cargo run -p devenv-studio -- migrate --target win11-ltsc-2024 --input examples/migration-profile.json
+cargo run -p devenv-studio -- plan --target win11-ltsc-2024 --select explorer-extensions,privacy-advertising-id --tasks software-git-git,feature-netfx3
+cargo run -p devenv-studio -- inspect --target win11-ltsc-2024 --select explorer-extensions
+cargo run -p devenv-studio -- plan --profile my-profile.json --output my-plan.json
 ```
 
 导出的计划只用于审查；执行时始终根据程序内置的可信清单重建方案。命令行不提供应用或恢复入口。
@@ -166,10 +176,10 @@ sudo apt-get install libxkbcommon-dev libwayland-dev libegl1-mesa-dev libfontcon
 cargo fmt --all -- --check
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo build --release --locked -p ltsc-studio
+cargo build --release --locked -p devenv-studio
 ```
 
-工作区包含 `studio-core`（配置与计划）、`studio-platform`（注册表与恢复）、`studio-deployment`（软件、功能、维护及进程历史）和 `ltsc-studio`（原生界面与命令行）。设计与首版边界见 [DESIGN.md](docs/DESIGN.md)，验证记录见 [VALIDATION.md](docs/VALIDATION.md)。
+工作区包含 `studio-core`（配置与计划）、`studio-platform`（注册表与恢复）、`studio-deployment`（软件、功能、维护及进程历史）和 `devenv-studio`（原生界面与命令行）。设计与首版边界见 [DESIGN.md](docs/DESIGN.md)，验证记录见 [VALIDATION.md](docs/VALIDATION.md)，版本选择与发布检查点见 [RELEASING.md](docs/RELEASING.md)。
 
 Check 工作流在三种桌面系统上运行检查；Package desktop 工作流需手动触发，生成对应运行器平台的可执行文件及许可证，不自动发布 Release。当前仓库不附带未经验证的旧 EXE。
 

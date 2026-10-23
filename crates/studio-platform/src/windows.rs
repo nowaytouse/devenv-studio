@@ -197,7 +197,7 @@ fn mutation_lock(directory: &Path) -> Result<File> {
         .truncate(false)
         .open(path)?;
     file.try_lock()
-        .context("Another LTSC Studio apply or restore is running; mutation is serialized")?;
+        .context("Another DevEnv Studio apply or restore is running; mutation is serialized")?;
     Ok(file)
 }
 fn unique_id() -> Result<String> {

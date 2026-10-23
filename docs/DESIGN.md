@@ -1,4 +1,10 @@
-# LTSC Studio — design record
+# DevEnv Studio — design record
+
+## Unreleased — DevEnv Studio identity and release cadence
+
+DevEnv Studio is the current macOS/Windows development-environment product name, with `devenv-studio` as its canonical package/command and nowaytouse/devenv-studio as its repository. The old `ltsc-studio` command remains a wrapper around the same implementation. Product branding is separate from compatibility identity: the existing LTSC Studio data directory, io.github.nowaytouse.ltsc-studio bundle identity, profile schemas, task IDs and authenticated history stay stable. This preserves existing preferences, network profiles and recovery keys without moving user data.
+
+The package baseline stays at 0.10.0. Changes accumulate under Unreleased rather than incrementing with each conversation or feature commit. A reviewed release checkpoint determines the next semantic pre-1.0 milestone or patch; local builds are distinguished by their source commit. Tags, release publishing and historical version records are not rewritten by a rename. See RELEASING.md for the policy. The numbered sections below remain historical design records.
 
 ## 0.10 application-scoped developer networking
 

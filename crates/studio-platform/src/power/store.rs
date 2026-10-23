@@ -231,7 +231,7 @@ pub(super) fn mutation_lock(directory: &Path) -> Result<File> {
         .open(&path)?;
     regular(&path)?;
     file.try_lock()
-        .context("Another LTSC Studio mutation is running")?;
+        .context("Another DevEnv Studio mutation is running")?;
     Ok(file)
 }
 pub(super) fn validate_key_path(directory: &Path) -> Result<()> {

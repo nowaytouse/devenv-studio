@@ -20,14 +20,16 @@ jobs:
       - name: Stable Rust
         run: rustup toolchain install stable --profile minimal
       - name: Build
-        run: cargo +stable build --release --locked -p ltsc-studio
+        run: cargo +stable build --release --locked -p devenv-studio
       - name: Upload desktop executable
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ltsc-studio-${{ runner.os }}-${{ runner.arch }}
+          name: devenv-studio-${{ runner.os }}-${{ runner.arch }}
           if-no-files-found: error
           retention-days: 14
           path: |
+            target/release/devenv-studio
+            target/release/devenv-studio.exe
             target/release/ltsc-studio
             target/release/ltsc-studio.exe
             LICENSE

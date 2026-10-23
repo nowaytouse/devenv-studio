@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 """Create a local, versioned macOS preview bundle without replacing an old build."""
 import argparse
+import datetime
 import pathlib
 import plistlib
 import shutil
 import sys
 import tempfile
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    raise SystemExit("Packaging requires Python 3.11 or newer; run this helper with a compatible python3.")
+
+
+def occupied(path):
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def main():
@@ -18,18 +32,25 @@ def main():
     with (root / "packaging/macos/Info.plist").open("rb") as handle:
         metadata = plistlib.load(handle)
     version = metadata["CFBundleShortVersionString"]
-    binary = root / "target" / args.profile / "ltsc-studio"
+    with (root / "Cargo.toml").open("rb") as handle:
+        cargo_version = tomllib.load(handle)["workspace"]["package"]["version"]
+    if version != cargo_version:
+        parser.error("The bundle version must match the workspace release version.")
+    executable_name = metadata["CFBundleExecutable"]
+    display_name = metadata["CFBundleDisplayName"]
+    binary = root / "target" / args.profile / executable_name
     if not binary.is_file():
-        parser.error("Build ltsc-studio for the selected profile before packaging.")
+        parser.error("Build devenv-studio for the selected profile before packaging.")
     output = root / "dist"
     output.mkdir(exist_ok=True)
-    destination = output / ("LTSC Studio " + version + ".app")
-    if destination.exists():
-        parser.error("Existing preview bundle is preserved: " + str(destination))
-    staging = pathlib.Path(tempfile.mkdtemp(prefix=".ltsc-bundle-", dir=output))
+    destination = output / (display_name + " " + version + ".app")
+    if occupied(destination):
+        stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        destination = output / (display_name + " " + version + "-preview-" + stamp + ".app")
+    staging = pathlib.Path(tempfile.mkdtemp(prefix=".devenv-bundle-", dir=output))
     try:
         contents = staging / "Contents"
-        executable = contents / "MacOS/ltsc-studio"
+        executable = contents / "MacOS" / executable_name
         executable.parent.mkdir(parents=True)
         resources = contents / "Resources"
         resources.mkdir()
@@ -41,7 +62,7 @@ def main():
             shutil.copytree(root / directory, resources / directory)
         # link/rename replacement semantics vary; reject occupied paths immediately
         # before publishing this same-directory staging bundle.
-        if destination.exists():
+        if occupied(destination):
             raise FileExistsError(str(destination))
         staging.rename(destination)
     finally:

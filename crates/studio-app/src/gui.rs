@@ -35,7 +35,7 @@ pub fn run() -> eframe::Result<()> {
 /// Screenshot mode is an explicit development aid, never enabled in normal sessions.
 pub fn run_with_options(screenshot: Option<PathBuf>) -> eframe::Result<()> {
     eframe::run_native(
-        "LTSC Studio",
+        "DevEnv Studio",
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([1240.0, 860.0])
@@ -229,7 +229,7 @@ impl Studio {
             setting_states: BTreeMap::new(),
             deployment_states: BTreeMap::new(),
             last_event: None,
-            page: Page::Recipes,
+            page: Page::Environment,
             category: String::new(),
             query: String::new(),
             dialog: None,
@@ -693,7 +693,7 @@ impl Studio {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     logo(ui, 25.0);
-                    ui.label(RichText::new("LTSC Studio").size(18.0).strong());
+                    ui.label(RichText::new("DevEnv Studio").size(18.0).strong());
                 });
                 ui.label(
                     RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
@@ -707,18 +707,22 @@ impl Studio {
                     .show(ui, |ui| {
                         for (group, pages) in [
                             (
-                                tx("工作空间", "Workspace"),
+                                tx("跨平台环境", "Cross-platform environments"),
                                 vec![
-                                    (Page::Recipes, tx("方案工作区", "Workspace recipes")),
-                                    (Page::Backup, tx("环境备份", "Environment backup")),
                                     (
                                         Page::Environment,
                                         tx("环境配置", "Environment configuration"),
                                     ),
+                                    (Page::Backup, tx("环境备份", "Environment backup")),
                                     (Page::Network, tx("网络环境", "Network environment")),
+                                ],
+                            ),
+                            (
+                                tx("Windows 配置", "Windows configuration"),
+                                vec![
+                                    (Page::Recipes, tx("方案工作区", "Workspace recipes")),
+                                    (Page::Developer, tx("开发工具", "Developer tools")),
                                     (Page::Migration, tx("迁移与映射", "Migration & mapping")),
-                                    (Page::Developer, tx("开发环境", "Developer tools")),
-                                    (Page::Status, tx("状态", "Status")),
                                     (Page::Workbench, t("配置工作台")),
                                     (Page::Power, tx("电源与节能", "Power & energy")),
                                     (Page::Storage, tx("存储与磁盘", "Storage & disks")),
@@ -729,7 +733,11 @@ impl Studio {
                             ),
                             (
                                 tx("执行与记录", "Execution"),
-                                vec![(Page::Plan, t("变更方案")), (Page::Recovery, t("恢复记录"))],
+                                vec![
+                                    (Page::Plan, t("变更方案")),
+                                    (Page::Recovery, t("恢复记录")),
+                                    (Page::Status, tx("状态", "Status")),
+                                ],
                             ),
                             (
                                 tx("应用", "Application"),
@@ -775,7 +783,7 @@ impl Studio {
                         }
                         ui.separator();
                         if ui
-                            .button(tx("退出 LTSC Studio", "Quit LTSC Studio"))
+                            .button(tx("退出 DevEnv Studio", "Quit DevEnv Studio"))
                             .clicked()
                         {
                             self.request_close(ui.ctx());
@@ -2172,7 +2180,7 @@ impl Drop for Studio {
                 && thread.join().is_err()
             {
                 eprintln!(
-                    "LTSC Studio worker panicked during shutdown; inspect recovery journals."
+                    "DevEnv Studio worker panicked during shutdown; inspect recovery journals."
                 );
             }
         }

@@ -581,11 +581,16 @@ impl Studio {
     pub(super) fn about_page(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             logo(ui, 34.0);
-            ui.heading("LTSC Studio");
+            ui.heading("DevEnv Studio");
         });
-        property(ui, tx("版本", "Version"), env!("CARGO_PKG_VERSION"));
+        property(
+            ui,
+            tx("开发基线", "Development baseline"),
+            env!("CARGO_PKG_VERSION"),
+        );
+        ui.label(tx("当前为开发构建；改进先累计到 Unreleased，版本号在发布检查点确定。", "This is a development build. Changes accumulate in Unreleased; version numbers are chosen at release checkpoints."));
         property(ui, tx("许可证", "License"), env!("CARGO_PKG_LICENSE"));
-        ui.label(tx("为 Windows LTSC 提供可检查、可导出的显式工作方案。每项修改、安装与维护均由用户选择。","Explicit, reviewable and exportable work plans for Windows LTSC. Every setting, installation and maintenance task is chosen by the user."));
+        ui.label(tx("面向 macOS 与 Windows 的开发环境备份、配置、网络方案与重部署。Windows LTSC 系统配置是其中的独立区域；每项变更由用户选择。", "Development environment backup, configuration, networking and redeployment for macOS and Windows. Windows LTSC system configuration is a separate area; every change is chosen by the user."));
         ui.hyperlink_to(
             tx("项目仓库", "Project repository"),
             env!("CARGO_PKG_REPOSITORY"),

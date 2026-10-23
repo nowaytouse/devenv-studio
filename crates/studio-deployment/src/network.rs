@@ -333,7 +333,7 @@ fn load_current_at(path: &Path) -> Result<NetworkProfile> {
     }
 }
 static APPLY_LOCK: Mutex<()> = Mutex::new(());
-/// Replaces only LTSC Studio's profile, after preserving the previous exact bytes.
+/// Replaces only DevEnv Studio's profile, after preserving the previous exact bytes.
 pub fn apply_current(profile: &NetworkProfile) -> Result<PathBuf> {
     let _lock = APPLY_LOCK
         .lock()

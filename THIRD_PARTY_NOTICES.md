@@ -1,6 +1,6 @@
 # Third-party notices
 
-LTSC Studio is an independent MIT-licensed Rust application. Selected registry behavior is mapped from the following MIT projects, with the original copyright and full license notices preserved in this distribution.
+DevEnv Studio is an independent MIT-licensed Rust application. Selected registry behavior is mapped from the following MIT projects, with the original copyright and full license notices preserved in this distribution.
 
 | Project | Reviewed revision | License copy |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ The application does not download or execute upstream scripts. Per-action eviden
 
 ## Development-environment integrations
 
-The following projects supply documented native formats, command contracts or design references. LTSC Studio invokes supported tools already present on the user's machine; it does not bundle their executables or copy their source code. These references do not imply that every upstream feature is integrated.
+The following projects supply documented native formats, command contracts or design references. DevEnv Studio invokes supported tools already present on the user's machine; it does not bundle their executables or copy their source code. These references do not imply that every upstream feature is integrated.
 
 | Project | Reviewed revision | Upstream license | Integration |
 | --- | --- | --- | --- |

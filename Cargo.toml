@@ -8,7 +8,7 @@ edition = "2024"
 rust-version = "1.95"
 license = "MIT"
 authors = ["nowaytouse"]
-repository = "https://github.com/nowaytouse/ltsc-studio"
+repository = "https://github.com/nowaytouse/devenv-studio"
 
 [workspace.dependencies]
 anyhow = "1.0"

@@ -80,6 +80,7 @@ pub fn host() -> HostInfo {
         HostInfo {name:format!("{} preview",std::env::consts::OS),target:None,can_apply:false,explanation:"Preview and export Windows configuration plans here. Applying and restoring require a supported Windows LTSC host; this computer's registry has not been inspected.".into()}
     }
 }
+// Keep this storage identity stable across product renames: keys, journals and locks are shared.
 pub fn data_directory() -> Result<PathBuf> {
     #[cfg(windows)]
     {

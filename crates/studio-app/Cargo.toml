@@ -1,12 +1,22 @@
 [package]
-name = "ltsc-studio"
+name = "devenv-studio"
+default-run = "devenv-studio"
+autobins = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "A native Rust workbench for user-chosen Windows LTSC configuration"
+description = "A native Rust workbench for macOS and Windows environment backup, configuration and redeployment"
+
+[[bin]]
+name = "devenv-studio"
+path = "src/main.rs"
+
+[[bin]]
+name = "ltsc-studio"
+path = "src/legacy.rs"
 
 [dependencies]
 anyhow.workspace = true
