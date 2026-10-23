@@ -1,5 +1,7 @@
 # Legacy capability parity checkpoint
 
+> Historical 0.8 comparison. The predecessor's retained Rust backend is now integrated into DevEnv Studio's Extended deployment workspace. Current code, exclusions and retirement records are documented in [LEGACY_MERGE.md](LEGACY_MERGE.md); the historical gaps below are not the current product inventory.
+
 This is a read-only comparison of the LTSC_Tools_Backup source tree with LTSC Studio 0.8. The setting catalog now includes the legacy diagnostic-data and consumer-experience policies; shipped historical snapshots remain available for recovery. A matching label does not mean the old and new implementations behave identically.
 
 ## What the legacy application actually provides

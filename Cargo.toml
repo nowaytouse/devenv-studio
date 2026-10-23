@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/studio-core", "crates/studio-platform", "crates/studio-deployment", "crates/studio-app"]
+members = ["crates/studio-core", "crates/studio-platform", "crates/studio-deployment", "crates/studio-legacy", "crates/studio-app"]
 resolver = "2"
 
 [workspace.package]
@@ -17,6 +17,7 @@ serde_json = "1.0"
 studio-core = { path = "crates/studio-core" }
 studio-platform = { path = "crates/studio-platform" }
 studio-deployment = { path = "crates/studio-deployment" }
+studio-legacy = { path = "crates/studio-legacy" }
 
 [profile.release]
 lto = "thin"

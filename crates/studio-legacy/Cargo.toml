@@ -1,0 +1,19 @@
+[package]
+name = "studio-legacy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+studio-platform.workspace = true
+chrono = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows = { version = "0.62.2", features = ["Foundation", "Management_Deployment", "Win32_System_WinRT"] }
+windows-collections = "0.3.2"

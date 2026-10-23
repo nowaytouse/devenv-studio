@@ -1,5 +1,19 @@
 # Dependency review — 2026-10-23
 
+## Unreleased legacy-engine integration
+
+Relative to `3e0741b`, the lockfile adds the internal `studio-legacy 0.10.0` crate and only three external packages: `chrono 0.4.45`, `iana-time-zone 0.1.65` and `iana-time-zone-haiku 0.1.2`. Existing external versions, sources, checksums and dependency arrays are unchanged. These additions support the retained deployment engine's timestamps; they are not a general dependency upgrade.
+
+All three declare MIT OR Apache-2.0. Chrono and iana-time-zone require Rust 1.62, below the workspace's 1.95 minimum. The Haiku helper has no declared MSRV and is selected only on Haiku, not macOS or Windows. Three cached published archives match Cargo.lock and the cached sparse index; all 97 extracted files match archive bytes. Cached records are not yanked; no online current-status or RustSec claim is made.
+
+| Added package | Archive and lock SHA-256 |
+| --- | --- |
+| chrono 0.4.45 | `1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327` |
+| iana-time-zone 0.1.65 | `e31bc9ad994ba00e440a8aa5c9ef0ec67d5cb5e5cb0cc7f8b744a35b389cc470` |
+| iana-time-zone-haiku 0.1.2 | `f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f` |
+
+The checksum-verified `windows 0.62.2` manifest requires collections 0.3.2, core 0.62.2, future 0.3.2 and numerics 0.3.1. The merged crate uses this compatible family, all MIT OR Apache-2.0 with Rust 1.82 minimum. These five cached archives and extracted sources match. The incompatible uncommitted collections 0.100.0 experiment in the old checkout remains preserved outside the new build. Compilation and runtime evidence are recorded separately in VALIDATION.md.
+
 ## Unreleased GUI checkpoint: cc 1.9.0 → 1.10.0
 
 The existing external lockfile update was reviewed separately from the GUI changes. Only the cc package version and checksum change; other external package entries remain identical. The official [crates.io record](https://crates.io/api/v1/crates/cc/1.10.0) was not yanked at review time. Its checksum `86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0` matches both Cargo.lock and the cached published archive. All 39 archive files match the extracted source cache, and the [upstream tag](https://github.com/rust-lang/cc-rs/tree/cc-v1.10.0) resolves to `8d06fcb73f6938c35c9bc59edbdcb9fb56f04d71`, matching the archive VCS metadata.

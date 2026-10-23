@@ -335,6 +335,7 @@ mod tests {
 
     fn preview() -> Studio {
         Studio {
+            compatibility: compatibility::UiState::default(),
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
             network: network::NetworkUiState::default(),

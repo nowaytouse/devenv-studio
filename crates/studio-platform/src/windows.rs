@@ -181,7 +181,7 @@ fn ensure_directory(path: &Path) -> Result<()> {
     );
     Ok(())
 }
-fn mutation_lock(directory: &Path) -> Result<File> {
+pub(super) fn mutation_lock(directory: &Path) -> Result<File> {
     ensure_directory(directory)?;
     let path = directory.join("mutation.lock");
     if path.try_exists()? {

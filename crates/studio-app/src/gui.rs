@@ -18,6 +18,7 @@ mod i18n;
 use i18n::{lf, t, tx};
 mod app_pages;
 mod backup;
+mod compatibility;
 mod environment;
 mod hybrid;
 mod network;
@@ -52,6 +53,7 @@ pub fn run_with_options(screenshot: Option<PathBuf>) -> eframe::Result<()> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
+    Compatibility,
     Recipes,
     Backup,
     Environment,
@@ -143,6 +145,7 @@ struct Worker {
 }
 
 enum WorkerResult {
+    Compatibility(studio_legacy::Report),
     Registry(RunReport),
     Power(RunReport),
     Deployment(studio_deployment::DeploymentReport),
@@ -166,6 +169,7 @@ struct Notice {
 }
 
 struct Studio {
+    compatibility: compatibility::UiState,
     hybrid: hybrid::HybridState,
     backup: backup::BackupUiState,
     network: network::NetworkUiState,
@@ -208,6 +212,7 @@ impl Studio {
             Err(error) => (Preferences::default(), Some(format!("{error:#}"))),
         };
         let mut app = Self {
+            compatibility: compatibility::UiState::default(),
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
             network: network::NetworkUiState::default(),
@@ -336,6 +341,14 @@ impl Studio {
                     ),
                     error: report.cancelled,
                 },
+                Ok(WorkerResult::Compatibility(report)) => {
+                    let notice = Notice {
+                        text: report.summary.clone(),
+                        error: !report.succeeded,
+                    };
+                    self.compatibility.report = Some(report);
+                    notice
+                }
                 Ok(WorkerResult::Backup(snapshot)) => self.accept_backup(snapshot),
                 Ok(WorkerResult::Rust(report)) => {
                     let notice = Notice {
@@ -780,6 +793,7 @@ impl Studio {
                                     (Page::Recipes, tx("方案工作区", "Workspace recipes")),
                                     (Page::Developer, tx("开发工具", "Developer tools")),
                                     (Page::Migration, tx("迁移与映射", "Migration & mapping")),
+                                    (Page::Compatibility, tx("扩展部署", "Extended deployment")),
                                     (Page::Workbench, t("配置工作台")),
                                     (Page::Power, tx("电源与节能", "Power & energy")),
                                     (Page::Storage, tx("存储与磁盘", "Storage & disks")),
@@ -820,7 +834,8 @@ impl Studio {
     fn tray(&mut self, ui: &mut egui::Ui) {
         if matches!(
             self.page,
-            Page::Environment
+            Page::Compatibility
+                | Page::Environment
                 | Page::Backup
                 | Page::Network
                 | Page::Settings
@@ -894,6 +909,7 @@ impl Studio {
                     Page::Environment => tx("环境配置", "Environment configuration"),
                     Page::Network => tx("网络环境", "Network environment"),
                     Page::Migration => tx("迁移与映射", "Migration & mapping"),
+                    Page::Compatibility => tx("扩展部署", "Extended deployment"),
                     Page::Developer => tx("开发环境", "Developer tools"),
                     Page::Workbench => t("配置工作台"),
                     Page::Power => tx("电源与节能", "Power & energy"),
@@ -1813,7 +1829,7 @@ impl Studio {
                 .show(ui, |ui| {
                     ui.hyperlink_to(RichText::new(&source.name).strong().size(18.0), &source.url);
                     ui.label(
-                        RichText::new(t(&source.description))
+                        RichText::new(if source.name == "LTSC_Tools_Backup" { tx("旧版部署逻辑已合并到扩展部署；恢复日志与未审查资源保留独立边界。", "The retained deployment engine is integrated into Extended deployment, with separate boundaries for old journals and unaudited resources.") } else { t(&source.description) })
                             .size(14.0)
                             .color(palette().muted),
                     );
@@ -1826,7 +1842,7 @@ impl Studio {
                         RichText::new(lf!(
                             "许可证 / 使用范围：{}",
                             "License / scope: {}",
-                            t(&source.license)
+                            if source.name == "LTSC_Tools_Backup" { tx("所有者授权的 Rust 后端整合；旧项目退役", "Owner-authorized Rust engine integration; predecessor retired") } else { t(&source.license) }
                         ))
                         .size(12.0)
                         .color(palette().muted),
@@ -2145,6 +2161,7 @@ impl eframe::App for Studio {
                             Page::Environment => self.environment_page(ui),
                             Page::Network => self.network_page(ui),
                             Page::Migration => self.migration_page(ui),
+                            Page::Compatibility => self.compatibility_page(ui),
                             Page::Workbench => self.workbench(ui),
                             Page::Power => self.power_page(ui),
                             Page::Software
@@ -2614,6 +2631,7 @@ mod tests {
 
     fn preview() -> Studio {
         Studio {
+            compatibility: compatibility::UiState::default(),
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
             network: network::NetworkUiState::default(),
@@ -2663,6 +2681,26 @@ mod tests {
         assert!(app.deployment_selected.is_empty());
         assert!(app.power_selected.is_empty());
         assert!(!app.mutation_available());
+    }
+
+    #[test]
+    fn merged_workflow_cannot_start_from_a_preview_host() {
+        let mut app = preview();
+        app.compatibility.options.dev_tools = true;
+        app.compatibility.confirmed = true;
+        assert!(
+            studio_legacy::review(
+                &app.compatibility.profile_json,
+                app.compatibility.target,
+                app.compatibility.mode,
+                &app.compatibility.options
+            )
+            .is_ok()
+        );
+        app.start_compatibility();
+        assert!(app.worker.is_none());
+        assert_eq!(app.selection_count(), 0);
+        assert!(app.compatibility.report.is_none());
     }
 
     #[test]
@@ -3062,6 +3100,7 @@ mod tests {
     #[test]
     fn every_page_renders_bilingually_at_minimum_size_without_enabling_preview_mutation() {
         let pages = [
+            Page::Compatibility,
             Page::Recipes,
             Page::Backup,
             Page::Environment,
@@ -3151,6 +3190,7 @@ mod tests {
                                     Page::Environment => app.environment_page(ui),
                                     Page::Network => app.network_page(ui),
                                     Page::Migration => app.migration_page(ui),
+                                    Page::Compatibility => app.compatibility_page(ui),
                                     Page::Workbench => app.workbench(ui),
                                     Page::Power => app.power_page(ui),
                                     Page::Software

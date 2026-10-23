@@ -1,5 +1,11 @@
 # DevEnv Studio — design record
 
+## Unreleased — legacy engine consolidation
+
+Seven owner-authorized Rust backend modules from LTSC_Tools_Backup are adapted into studio-legacy. Extended deployment is a page of the same GUI and uses the root worker, cancellation flag and the same Windows mutation.lock as modern registry/power workflows. It introduces no second executable, window, UAC identity or independent maintenance project. Cross-platform parsing/review is separated from a supported-Windows-only execute boundary; a canonical reviewed configuration is checked again before mutation.
+
+Compatibility configuration retains the legacy provider matrix and explicit domains without silently translating unknown fields into trusted catalog tasks. Default scopes are off; invalid target/scope combinations fail review. Old generated block markers and journal locations stay distinct from authenticated modern journals. File originals, request, bounded event log and terminal report are retained locally before reporting success. Unaudited resource bundles, embedded fonts, personal inventories and unauthenticated command-journal replay are excluded from the runtime; original source history remains traceable. See LEGACY_MERGE.md for retirement and preservation details.
+
 ## Unreleased — native GUI hierarchy
 
 The owner's LTSC_Tools_Backup GUI at a8523abbe08147b4d5de8746f26d99d056057ab0 supplies visual reference for layered surfaces, selection markers and card spacing. The current implementation adapts those ideas to both appearance modes and all five accent colors, without importing its font assets, execution logic or fixed-width log sidebar. The palette distinguishes canvas, navigation and working surfaces; accent is reserved for selection, focus and primary actions. System fonts remain in use.

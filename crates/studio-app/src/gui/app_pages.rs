@@ -635,9 +635,20 @@ impl Studio {
             for source in &catalog.sources {
                 ui.hyperlink_to(&source.name, &source.url);
                 ui.label(
-                    RichText::new(format!("{} / {}", source.revision, t(&source.license)))
-                        .size(12.0)
-                        .color(palette().muted),
+                    RichText::new(format!(
+                        "{} / {}",
+                        source.revision,
+                        if source.name == "LTSC_Tools_Backup" {
+                            tx(
+                                "所有者授权的 Rust 后端整合",
+                                "Owner-authorized Rust engine integration",
+                            )
+                        } else {
+                            t(&source.license)
+                        }
+                    ))
+                    .size(12.0)
+                    .color(palette().muted),
                 );
             }
         }

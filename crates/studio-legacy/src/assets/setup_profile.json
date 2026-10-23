@@ -1,0 +1,191 @@
+{
+  "profile_version": "2.2.0",
+  "metadata": {
+    "name": "DevEnv Studio compatibility package profile",
+    "description": "Optional legacy package choices; not a host backup or installation proof.",
+    "provider_audit": {
+      "captured_at": "2026-09-25",
+      "updated_at": "2026-10-13",
+      "winget_manifest_ids_verified": 36,
+      "scoop_manifests_verified": 88,
+      "microsoft_store_product_ids_verified": 6,
+      "verification_scope": "Existing WinGet/Scoop catalog passed CI 37089825898; added LLVM.LLVM, suzuki-shunsuke.pinact and gradle were checked against official manifests on 2026-10-04. Scoop retired jhead on 2026-10-05; it is now an explicit manual source-build item, not a verified Scoop install. Store product evidence retains its original capture date. No LTSC installation is claimed.",
+      "policy": "Use exact IDs from official provider repositories; omit unavailable mappings."
+    }
+  },
+  "git_config": {
+    "user_name": "",
+    "user_email": "",
+    "post_buffer_bytes": 524288000,
+    "safe_directory": "",
+    "enable_long_paths": true,
+    "enable_autocrlf": true,
+    "global_gitignore_rules": [
+      "**/.cursor/.agent-tools",
+      "**/.cursor/.agent-notes",
+      ".DS_Store",
+      "**/.claude/settings.local.json",
+      "AGENTS.local.md",
+      "*.local.md"
+    ]
+  },
+  "powershell_profile": {
+    "enable_utf8_encoding": true,
+    "init_starship": true,
+    "init_zoxide": true,
+    "aliases": {
+      "g": "git",
+      "ls": "eza",
+      "ll": "eza",
+      "cat": "bat",
+      "find": "fd",
+      "grep": "rg",
+      "top": "fastfetch"
+    }
+  },
+  "environment_mirrors": {
+    "cargo_sparse_index": "sparse+https://index.crates.io/",
+    "pip_index_url": "https://pypi.org/simple/",
+    "npm_registry": "https://registry.npmjs.org/"
+  },
+  "vscode_config": {
+    "user_settings": {
+      "cursor.composer.usageSummaryDisplay": "always",
+      "window.autoDetectColorScheme": true,
+      "editor.largeFileOptimizations": false,
+      "diffEditor.maxComputationTime": 0,
+      "editor.accessibilitySupport": "on",
+      "explorer.confirmDragAndDrop": false,
+      "workbench.preferredLightColorTheme": "Default Dark Modern",
+      "vim.disableExtension": true,
+      "cursor.composer.conversationDensity": "detailed"
+    },
+    "extensions": [
+      "anthropic.claude-code",
+      "anysphere.cursorpyright",
+      "anysphere.remote-containers",
+      "anysphere.remote-ssh",
+      "davidanson.vscode-markdownlint",
+      "donjayamanne.githistory",
+      "eamodio.gitlens",
+      "github.vscode-github-actions",
+      "golang.go",
+      "ms-azuretools.vscode-docker",
+      "ms-python.python",
+      "ms-python.debugpy",
+      "vscodevim.vim"
+    ]
+  },
+  "packages": {
+    "winget_core": [
+      { "id": "7zip.7zip", "name": "7-Zip Archiver" },
+      { "id": "VideoLAN.VLC", "name": "VLC Media Player" },
+      { "id": "Google.Chrome", "name": "Google Chrome" },
+      { "id": "Notepad++.Notepad++", "name": "Notepad++" },
+      { "id": "ShareX.ShareX", "name": "ShareX Productivity" },
+      { "id": "IrfanSkiljan.IrfanView", "name": "IrfanView Media Viewer" },
+      { "id": "Microsoft.PowerToys", "name": "Microsoft PowerToys" },
+      { "id": "Microsoft.Sysinternals.Suite", "name": "Microsoft Sysinternals Suite" },
+      { "id": "Microsoft.VCRedist.2015+.x64", "name": "Visual C++ Runtime x64" },
+      { "id": "Microsoft.VCRedist.2015+.x86", "name": "Visual C++ Runtime x86" }
+    ],
+    "winget_dev": [
+      { "id": "Git.Git", "name": "Git for Windows" },
+      { "id": "Rustlang.Rustup", "name": "Rust Toolchain" },
+      { "id": "Microsoft.VisualStudioCode", "name": "Visual Studio Code" },
+      { "id": "Anysphere.Cursor", "name": "Cursor AI IDE" },
+      { "id": "Brave.Brave", "name": "Brave Browser" },
+      { "id": "LibreWolf.LibreWolf", "name": "LibreWolf Privacy Browser" },
+      { "id": "Bitwarden.CLI", "name": "Bitwarden CLI" },
+      { "id": "Bitwarden.Bitwarden", "name": "Bitwarden Desktop" },
+      { "id": "LLVM.LLVM", "name": "LLVM Toolchain (LLD)" },
+      { "id": "LocalSend.LocalSend", "name": "LocalSend File Transfer" },
+      { "id": "GnuPG.Gpg4win", "name": "Gpg4win Security Suite" },
+      { "id": "Microsoft.OpenJDK.21", "name": "Microsoft OpenJDK 21" },
+      { "id": "suzuki-shunsuke.pinact", "name": "pinact GitHub Actions Pinning" },
+      { "id": "Microsoft.PowerShell", "name": "PowerShell 7" },
+      { "id": "CondaForge.Miniforge3", "name": "Miniforge 3" },
+      { "id": "EFF.Certbot", "name": "Certbot SSL Tool" },
+      { "id": "Cryptomator.Cryptomator", "name": "Cryptomator Vault" },
+      { "id": "Docker.DockerDesktop", "name": "Docker Desktop" },
+      { "id": "RedHat.Podman-Desktop", "name": "Podman Desktop" },
+      { "id": "KDE.Krita", "name": "Krita Digital Painting" },
+      { "id": "BlenderFoundation.Blender", "name": "Blender 3D Creation" },
+      { "id": "Giorgiotani.Peazip", "name": "PeaZip Utility" },
+      { "id": "Discord.Discord", "name": "Discord Desktop" },
+      { "id": "Telegram.TelegramDesktop", "name": "Telegram Desktop" },
+      { "id": "Anthropic.Claude", "name": "Claude Desktop" },
+      { "id": "Valve.Steam", "name": "Steam Gaming Client" }
+    ],
+    "scoop_tools": [
+      "gh", "git-lfs", "restic", "chezmoi", "atuin", "direnv", "starship", "fastfetch",
+      "python", "nodejs-lts", "go", "zig", "deno", "fnm", "bun", "pnpm", "neovim", "mise", "zoxide",
+      "cmake", "ninja", "gradle", "nasm", "yasm", "sccache", "just", "mold", "gcc",
+      "ripgrep", "fd", "fzf", "bat", "eza", "topgrade", "jdupes", "b3sum", "xxhash",
+      "actionlint", "shellcheck", "shfmt", "doxygen", "grype", "osv-scanner",
+      "ffmpeg", "imagemagick", "exiftool", "yt-dlp", "gallery-dl", "transmission-cli", "poppler", "tesseract", "mpv",
+      "apngasm", "czkawka", "dovi-tool", "gifsicle", "gifski", "git-filter-repo", "gpac", "helm",
+      "lychee", "mediainfo", "meson", "pandoc", "pipx", "pngquant", "pyenv", "ruby", "taplo", "tealdeer", "volta",
+      "aria2", "wget", "lz4", "zstd", "xz", "brotli", "sqlite", "postgresql", "uv",
+      "krew", "uutils-coreutils", "libvips",
+      "sing-box", "mihomo", "nextdns",
+      "ollama", "whisper-cpp"
+    ],
+    "cargo_packages": [
+      "rtk", "bkmr", "yek",
+      "cargo-edit", "cargo-expand", "cargo-audit", "cargo-deny", "cargo-hack",
+      "cargo-license", "cargo-machete", "cargo-mutants", "cargo-semver-checks", "cargo-udeps",
+      "cargo-bloat", "cargo-about", "cargo-upgrades", "rust-script", "flamegraph",
+      "cargo-cache", "cargo-fuzz", "cargo-geiger", "cargo-insta",
+      "cargo-llvm-cov", "cargo-outdated", "cargo-update", "cargo-why",
+      "dupe-krill", "fclones", "kondo", "krokiet"
+    ],
+    "npm_globals": [
+      "@anthropic-ai/claude-code", "@alibaba-group/open-code-review", "@diff4/cli",
+      "acp-ts", "context-mode", "lodash", "openclaw", "opencode-ai",
+      "pyright", "run-deepseek-cli", "typescript", "typescript-language-server",
+      "ui-ux-pro-max-cli", "prettier", "markdownlint-cli2", "node-gyp", "npm",
+      "@openai/codex", "repomix", "@moonshot-ai/kimi-code", "@kilocode/cli"
+    ],
+    "pip_packages": [
+      "buku",
+      "flask", "flask-cors", "numpy", "scipy", "scikit-learn", "pillow",
+      "opencv-python", "torch", "lightgbm", "openvino", "tqdm", "joblib",
+      "sympy", "networkx", "PyWavelets", "certifi", "cryptography", "filelock", "fsspec",
+      "ruff", "pyupgrade", "docutils", "asciidoc", "setuptools", "sphinx"
+    ],
+    "uv_tools": [
+      "ruff", "serena-agent"
+    ]
+  },
+  "system_tweaks": {
+    "create_rollback_journal": true,
+    "activate_ultimate_performance": true,
+    "extreme_ac_power_settings": true,
+    "disable_hibernation": false,
+    "enable_trim": true,
+    "optimize_storage": true,
+    "disable_telemetry": true,
+    "disable_bing_search": true,
+    "disable_consumer_features": true,
+    "disable_advertising_id": true,
+    "disable_activity_history": true,
+    "disable_feedback_prompts": true,
+    "explorer_open_to_this_pc": true,
+    "explorer_show_file_extensions": true,
+    "explorer_show_hidden_files": true,
+    "enable_ntfs_long_paths": true,
+    "enable_developer_mode": true,
+    "system_responsiveness": 0,
+    "network_throttling_index": 4294967295
+  },
+  "windows_features": {
+    "enable_wsl2": true,
+    "enable_netfx3": false,
+    "enable_windows_sandbox": false,
+    "enable_hyper_v": false
+  },
+  "ollama_models": [
+    "qwen2.5-coder"
+  ]
+}

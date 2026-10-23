@@ -25,6 +25,7 @@ pub(super) fn t(source: &str) -> &str {
         return source;
     }
     match source {
+        "正在执行兼容部署" => "Applying merged deployment workflow",
         "设计参考；未复制源码" => "Design reference; no source code copied",
         "拆分其配置清单中的独立注册表设置，保留来源；不运行上游捆绑脚本。" => {
             "Individual registry settings adapted with provenance retained. Bundled upstream scripts are not executed."

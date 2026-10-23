@@ -108,6 +108,18 @@ pub fn data_directory() -> Result<PathBuf> {
         Ok(base.join("ltsc-studio"))
     }
 }
+/// Serializes integrated Windows workflows with registry and power mutations.
+pub fn acquire_mutation_lock() -> Result<std::fs::File> {
+    #[cfg(windows)]
+    {
+        windows::mutation_lock(&data_directory()?)
+    }
+    #[cfg(not(windows))]
+    {
+        anyhow::bail!("Windows mutations are unavailable on this host")
+    }
+}
+
 pub fn apply(plan: Plan, cancel: Arc<AtomicBool>) -> Result<RunReport> {
     #[cfg(windows)]
     {

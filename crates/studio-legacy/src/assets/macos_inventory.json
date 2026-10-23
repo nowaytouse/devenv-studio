@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "captured_at": "synthetic-example-not-a-host-capture",
+  "homebrew_formulae": ["git", "uv"],
+  "homebrew_casks": [],
+  "homebrew_taps": [],
+  "cargo_packages": [],
+  "npm_globals": ["@moonshot-ai/kimi-code"],
+  "uv_tools": ["serena-agent"],
+  "vscode_extensions": [],
+  "cursor_extensions": [],
+  "warnings": ["Synthetic compatibility fixture; not a user's development environment."]
+}
