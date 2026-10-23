@@ -9,7 +9,7 @@ DevEnv Studio 是后续唯一维护入口。旧 [LTSC_Tools_Backup](https://gith
 | 旧源文件 | 保留职责 |
 | --- | --- |
 | `src/config.rs` | 旧配置模型、工具映射与输入校验 |
-| `src/inventory.rs` | 旧 Mac 工具清单、受限来源和导入校验 |
+| `src/inventory.rs` | 内置中性 Mac 工具清单、映射模型与有界本地输入校验；移除旧仓库下载和隐式缓存入口 |
 | `src/installer.rs` | 旧 Windows 部署任务与结构化执行事件 |
 | `src/platform.rs` | 旧 Windows 能力与系统参数处理 |
 | `src/rollback.rs` | 旧原值记录模型；不开放未认证的通用恢复入口 |
@@ -19,6 +19,20 @@ DevEnv Studio 是后续唯一维护入口。旧 [LTSC_Tools_Backup](https://gith
 旧 GUI 不作为另一个程序嵌套启动。新 GUI 使用同一个后台 worker、取消信号和执行互斥锁调度迁入的后端；旧任务与其他系统写入不能同时启动。所有变更仍需明确选择与确认，真实事件决定状态；失败、超时、取消和输出失败不能被转换成成功。Windows 执行能力与 macOS 预览分开，macOS 展示旧能力不表示已检查或修改 Windows 主机。
 
 这七个模块保留原有信任边界和错误传播，并适配新工作区的校验与线程模型。TRIM 按 NTFS / ReFS 分别记录明确的 0/1 原值，遇到未设、重复或未知结果拒绝写入，执行后重新查询；命令参数和 0/1 含义对照 [Microsoft fsutil behavior 文档](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-behavior)，真实设备行为仍需独立验收。旧代码中的所有者源码经明确授权适配；Windows 投影依赖必须使用兼容类型家族，不把保留的未提交依赖组合当作已验证配置。整合后的具体功能、缺口和验证证据由本次代码、测试及 [VALIDATION.md](VALIDATION.md) 共同确定；[LEGACY_PARITY.md](LEGACY_PARITY.md) 作为此前比较检查点保留。
+
+## 退役后的运行边界
+
+旧仓库已只读归档，DevEnv Studio 独立构建和运行。`studio-legacy` 不再保留旧 GitHub Raw / Contents API 清单地址、下载与回退逻辑，也不再读取 `LOCALAPPDATA/LTSCWorkspace/macos_inventory.json` 或 `inventory_source_url.txt`。这些入口在新应用中没有调用者；删除它们不会改变当前部署计划，也不会删除或覆盖磁盘上的旧缓存。映射所需的中性样例和 parity 规则随当前程序构建；现用开发环境备份和重部署仍通过 DevEnv Studio 自身的清单流程完成。
+
+历史来源链接、固定源码 revision、catalog ID、`ltsc-studio` 命令别名、旧应用存储位置及已管理文件标记继续保留，用于来源追溯和读取已有数据，不表示依赖旧仓库服务或恢复独立维护。旧本地源码、原始 EXE、未提交文件及私有退役备份也继续保留；完整退役不要求删除它们。
+
+## 扩展部署请求与单项选择
+
+扩展部署把完整候选 Profile 与明确选择分开。WinGet core/dev、Store、Scoop、Cargo、NPM、Pip、uv、编辑器扩展和 Ollama 模型使用独立身份键；默认零选择，搜索和来源筛选保留隐藏选择。审核和执行重新构造精确筛选的 Profile，只执行已启用领域中的所选项目。编辑候选 JSON 会清空单项选择和确认。
+
+六个旧 Store 固定请求已迁入可选 `packages.store_apps`，不再由安装器隐含追加。旧 SetupProfile 2.2.0 缺少该字段时解析为空，仍可载入和审核，不会补装 Store 项目。Scoop 缺少 Git 时只在明确选中 WinGet Git.Git 的情况下引导该依赖；否则报告缺少先决工具。
+
+本地请求 JSON 使用 schema 1，包含候选 Profile、目标、网络模式、领域选项与选择键，不包含确认或已执行状态。允许保存尚未启用领域的草稿；执行审核是独立门禁。载入先完成全部验证，再替换窗口状态；载入失败保留旧草稿，成功载入也清除执行确认。保存使用现有完整写入且不覆盖的导出契约；输入最多 1 MiB，拒绝未知字段、重复/未知选择、退役目标、非普通文件、最终或祖先链接。导出大小包含结尾换行，保证已保存的请求可按同一限制载入。
 
 ## 不自动迁入的内容
 

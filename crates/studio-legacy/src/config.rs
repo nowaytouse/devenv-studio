@@ -133,6 +133,8 @@ pub struct VSCodeProfileConfig {
 pub struct PackageMatrixConfig {
     pub winget_core: Vec<WingetApp>,
     pub winget_dev: Vec<WingetApp>,
+    #[serde(default)]
+    pub store_apps: Vec<WingetApp>,
     pub scoop_tools: Vec<String>,
     pub cargo_packages: Vec<String>,
     pub npm_globals: Vec<String>,
@@ -197,18 +199,13 @@ impl SetupProfile {
         })
     }
 
-    pub fn save_to_file(&self, path: &std::path::Path) -> anyhow::Result<()> {
-        let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, content)?;
-        Ok(())
-    }
-
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.profile_version != "2.2.0" {
             anyhow::bail!("兼容部署仅支持 SetupProfile 2.2.0");
         }
         validate_winget_apps("winget_core", &self.packages.winget_core)?;
         validate_winget_apps("winget_dev", &self.packages.winget_dev)?;
+        validate_store_apps(&self.packages.store_apps)?;
         validate_unique_strings("scoop_tools", &self.packages.scoop_tools)?;
         validate_unique_strings("cargo_packages", &self.packages.cargo_packages)?;
         validate_unique_strings("npm_globals", &self.packages.npm_globals)?;
@@ -356,6 +353,7 @@ impl SetupProfile {
         let result = PackageMatrixConfig {
             winget_core: selected_winget(&packages.winget_core),
             winget_dev: selected_winget(&packages.winget_dev),
+            store_apps: Vec::new(),
             scoop_tools: selected_strings(ParityProvider::Scoop, &packages.scoop_tools),
             cargo_packages: selected_strings(ParityProvider::Cargo, &packages.cargo_packages),
             npm_globals: selected_strings(ParityProvider::Npm, &packages.npm_globals),
@@ -600,6 +598,29 @@ fn validate_winget_apps(label: &str, apps: &[WingetApp]) -> anyhow::Result<()> {
         if !ids.insert(app.id.to_ascii_lowercase()) {
             anyhow::bail!("{label} 中存在重复包 ID: {}", app.id);
         }
+    }
+    Ok(())
+}
+
+fn validate_store_apps(apps: &[WingetApp]) -> anyhow::Result<()> {
+    let mut ids = std::collections::BTreeSet::new();
+    for app in apps {
+        anyhow::ensure!(
+            app.id.len() == 12 && app.id.bytes().all(|ch| ch.is_ascii_alphanumeric()),
+            "Store product ID must contain exactly 12 ASCII letters or digits: {}",
+            app.id
+        );
+        anyhow::ensure!(
+            !app.name.trim().is_empty()
+                && app.name.len() <= 1024
+                && !app.name.chars().any(char::is_control),
+            "Invalid Store product name"
+        );
+        anyhow::ensure!(
+            ids.insert(app.id.to_ascii_lowercase()),
+            "Duplicate Store product ID: {}",
+            app.id
+        );
     }
     Ok(())
 }

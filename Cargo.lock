@@ -3095,6 +3095,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "studio-core",
  "studio-platform",
  "windows",
  "windows-collections",

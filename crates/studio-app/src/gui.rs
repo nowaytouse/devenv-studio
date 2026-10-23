@@ -87,6 +87,8 @@ enum FileOperation {
     SaveBundleReport,
     SaveRustRequest,
     LoadRustRequest,
+    SaveCompatibilityRequest,
+    LoadCompatibilityRequest,
     ExportRustToolchain,
     ExportMise,
     SaveRustReport,
@@ -108,6 +110,12 @@ impl FileOperation {
             Self::SaveBundleReport => tx("保存 Mac 配置结果", "Save Mac configuration result"),
             Self::SaveRustRequest => tx("保存 Rust 重部署请求", "Save Rust redeployment request"),
             Self::LoadRustRequest => tx("载入 Rust 重部署请求", "Load Rust redeployment request"),
+            Self::SaveCompatibilityRequest => {
+                tx("保存扩展部署请求", "Save extended deployment request")
+            }
+            Self::LoadCompatibilityRequest => {
+                tx("载入扩展部署请求", "Load extended deployment request")
+            }
             Self::ExportRustToolchain => {
                 tx("导出 rust-toolchain.toml", "Export rust-toolchain.toml")
             }
@@ -1899,7 +1907,7 @@ impl Studio {
                 match &mut dialog {
                     Dialog::File { operation, path, error } => {
                         ui.heading(operation.title());
-                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::NetworkLoad) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
+                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::NetworkLoad) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
                         ui.add_space(12.0);
                         ui.add(egui::TextEdit::singleline(path).desired_width(f32::INFINITY).hint_text(t("完整文件路径，例如 /Users/you/Desktop/lt-sc.json")));
                         if let Some(error) = error.as_ref() { ui.colored_label(palette().danger, error); }
@@ -2058,8 +2066,26 @@ impl Studio {
         ) {
             return self.network_file_operation(operation, &path);
         }
+        if matches!(
+            operation,
+            FileOperation::SaveCompatibilityRequest | FileOperation::LoadCompatibilityRequest
+        ) {
+            if self.worker.is_some() {
+                return Err(tx("请等待当前任务结束后再保存或载入扩展部署请求。", "Wait for the current task before saving or loading an extended deployment request.").into());
+            }
+            self.compatibility_file_operation(operation, &path)
+                .map_err(|error| format!("{error:#}"))?;
+            return Ok(lf!(
+                "扩展部署请求已处理：{}",
+                "Extended deployment request processed: {}",
+                path.display()
+            ));
+        }
         let catalog = self.catalog.as_ref().map_err(Clone::clone)?;
         match operation {
+            FileOperation::SaveCompatibilityRequest | FileOperation::LoadCompatibilityRequest => {
+                Err("Extended deployment request was not dispatched".into())
+            }
             FileOperation::NetworkSave
             | FileOperation::NetworkLoad
             | FileOperation::NetworkExportConfig => {
@@ -2687,10 +2713,21 @@ mod tests {
     fn merged_workflow_cannot_start_from_a_preview_host() {
         let mut app = preview();
         app.compatibility.options.dev_tools = true;
+        let entry = studio_legacy::request::candidates(&app.compatibility.profile_json)
+            .unwrap()
+            .into_iter()
+            .find(|entry| entry.group == studio_legacy::request::Group::Cargo)
+            .unwrap();
+        app.compatibility.selected.insert(entry.key);
         app.compatibility.confirmed = true;
+        let effective = studio_legacy::request::selected_profile(
+            &app.compatibility.profile_json,
+            &app.compatibility.selected,
+        )
+        .unwrap();
         assert!(
             studio_legacy::review(
-                &app.compatibility.profile_json,
+                &effective,
                 app.compatibility.target,
                 app.compatibility.mode,
                 &app.compatibility.options
@@ -2701,6 +2738,40 @@ mod tests {
         assert!(app.worker.is_none());
         assert_eq!(app.selection_count(), 0);
         assert!(app.compatibility.report.is_none());
+    }
+
+    #[test]
+    fn extended_request_io_is_blocked_while_a_task_is_running() {
+        let mut app = preview();
+        let (_sender, receiver) = mpsc::channel();
+        app.worker = Some(Worker {
+            cancel: Arc::new(AtomicBool::new(false)),
+            receiver,
+            thread: None,
+            events: None,
+            label: "test",
+        });
+        let before = app.compatibility.profile_json.clone();
+        for operation in [
+            FileOperation::SaveCompatibilityRequest,
+            FileOperation::LoadCompatibilityRequest,
+        ] {
+            let error = app
+                .file_operation(
+                    operation,
+                    std::env::temp_dir().join("devenv-busy-request.json"),
+                )
+                .unwrap_err();
+            assert_eq!(
+                error,
+                tx(
+                    "请等待当前任务结束后再保存或载入扩展部署请求。",
+                    "Wait for the current task before saving or loading an extended deployment request."
+                )
+            );
+            assert_eq!(app.compatibility.profile_json, before);
+            assert!(app.worker.is_some());
+        }
     }
 
     #[test]

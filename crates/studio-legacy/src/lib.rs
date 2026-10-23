@@ -14,6 +14,7 @@ mod installer;
 pub mod inventory;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod platform;
+pub mod request;
 #[cfg_attr(not(windows), allow(dead_code))]
 pub mod rollback;
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -24,6 +25,7 @@ mod winget_bootstrap;
 pub use config::{ExecutionTarget, NetworkMode, SetupConfig, SetupProfile};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     pub extra_apps: bool,
     pub dev_tools: bool,
@@ -124,6 +126,24 @@ pub fn review(
         *options == allowed,
         "Some selected scopes do not apply to this operation; deselect them or choose Full setup"
     );
+    if options.dev_tools {
+        let packages = &profile.packages;
+        ensure!(
+            !packages.winget_dev.is_empty()
+                || !packages.scoop_tools.is_empty()
+                || !packages.cargo_packages.is_empty()
+                || !packages.npm_globals.is_empty()
+                || !packages.pip_packages.is_empty()
+                || !packages.uv_tools.is_empty(),
+            "Select at least one development package"
+        );
+    }
+    if options.extra_apps {
+        ensure!(
+            !profile.packages.winget_core.is_empty() || !profile.packages.store_apps.is_empty(),
+            "Select at least one additional application"
+        );
+    }
     let system_changes = matches!(
         target,
         ExecutionTarget::NetworkOnly
@@ -197,8 +217,9 @@ pub fn review(
     }
     if packages_target && options.extra_apps {
         scopes.push(format!(
-            "Additional WinGet applications: {}; six legacy Store product requests",
-            packages.winget_core.len()
+            "Additional WinGet applications: {}; Store product requests: {}",
+            packages.winget_core.len(),
+            packages.store_apps.len()
         ));
     }
     if full && options.git_shell {
@@ -510,6 +531,51 @@ mod tests {
                 .npm_registry
                 .starts_with("https://registry.npmjs.org")
         );
+    }
+
+    #[test]
+    fn empty_explicit_package_scopes_are_rejected_and_store_review_is_exact() {
+        let empty = request::selected_profile(
+            &default_profile_json().unwrap(),
+            &std::collections::BTreeSet::new(),
+        )
+        .unwrap();
+        for options in [
+            Options {
+                dev_tools: true,
+                ..Options::default()
+            },
+            Options {
+                extra_apps: true,
+                ..Options::default()
+            },
+        ] {
+            assert!(
+                review(
+                    &empty,
+                    ExecutionTarget::DevToolsOnly,
+                    NetworkMode::Basic,
+                    &options
+                )
+                .is_err()
+            );
+        }
+        let selected = std::collections::BTreeSet::from(["store:9wzdncrfhvn5".into()]);
+        let profile =
+            request::selected_profile(&default_profile_json().unwrap(), &selected).unwrap();
+        let review = review(
+            &profile,
+            ExecutionTarget::DevToolsOnly,
+            NetworkMode::Basic,
+            &Options {
+                extra_apps: true,
+                ..Options::default()
+            },
+        )
+        .unwrap();
+        assert!(review.summary.contains("Store product requests: 1"));
+        assert_eq!(review.config.profile.packages.store_apps.len(), 1);
+        assert!(review.config.profile.packages.winget_core.is_empty());
     }
 
     #[test]

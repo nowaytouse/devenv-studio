@@ -537,6 +537,17 @@ impl Studio {
         );
         settings_section(
             ui,
+            tx(
+                "扩展部署与可保存请求",
+                "Extended deployment and saved requests",
+            ),
+            |ui| {
+                ui.label(tx("在 Windows 配置的扩展部署页，先启用需要的领域，再按来源搜索和勾选软件、扩展或模型。所有项目初始未选；关闭领域会保留选择，但只执行启用领域中的项目。Store 应用也需明确选择。", "In Windows Extended deployment, enable the capabilities you need, then filter and select packages, extensions or models. Items start unchecked. Disabling a capability preserves selections but only enabled capabilities run. Store products also need explicit selection."));
+                ui.label(tx("保存请求记录候选配置与选择，不包含执行确认。载入后重新审核；错误不会覆盖当前草稿，已有文件不会被保存操作覆盖。编辑高级 Profile 会清空项目选择和确认。旧仓库已退役，当前流程无需读取其远端清单。", "Saved requests contain candidate configuration and selections, never execution approval. Review again after loading. Failed loads preserve the open draft, and saves never overwrite an existing file. Editing the advanced Profile clears item selections and approval. The retired repository's remote inventory is no longer used."));
+            },
+        );
+        settings_section(
+            ui,
             tx("开发网络环境", "Developer network environment"),
             |ui| {
                 ui.label(tx("网络页保存本应用部署使用的继承、直连或明确 HTTP 代理与 npm/Python/Cargo 软件源。先审核草稿并启用，后续适用任务才会使用；每次任务固定一份配置。原值可从历史 before.json 重新载入并审核恢复。", "The network page saves inherited, direct or explicit HTTP proxy and npm/Python/Cargo package sources for this app. Review and activate the draft before supported tasks use it; each task pins one profile. Restore prior values by loading and reviewing before.json from history."));

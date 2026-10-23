@@ -113,6 +113,20 @@ enum ScoopGitAction {
     WingetRequired,
 }
 
+fn package_manager_needs(config: &SetupConfig) -> (bool, bool) {
+    let packages = &config.profile.packages;
+    (
+        (config.include_curated_extras
+            && (!packages.winget_core.is_empty() || !packages.store_apps.is_empty()))
+            || (config.include_dev_tools && !packages.winget_dev.is_empty()),
+        config.include_dev_tools && !packages.scoop_tools.is_empty(),
+    )
+}
+
+fn git_unset_succeeded(result: &CommandResult) -> bool {
+    result.state == CommandState::Exited && matches!(result.exit_code, Some(0 | 5))
+}
+
 fn scoop_git_action(git_available: bool, winget_available: bool) -> ScoopGitAction {
     if git_available {
         ScoopGitAction::UseExisting
@@ -555,14 +569,17 @@ impl SetupEngine {
 
     fn step_package_managers(&self) -> ManagerAvailability {
         self.log(LogLevel::Start, "包管理器预检与原生引导");
-        let packages = &self.config.profile.packages;
-        let need_scoop = self.config.include_dev_tools && !packages.scoop_tools.is_empty();
-        let need_winget = (self.config.include_curated_extras && !packages.winget_core.is_empty())
-            || (self.config.include_dev_tools && !packages.winget_dev.is_empty())
-            || self.config.include_curated_extras
-            || need_scoop;
+        let (need_winget, need_scoop) = package_manager_needs(&self.config);
         let winget = need_winget && self.ensure_winget();
-        let scoop = need_scoop && self.ensure_scoop(winget);
+        let git_selected = self.config.include_dev_tools
+            && self
+                .config
+                .profile
+                .packages
+                .winget_dev
+                .iter()
+                .any(|app| app.id.eq_ignore_ascii_case("Git.Git"));
+        let scoop = need_scoop && self.ensure_scoop(winget && git_selected);
         ManagerAvailability { winget, scoop }
     }
 
@@ -717,7 +734,7 @@ impl SetupEngine {
         result
     }
 
-    fn ensure_scoop(&self, winget_available: bool) -> bool {
+    fn ensure_scoop(&self, may_install_git: bool) -> bool {
         let current = self.command("scoop.cmd", &["--version"], 30);
         if current.succeeded() {
             if !self.configure_scoop_buckets() {
@@ -762,7 +779,7 @@ impl SetupEngine {
             CommandState::Exited | CommandState::SpawnFailed => {}
         }
         let git_available = git_probe.succeeded();
-        match scoop_git_action(git_available, winget_available) {
+        match scoop_git_action(git_available, may_install_git) {
             ScoopGitAction::UseExisting => {
                 self.log(LogLevel::Ok, "Scoop 引导使用现有 Git。");
             }
@@ -787,7 +804,7 @@ impl SetupEngine {
                 if !self.stopped() {
                     self.log(
                         LogLevel::Error,
-                        "Scoop 引导需要 Git；未发现 Git 且 WinGet 不可用，已停止该提供程序。",
+                        "Scoop 引导需要 Git；请先安装 Git，或显式选择 WinGet Git.Git 后重试。已停止该提供程序。",
                     );
                 }
                 return false;
@@ -889,14 +906,12 @@ if %errorlevel%==0 (
 
     fn configure_scoop_buckets(&self) -> bool {
         let listed = self.command("scoop.cmd", &["bucket", "list"], 60);
-        let output = if listed.succeeded() {
-            listed.output
-        } else {
-            String::new()
+        let Some(output) = self.checked_list_output("Scoop buckets", &listed) else {
+            return false;
         };
         let mut ready = true;
         for bucket in ["main", "extras", "versions"] {
-            if scoop_bucket_is_listed(&output, bucket) {
+            if scoop_bucket_is_listed(output, bucket) {
                 continue;
             }
             let result = self.command("scoop.cmd", &["bucket", "add", bucket], 300);
@@ -933,7 +948,7 @@ if %errorlevel%==0 (
         };
         if existing.contains("[source.crates-io]") && !existing.contains(MANAGED_START) {
             self.log(
-                LogLevel::Warn,
+                LogLevel::Error,
                 format!(
                     "已保留现有 Cargo source 配置，避免产生重复 TOML 表：{}",
                     cargo_file.display()
@@ -963,25 +978,28 @@ if %errorlevel%==0 (
     }
 
     fn step_uwp_apps(&self, winget_available: bool, start: f32, end: f32) {
-        if !winget_available {
-            self.log(LogLevel::Warn, "WinGet 不可用，已跳过 UWP 应用恢复。");
+        let apps = &self.config.profile.packages.store_apps;
+        if apps.is_empty() {
             self.progress(end);
             return;
         }
-        self.log(LogLevel::Start, "恢复 LTSC 常用 UWP 应用");
-        let apps = [
-            ("9WZDNCRFHVN5", "Windows Calculator"),
-            ("9WZDNCRFJBH4", "Microsoft Photos"),
-            ("9PCFS5B6T72H", "Microsoft Paint"),
-            ("9MZ95KL8MR0L", "Snipping Tool"),
-            ("9N0DX20HK701", "Windows Terminal"),
-            ("9NT1R1C2HH7J", "ChatGPT"),
-        ];
-        for (index, (id, name)) in apps.iter().enumerate() {
+        if !winget_available {
+            self.log(
+                LogLevel::Error,
+                "WinGet 不可用，无法安装选定的 Store 应用。",
+            );
+            self.progress(end);
+            return;
+        }
+        self.log(
+            LogLevel::Start,
+            format!("安装 {} 个选定的 Store 应用", apps.len()),
+        );
+        for (index, app) in apps.iter().enumerate() {
             if self.stopped() {
                 break;
             }
-            self.install_store_app(id, name);
+            self.install_store_app(&app.id, &app.name);
             self.progress(item_progress(start, end, index, apps.len()));
         }
     }
@@ -1114,8 +1132,17 @@ if %errorlevel%==0 (
                 ],
                 &self.cancellation,
             );
-            if result.succeeded() || result.exit_code == Some(5) {
+            if git_unset_succeeded(&result) {
                 self.log(LogLevel::Ok, "Git safe.directory 未使用全局通配符");
+            } else if result.cancelled() {
+                self.stopped();
+                return;
+            } else {
+                self.log(
+                    LogLevel::Error,
+                    format!("Git safe.directory 清理失败：{}", result.diagnostic()),
+                );
+                return;
             }
         } else {
             self.git_config("safe.directory", &git.safe_directory);
@@ -1219,7 +1246,7 @@ if %errorlevel%==0 (
                     LogLevel::Ok,
                     format!("{label} 设置已合并：{}", path.display()),
                 ),
-                Err(error) => self.log(LogLevel::Warn, format!("{label} 设置未覆盖：{error}")),
+                Err(error) => self.log(LogLevel::Error, format!("{label} 设置未覆盖：{error}")),
             }
         }
 
@@ -1239,31 +1266,58 @@ if %errorlevel%==0 (
             if self.stopped() {
                 break;
             }
-            let mut installed = false;
-            if code_available {
-                installed |= self
-                    .command(
-                        "code.cmd",
-                        &["--install-extension", extension, "--force"],
-                        120,
-                    )
-                    .succeeded();
-            }
-            if cursor_available {
-                installed |= self
-                    .command(
-                        "cursor.cmd",
-                        &["--install-extension", extension, "--force"],
-                        120,
-                    )
-                    .succeeded();
-            }
-            if installed {
-                self.log(LogLevel::Ok, format!("IDE 扩展：{extension}"));
-            } else if !self.stopped() {
-                self.log(LogLevel::Error, format!("IDE 扩展安装失败：{extension}"));
+            for (label, command, available) in [
+                ("VS Code", "code.cmd", code_available),
+                ("Cursor", "cursor.cmd", cursor_available),
+            ] {
+                if available && !self.stopped() {
+                    let result =
+                        self.command(command, &["--install-extension", extension, "--force"], 120);
+                    self.record_extension_result(label, extension, &result);
+                }
             }
             self.progress(item_progress(start, end, index, extensions.len()));
+        }
+    }
+
+    fn unavailable_provider(&self, provider: &str) {
+        self.log(
+            LogLevel::Error,
+            format!("{provider} 不可用，无法安装选定的工具。"),
+        );
+    }
+
+    fn checked_list_output<'a>(
+        &self,
+        provider: &str,
+        result: &'a CommandResult,
+    ) -> Option<&'a str> {
+        if result.succeeded() {
+            Some(&result.output)
+        } else {
+            if result.cancelled() {
+                self.stopped();
+            } else {
+                self.log(
+                    LogLevel::Error,
+                    format!("{provider} 已安装清单读取失败：{}", result.diagnostic()),
+                );
+            }
+            None
+        }
+    }
+
+    fn record_extension_result(&self, editor: &str, extension: &str, result: &CommandResult) {
+        if result.succeeded() {
+            self.log(LogLevel::Ok, format!("{editor} 扩展：{extension}"));
+        } else if !result.cancelled() {
+            self.log(
+                LogLevel::Error,
+                format!(
+                    "{editor} 扩展安装失败：{extension}；{}",
+                    result.diagnostic()
+                ),
+            );
         }
     }
 
@@ -1310,18 +1364,24 @@ if %errorlevel%==0 (
                     packages.winget_dev.len(),
                 ));
             }
-        } else {
-            self.log(LogLevel::Warn, "WinGet 不可用，已跳过开发桌面应用。");
+        } else if !packages.winget_dev.is_empty() {
+            self.log(
+                LogLevel::Error,
+                "WinGet 不可用，无法安装选定的开发桌面应用。",
+            );
             self.progress(winget_end);
         }
 
         if managers.scoop {
-            let listed = self.command("scoop.cmd", &["list"], 90).output;
+            let result = self.command("scoop.cmd", &["list"], 90);
+            let Some(listed) = self.checked_list_output("Scoop", &result) else {
+                return;
+            };
             for (index, tool) in packages.scoop_tools.iter().enumerate() {
                 if self.stopped() {
                     return;
                 }
-                if package_is_listed(&listed, tool) {
+                if package_is_listed(listed, tool) {
                     self.log(LogLevel::Ok, format!("Scoop：{tool} 已安装"));
                 } else {
                     self.install_provider_package(
@@ -1339,19 +1399,23 @@ if %errorlevel%==0 (
                     packages.scoop_tools.len(),
                 ));
             }
-        } else {
-            self.log(LogLevel::Warn, "Scoop 不可用，已跳过便携 CLI 工具。");
+        } else if !packages.scoop_tools.is_empty() {
+            self.unavailable_provider("Scoop");
             self.progress(scoop_end);
         }
 
-        let cargo_available = self.command("cargo", &["--version"], 30).succeeded();
+        let cargo_available = !packages.cargo_packages.is_empty()
+            && self.command("cargo", &["--version"], 30).succeeded();
         if cargo_available {
-            let listed = self.command("cargo", &["install", "--list"], 90).output;
+            let result = self.command("cargo", &["install", "--list"], 90);
+            let Some(listed) = self.checked_list_output("Cargo", &result) else {
+                return;
+            };
             for (index, package) in packages.cargo_packages.iter().enumerate() {
                 if self.stopped() {
                     return;
                 }
-                if package_is_listed(&listed, package) {
+                if package_is_listed(listed, package) {
                     self.log(LogLevel::Ok, format!("Cargo：{package} 已安装"));
                 } else {
                     self.install_provider_package(
@@ -1377,7 +1441,8 @@ if %errorlevel%==0 (
             self.progress(cargo_end);
         }
 
-        let npm_available = self.command("npm.cmd", &["--version"], 30).succeeded();
+        let npm_available = !packages.npm_globals.is_empty()
+            && self.command("npm.cmd", &["--version"], 30).succeeded();
         if npm_available {
             for (index, package) in packages.npm_globals.iter().enumerate() {
                 if self.stopped() {
@@ -1409,16 +1474,18 @@ if %errorlevel%==0 (
             self.progress(npm_end);
         }
 
-        let python_available = self.command("python", &["--version"], 30).succeeded();
+        let python_available = !packages.pip_packages.is_empty()
+            && self.command("python", &["--version"], 30).succeeded();
         if python_available {
-            let listed = self
-                .command("python", &["-m", "pip", "list", "--format=freeze"], 90)
-                .output;
+            let result = self.command("python", &["-m", "pip", "list", "--format=freeze"], 90);
+            let Some(listed) = self.checked_list_output("Pip", &result) else {
+                return;
+            };
             for (index, package) in packages.pip_packages.iter().enumerate() {
                 if self.stopped() {
                     return;
                 }
-                if python_package_is_listed(&listed, package) {
+                if python_package_is_listed(listed, package) {
                     self.log(LogLevel::Ok, format!("Pip：{package} 已安装"));
                 } else {
                     self.install_provider_package(
@@ -1441,14 +1508,18 @@ if %errorlevel%==0 (
             self.progress(pip_end);
         }
 
-        let uv_available = self.command("uv", &["--version"], 30).succeeded();
+        let uv_available =
+            !packages.uv_tools.is_empty() && self.command("uv", &["--version"], 30).succeeded();
         if uv_available {
-            let listed = self.command("uv", &["tool", "list"], 60).output;
+            let result = self.command("uv", &["tool", "list"], 60);
+            let Some(listed) = self.checked_list_output("uv", &result) else {
+                return;
+            };
             for (index, tool) in packages.uv_tools.iter().enumerate() {
                 if self.stopped() {
                     return;
                 }
-                if package_is_listed(&listed, tool) {
+                if package_is_listed(listed, tool) {
                     self.log(LogLevel::Ok, format!("UV：{tool} 已安装"));
                 } else {
                     self.install_provider_package(
@@ -1462,7 +1533,7 @@ if %errorlevel%==0 (
                 self.progress(item_progress(pip_end, end, index, packages.uv_tools.len()));
             }
         } else if !packages.uv_tools.is_empty() {
-            self.log(LogLevel::Warn, "uv 不可用，已跳过 UV 工具。");
+            self.unavailable_provider("uv");
             self.progress(end);
         }
     }
@@ -2167,6 +2238,91 @@ mod tests {
     };
     use crate::config::SetupConfig;
     use crate::utils::CancellationToken;
+
+    #[test]
+    fn only_requested_providers_need_managers_and_failed_lists_never_prove_installed() {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(64);
+        let json = crate::request::selected_profile(
+            &crate::default_profile_json().unwrap(),
+            &std::collections::BTreeSet::new(),
+        )
+        .unwrap();
+        let mut config = SetupConfig {
+            include_curated_extras: true,
+            profile: serde_json::from_str(&json).unwrap(),
+            ..SetupConfig::default()
+        };
+        assert_eq!(super::package_manager_needs(&config), (false, false));
+        config.profile.packages.scoop_tools.push("git-lfs".into());
+        assert_eq!(super::package_manager_needs(&config), (false, true));
+        config
+            .profile
+            .packages
+            .store_apps
+            .push(crate::config::WingetApp {
+                id: "9WZDNCRFHVN5".into(),
+                name: "Calculator".into(),
+            });
+        assert_eq!(super::package_manager_needs(&config), (true, true));
+        let engine = super::SetupEngine::new(sender, config, CancellationToken::default());
+        let success = crate::utils::CommandResult {
+            state: crate::utils::CommandState::Exited,
+            exit_code: Some(0),
+            output: "tool v1.0".into(),
+        };
+        assert_eq!(
+            engine.checked_list_output("Cargo", &success),
+            Some("tool v1.0")
+        );
+        for state in [
+            crate::utils::CommandState::Exited,
+            crate::utils::CommandState::OutputFailed,
+        ] {
+            let failed = crate::utils::CommandResult {
+                state,
+                exit_code: Some(1),
+                ..success.clone()
+            };
+            assert_eq!(engine.checked_list_output("Cargo", &failed), None);
+        }
+        engine.unavailable_provider("uv");
+        assert_eq!(engine.errors.get(), 3);
+        assert!(receiver.try_iter().any(|event| matches!(event, SetupEvent::Log(log) if log.level == crate::utils::LogLevel::Error && log.message.contains("uv"))));
+    }
+
+    #[test]
+    fn one_editor_success_does_not_hide_another_editor_failure() {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(64);
+        let engine =
+            super::SetupEngine::new(sender, SetupConfig::default(), CancellationToken::default());
+        let success = crate::utils::CommandResult {
+            state: crate::utils::CommandState::Exited,
+            exit_code: Some(0),
+            output: String::new(),
+        };
+        let failure = crate::utils::CommandResult {
+            exit_code: Some(1),
+            output: "install refused".into(),
+            ..success.clone()
+        };
+        engine.record_extension_result("VS Code", "publisher.extension", &success);
+        engine.record_extension_result("Cursor", "publisher.extension", &failure);
+        assert_eq!(engine.errors.get(), 1);
+        let events: Vec<_> = receiver.try_iter().collect();
+        assert!(events.iter().any(|event| matches!(event, SetupEvent::Log(log) if log.level == crate::utils::LogLevel::Error && log.message.contains("Cursor") && log.message.contains("install refused"))));
+        assert!(super::git_unset_succeeded(&success));
+        assert!(!super::git_unset_succeeded(&failure));
+        let missing = crate::utils::CommandResult {
+            exit_code: Some(5),
+            ..success.clone()
+        };
+        assert!(super::git_unset_succeeded(&missing));
+        let failed_capture = crate::utils::CommandResult {
+            state: crate::utils::CommandState::OutputFailed,
+            ..missing
+        };
+        assert!(!super::git_unset_succeeded(&failed_capture));
+    }
 
     #[test]
     fn package_list_match_is_exact_across_provider_formats() {

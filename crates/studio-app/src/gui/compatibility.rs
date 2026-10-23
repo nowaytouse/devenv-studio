@@ -1,5 +1,6 @@
 //! Reviewed access to the retained Windows deployment engine in the Studio window.
 use super::*;
+use studio_legacy::request::{self, Entry, Group, Request};
 use studio_legacy::{ExecutionTarget, NetworkMode, Options, Report};
 
 pub(super) struct UiState {
@@ -9,6 +10,9 @@ pub(super) struct UiState {
     pub options: Options,
     pub confirmed: bool,
     pub report: Option<Report>,
+    pub selected: BTreeSet<String>,
+    query: String,
+    group: Option<Group>,
     profile_error: Option<String>,
 }
 
@@ -25,12 +29,104 @@ impl Default for UiState {
             options: Options::default(),
             confirmed: false,
             report: None,
+            selected: BTreeSet::new(),
+            query: String::new(),
+            group: None,
             profile_error,
         }
     }
 }
 
+impl UiState {
+    pub(super) fn effective_profile(&self) -> anyhow::Result<String> {
+        request::selected_profile(&self.profile_json, &self.selected)
+    }
+
+    pub(super) fn draft_request(&self) -> anyhow::Result<Request> {
+        let request = Request {
+            schema_version: 1,
+            profile: serde_json::from_str(&self.profile_json)?,
+            target: self.target,
+            network_mode: self.mode,
+            options: self.options.clone(),
+            selection: self.selected.clone(),
+        };
+        request::validate(&request)?;
+        Ok(request)
+    }
+
+    fn restore_request(&mut self, request: Request) -> anyhow::Result<()> {
+        request::validate(&request)?;
+        let profile_json = serde_json::to_string_pretty(&request.profile)?;
+        self.profile_json = profile_json;
+        self.target = request.target;
+        self.mode = request.network_mode;
+        self.options = request.options;
+        self.selected = request.selection;
+        self.confirmed = false;
+        self.report = None;
+        self.profile_error = None;
+        self.query.clear();
+        self.group = None;
+        Ok(())
+    }
+
+    fn profile_edited(&mut self) {
+        self.selected.clear();
+        self.confirmed = false;
+        self.profile_error = None;
+    }
+
+    fn select(&mut self, key: &str, selected: bool) {
+        if selected {
+            self.selected.insert(key.to_owned());
+        } else {
+            self.selected.remove(key);
+        }
+        self.confirmed = false;
+    }
+
+    fn visible<'a>(&self, candidates: &'a [Entry]) -> Vec<&'a Entry> {
+        let query = self.query.trim().to_lowercase();
+        candidates
+            .iter()
+            .filter(|entry| {
+                self.group.is_none_or(|group| entry.group == group)
+                    && (query.is_empty()
+                        || format!("{} {} {}", entry.id, entry.name, group_label(entry.group))
+                            .to_lowercase()
+                            .contains(&query))
+            })
+            .collect()
+    }
+}
+
 impl Studio {
+    pub(super) fn compatibility_file_operation(
+        &mut self,
+        operation: FileOperation,
+        path: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.worker.is_none(),
+            "{}",
+            tx(
+                "请等待当前任务结束后再操作部署草案。",
+                "Wait for the current task before changing deployment drafts."
+            )
+        );
+        match operation {
+            FileOperation::SaveCompatibilityRequest => {
+                request::save(&self.compatibility.draft_request()?, path)
+            }
+            FileOperation::LoadCompatibilityRequest => {
+                let request = request::load(path)?;
+                self.compatibility.restore_request(request)
+            }
+            _ => anyhow::bail!("Unsupported deployment request operation"),
+        }
+    }
+
     pub(super) fn start_compatibility(&mut self) {
         if !self.host.can_apply
             || self.worker.is_some()
@@ -40,12 +136,14 @@ impl Studio {
             return;
         }
         self.compatibility.confirmed = false;
-        let review = match studio_legacy::review(
-            &self.compatibility.profile_json,
-            self.compatibility.target,
-            self.compatibility.mode,
-            &self.compatibility.options,
-        ) {
+        let review = match self.compatibility.effective_profile().and_then(|profile| {
+            studio_legacy::review(
+                &profile,
+                self.compatibility.target,
+                self.compatibility.mode,
+                &self.compatibility.options,
+            )
+        }) {
             Ok(review) => review,
             Err(error) => {
                 self.notice = Some(Notice {
@@ -62,17 +160,153 @@ impl Studio {
         );
     }
 
+    fn compatibility_package_picker(&mut self, ui: &mut egui::Ui, editable: bool) {
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("选择软件、扩展与模型", "Choose packages, extensions and models"));
+            ui.label(tx(
+                "只安装勾选项目，且仅在对应领域启用时执行。关闭领域会保留选择；搜索与筛选不会改变已选项目。Store 项目也需要逐项勾选。",
+                "Only checked items in enabled capabilities are installed. Disabling a capability keeps its selections; search and filters preserve them. Store products also require individual selection.",
+            ));
+            let candidates = match request::candidates(&self.compatibility.profile_json) {
+                Ok(candidates) => candidates,
+                Err(error) => {
+                    ui.colored_label(palette().danger, format!("{error:#}"));
+                    return;
+                }
+            };
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.compatibility.query)
+                        .hint_text(tx("搜索名称、ID 或包管理器…", "Search name, ID or provider…"))
+                        .desired_width(300.0),
+                );
+                egui::ComboBox::from_id_salt("compatibility-package-group")
+                    .selected_text(self.compatibility.group.map_or(tx("全部来源", "All providers"), group_label))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.compatibility.group, None, tx("全部来源", "All providers"));
+                        for group in Group::ALL {
+                            let total = candidates.iter().filter(|entry| entry.group == group).count();
+                            let selected = candidates.iter().filter(|entry| {
+                                entry.group == group && self.compatibility.selected.contains(&entry.key)
+                            }).count();
+                            ui.selectable_value(
+                                &mut self.compatibility.group,
+                                Some(group),
+                                format!("{} · {selected}/{total}", group_label(group)),
+                            );
+                        }
+                    });
+            });
+            let visible = self.compatibility.visible(&candidates);
+            let selected_visible = visible.iter().filter(|entry| self.compatibility.selected.contains(&entry.key)).count();
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(lf!(
+                    "已选 {} 项 · 当前显示 {} / {} 项 · 其中已选 {} 项",
+                    "{} selected · Showing {} / {} items · {} selected here",
+                    self.compatibility.selected.len(), visible.len(), candidates.len(), selected_visible
+                )).color(palette().muted),
+            );
+            ui.add_enabled_ui(editable, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.add_enabled(!visible.is_empty(), egui::Button::new(tx("选择当前显示", "Select visible"))).clicked() {
+                        self.compatibility.selected.extend(visible.iter().map(|entry| entry.key.clone()));
+                        self.compatibility.confirmed = false;
+                    }
+                    let clear_label = if self.compatibility.group.is_some() {
+                        tx("清空当前来源", "Clear this provider")
+                    } else {
+                        tx("清空全部选择", "Clear all selections")
+                    };
+                    if ui.add_enabled(!self.compatibility.selected.is_empty(), egui::Button::new(clear_label)).clicked() {
+                        let group = self.compatibility.group;
+                        for entry in &candidates {
+                            if group.is_none_or(|group| entry.group == group) {
+                                self.compatibility.selected.remove(&entry.key);
+                            }
+                        }
+                        self.compatibility.confirmed = false;
+                    }
+                });
+            });
+            ui.add_space(8.0);
+            if visible.is_empty() {
+                ui.label(tx("没有匹配项目，请调整搜索或来源。", "No matching items. Change the search or provider."));
+            }
+            let row_height = ui.spacing().interact_size.y
+                .max(ui.text_style_height(&egui::TextStyle::Body));
+            egui::ScrollArea::vertical()
+                .id_salt("compatibility-package-rows")
+                .max_height(280.0)
+                .auto_shrink([false, true])
+                .show_rows(ui, row_height, visible.len(), |ui, range| {
+                    for entry in &visible[range] {
+                        let mut checked = self.compatibility.selected.contains(&entry.key);
+                        ui.push_id(&entry.key, |ui| {
+                            ui.horizontal(|ui| {
+                                let width = ui.available_width();
+                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                                let response = ui.add_enabled_ui(editable, |ui| {
+                                    ui.add_sized(
+                                        [width * 0.40, row_height],
+                                        egui::Checkbox::new(&mut checked, &entry.name),
+                                    )
+                                }).inner;
+                                if response.changed() {
+                                    self.compatibility.select(&entry.key, checked);
+                                }
+                                response.on_hover_text(&entry.name);
+                                ui.add_sized(
+                                    [width * 0.35, row_height],
+                                    egui::Label::new(RichText::new(&entry.id).monospace().color(palette().muted)).truncate(),
+                                ).on_hover_text(&entry.id);
+                                ui.add_sized(
+                                    [ui.available_width(), row_height],
+                                    egui::Label::new(RichText::new(group_label(entry.group)).small().color(palette().muted)).truncate(),
+                                );
+                            });
+                        });
+                    }
+                });
+        });
+    }
+
     pub(super) fn compatibility_page(&mut self, ui: &mut egui::Ui) {
         ui.heading(tx("扩展部署", "Extended deployment"));
         ui.label(
             RichText::new(tx(
-                "已合并的旧版工作流：在同一工作台审核 Windows 部署能力与完整 Profile。",
-                "Merged legacy workflows: review Windows deployment capabilities and the complete Profile in this workbench.",
+                "按需组合 Windows 部署能力与单个软件。默认不选择任何软件，先选领域，再勾选所需项目。",
+                "Compose Windows deployment capabilities and individual packages. Nothing is selected by default: enable capabilities, then pick the items you need.",
             ))
             .color(palette().muted),
         );
         ui.add_space(14.0);
         let editable = self.worker.is_none();
+        ui.add_enabled_ui(editable, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .button(tx("保存部署草案…", "Save deployment draft…"))
+                    .clicked()
+                {
+                    self.open_file(FileOperation::SaveCompatibilityRequest);
+                }
+                if ui
+                    .button(tx("载入部署草案…", "Load deployment draft…"))
+                    .clicked()
+                {
+                    self.open_file(FileOperation::LoadCompatibilityRequest);
+                }
+                if ui
+                    .button(tx("重置为默认候选清单", "Reset default candidate catalog"))
+                    .clicked()
+                {
+                    self.compatibility = UiState::default();
+                }
+            });
+        });
+        ui.add_space(10.0);
         let old_target = self.compatibility.target;
         let old_mode = self.compatibility.mode;
         let old_options = self.compatibility.options.clone();
@@ -122,7 +356,8 @@ impl Studio {
                         });
                 });
                 ui.add_space(8.0);
-                for (selected, title) in [
+                ui.columns(2, |columns| {
+                    for (index, (selected, title)) in [
                     (
                         &mut self.compatibility.options.extra_apps,
                         tx("基础与附加软件", "Core and additional applications"),
@@ -159,9 +394,10 @@ impl Studio {
                         &mut self.compatibility.options.tweaks,
                         tx("系统性能与隐私配置", "System performance and privacy configuration"),
                     ),
-                ] {
-                    ui.checkbox(selected, title);
-                }
+                ].into_iter().enumerate() {
+                    columns[index % 2].checkbox(selected, title);
+                    }
+                });
             });
             ui.add_space(8.0);
             egui::CollapsingHeader::new(tx(
@@ -171,8 +407,8 @@ impl Studio {
             .id_salt("compatibility-profile")
             .show(ui, |ui| {
                 ui.label(tx(
-                    "可粘贴原版 SetupProfile JSON。Git 身份等字段应先改为自己的值；编辑只保留在当前窗口，不会自动保存或联网。",
-                    "Paste an existing SetupProfile JSON. Review Git identity and other personal fields before applying. Edits remain in this window and are not saved or sent online automatically.",
+                    "这是候选清单与高级设置，不会全部安装。编辑 JSON 会清空所有单项选择和执行确认；Git 身份等字段应改为自己的值。保存草案会包含这些字段，请妥善保管。",
+                    "This is the candidate catalog and advanced settings, not a bulk install list. Editing JSON clears every item selection and execution confirmation. Review Git identity and personal fields; saved drafts include these values.",
                 ));
                 if let Some(error) = &self.compatibility.profile_error {
                     ui.colored_label(palette().danger, error);
@@ -191,8 +427,7 @@ impl Studio {
                             )
                             .changed()
                         {
-                            self.compatibility.confirmed = false;
-                            self.compatibility.profile_error = None;
+                            self.compatibility.profile_edited();
                         }
                     });
             });
@@ -204,6 +439,8 @@ impl Studio {
             self.compatibility.confirmed = false;
         }
         ui.add_space(16.0);
+        self.compatibility_package_picker(ui, editable);
+        ui.add_space(16.0);
         surface_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.heading(tx("审核与执行", "Review and apply"));
@@ -212,19 +449,53 @@ impl Studio {
                 "This workflow uses network settings independently of the application's modern network profile. Global package sources write Cargo/Pip/NPM native configuration; the network configuration target flushes DNS even in Basic mode. The review below defines the actual scope of complete deployment.",
             ));
             ui.add_space(8.0);
-            let review = studio_legacy::review(
-                &self.compatibility.profile_json,
-                self.compatibility.target,
-                self.compatibility.mode,
-                &self.compatibility.options,
-            );
+            let effective = self.compatibility.effective_profile();
+            let review = effective.as_ref().map_err(|error| anyhow::anyhow!("{error:#}")).and_then(|profile| {
+                studio_legacy::review(
+                    profile,
+                    self.compatibility.target,
+                    self.compatibility.mode,
+                    &self.compatibility.options,
+                )
+            });
             match &review {
                 Ok(review) => {
+                    ui.strong(lf!(
+                        "{} · 已选 {} 个单项",
+                        "{} · {} individual items selected",
+                        target_label(self.compatibility.target),
+                        self.compatibility.selected.len()
+                    ));
                     ui.label(&review.summary);
+                }
+                Err(_) if effective.is_ok()
+                    && self.compatibility.selected.is_empty()
+                    && self.compatibility.options == Options::default() =>
+                {
+                    ui.label(RichText::new(tx(
+                        "先启用要配置的领域；安装软件时，再从候选清单勾选单项。完成后将在这里显示实际计划供你审核。",
+                        "Enable the capabilities you want to configure, then select individual items for software installation. The resulting plan will appear here for review.",
+                    )).color(palette().muted));
                 }
                 Err(error) => {
                     ui.colored_label(palette().danger, format!("{error:#}"));
+                    ui.label(tx(
+                        "请检查当前目标允许的领域、该领域的单项选择，以及高级 Profile 配置。",
+                        "Check which capabilities this target supports, the items selected for those capabilities, and the advanced Profile settings.",
+                    ));
                 }
+            }
+            if let Ok(profile) = &effective {
+                egui::CollapsingHeader::new(tx("实际执行 Profile · 仅含勾选项目", "Effective Profile · Selected items only"))
+                    .id_salt("compatibility-effective-profile")
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("compatibility-effective-profile-content")
+                            .max_height(240.0)
+                            .show(ui, |ui| {
+                                ui.add(egui::Label::new(RichText::new(profile).monospace()).wrap());
+                            });
+                    });
             }
             ui.add_space(8.0);
             ui.label(
@@ -249,8 +520,8 @@ impl Studio {
                 egui::Checkbox::new(
                     &mut self.compatibility.confirmed,
                     tx(
-                        "我已审核完整 Profile、所选领域及上述网络与配置变更",
-                        "I reviewed the complete Profile, selected capabilities, and the network and configuration changes above",
+                        "我已审核实际执行 Profile、勾选项目、领域及上述配置变更",
+                        "I reviewed the effective Profile, selected items, capabilities and configuration changes above",
                     ),
                 ),
             );
@@ -278,8 +549,8 @@ impl Studio {
                 "Embedded Agent Skills / Plugins have not completed review, and unauthenticated legacy rollback journals are not enabled for execution. These two legacy targets remain unavailable. The current review defines the other capabilities.",
             ));
             ui.label(tx(
-                "原现代迁移页面继续可用；本页直接审核完整 Profile，不自动采集或载入个人工具清单。",
-                "The modern migration page remains available. This page reviews the complete Profile directly without automatically collecting or loading a personal tool inventory.",
+                "开发环境迁移页面继续可用；本页审核手动勾选项目与高级设置，不自动采集个人工具清单。部署草案包含候选 Profile 和选择，可保存后在其他机器重新审核。",
+                "The developer environment migration page remains available. This page reviews manually selected items and advanced settings without collecting a personal inventory. A saved draft includes its candidate Profile and selections for review on another machine.",
             ));
         });
         if let Some(report) = &self.compatibility.report {
@@ -334,6 +605,24 @@ fn allowed_target(target: ExecutionTarget) -> bool {
     )
 }
 
+fn group_label(group: Group) -> &'static str {
+    match group {
+        Group::WingetCore => tx("WinGet · 基础软件", "WinGet · Core apps"),
+        Group::WingetDev => tx("WinGet · 开发工具", "WinGet · Developer tools"),
+        Group::Store => tx(
+            "Microsoft Store · 附加软件",
+            "Microsoft Store · Additional apps",
+        ),
+        Group::Scoop => tx("Scoop · 开发工具", "Scoop · Developer tools"),
+        Group::Cargo => tx("Cargo · Rust 工具", "Cargo · Rust tools"),
+        Group::Npm => tx("NPM · 全局工具", "NPM · Global tools"),
+        Group::Pip => tx("Pip · Python 包", "Pip · Python packages"),
+        Group::Uv => tx("uv · Python 工具", "uv · Python tools"),
+        Group::Extension => tx("编辑器扩展", "Editor extensions"),
+        Group::Model => tx("Ollama 模型", "Ollama models"),
+    }
+}
+
 fn target_label(target: ExecutionTarget) -> &'static str {
     match target {
         ExecutionTarget::FullSetup => tx("完整部署", "Complete deployment"),
@@ -370,6 +659,7 @@ mod tests {
     fn compatibility_is_opt_in_and_excludes_unreviewed_legacy_targets() {
         let state = UiState::default();
         assert!(!state.confirmed);
+        assert!(state.selected.is_empty());
         assert!(state.report.is_none());
         assert!(state.options == Options::default());
         assert!(
@@ -392,5 +682,124 @@ mod tests {
         assert!(allowed_target(ExecutionTarget::DevToolsOnly));
         assert!(!allowed_target(ExecutionTarget::AgentSkillsOnly));
         assert!(!allowed_target(ExecutionTarget::RollbackLatest));
+    }
+
+    #[test]
+    fn one_selected_package_is_the_entire_effective_catalog() {
+        let mut state = UiState::default();
+        let candidates = request::candidates(&state.profile_json).unwrap();
+        let entry = candidates
+            .iter()
+            .find(|entry| entry.group == Group::WingetDev)
+            .unwrap();
+        state.confirmed = true;
+        state.select(&entry.key, true);
+        assert!(!state.confirmed);
+        state.options.dev_tools = true;
+        let effective = state.effective_profile().unwrap();
+        let selected = request::candidates(&effective).unwrap();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].key, entry.key);
+        assert!(selected.iter().all(|entry| entry.group != Group::Store));
+        let review =
+            studio_legacy::review(&effective, state.target, state.mode, &state.options).unwrap();
+        assert_eq!(review.config.profile.packages.winget_dev.len(), 1);
+        assert_eq!(review.config.profile.packages.winget_dev[0].id, entry.id);
+    }
+
+    #[test]
+    fn changing_any_candidate_json_clears_selection_and_confirmation() {
+        let mut state = UiState::default();
+        let key = request::candidates(&state.profile_json).unwrap()[0]
+            .key
+            .clone();
+        state.select(&key, true);
+        state.confirmed = true;
+        state.profile_json.push(' ');
+        state.profile_edited();
+        assert!(state.selected.is_empty());
+        assert!(!state.confirmed);
+        state.select(&key, true);
+        state.confirmed = true;
+        state.profile_json = "{".into();
+        state.profile_edited();
+        assert!(state.selected.is_empty());
+        assert!(!state.confirmed);
+        assert!(state.effective_profile().is_err());
+    }
+
+    #[test]
+    fn restoring_a_valid_draft_keeps_choices_but_never_confirmation() {
+        let mut source = UiState::default();
+        let key = request::candidates(&source.profile_json)
+            .unwrap()
+            .into_iter()
+            .find(|entry| entry.group == Group::WingetCore)
+            .unwrap()
+            .key;
+        source.select(&key, true);
+        source.target = ExecutionTarget::FullSetup;
+        source.options.extra_apps = true;
+        source.mode = NetworkMode::Optimized;
+        let request = source.draft_request().unwrap();
+        let mut restored = UiState {
+            confirmed: true,
+            ..UiState::default()
+        };
+        restored.restore_request(request).unwrap();
+        assert_eq!(restored.selected, source.selected);
+        assert!(restored.target == source.target);
+        assert!(restored.mode == source.mode);
+        assert_eq!(restored.options, source.options);
+        assert!(!restored.confirmed);
+    }
+
+    #[test]
+    fn rejecting_a_draft_preserves_the_open_selection_and_profile() {
+        let mut state = UiState::default();
+        let key = request::candidates(&state.profile_json).unwrap()[0]
+            .key
+            .clone();
+        state.select(&key, true);
+        let original_profile = state.profile_json.clone();
+        let original_selection = state.selected.clone();
+        let mut invalid = state.draft_request().unwrap();
+        invalid.selection.insert("unknown:package".into());
+        assert!(state.restore_request(invalid).is_err());
+        assert_eq!(state.profile_json, original_profile);
+        assert_eq!(state.selected, original_selection);
+        assert!(state.target == ExecutionTarget::DevToolsOnly);
+    }
+
+    #[test]
+    fn search_and_provider_filters_preserve_hidden_selections() {
+        let mut state = UiState::default();
+        let candidates = request::candidates(&state.profile_json).unwrap();
+        let entry = candidates
+            .iter()
+            .find(|entry| entry.group == Group::WingetDev)
+            .unwrap();
+        state.select(&entry.key, true);
+        state.query = "this-query-has-no-matches".into();
+        assert!(state.visible(&candidates).is_empty());
+        assert!(state.selected.contains(&entry.key));
+        state.query.clear();
+        state.group = Some(Group::Model);
+        assert!(
+            state
+                .visible(&candidates)
+                .iter()
+                .all(|entry| entry.group == Group::Model)
+        );
+        assert!(state.selected.contains(&entry.key));
+        state.group = None;
+        state.query = entry.id.clone();
+        assert!(
+            state
+                .visible(&candidates)
+                .iter()
+                .any(|candidate| candidate.key == entry.key)
+        );
+        assert_eq!(state.selected.len(), 1);
     }
 }

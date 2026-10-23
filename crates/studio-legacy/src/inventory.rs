@@ -3,11 +3,8 @@ use crate::utils::{CancellationToken, run_native_cmd_timeout};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-pub const DEFAULT_INVENTORY_URL: &str = "https://raw.githubusercontent.com/nowaytouse/LTSC_Tools_Backup/main/src/assets/macos_inventory.json";
-#[cfg(any(target_os = "windows", test))]
-const GITHUB_API_INVENTORY_URL: &str = "https://api.github.com/repos/nowaytouse/LTSC_Tools_Backup/contents/src/assets/macos_inventory.json?ref=main";
 const MAX_INVENTORY_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -116,50 +113,22 @@ impl MacosInventory {
     }
 
     pub fn load_file(path: &Path) -> anyhow::Result<Self> {
+        crate::utils::reject_links(path)?;
+        if !std::fs::symlink_metadata(path)?.is_file() {
+            anyhow::bail!("Mac 清单不是普通文件：{}", path.display());
+        }
+        let file = std::fs::File::open(path)?;
+        if !file.metadata()?.is_file() {
+            anyhow::bail!("Mac 清单句柄不是普通文件：{}", path.display());
+        }
         let mut bytes = Vec::new();
-        std::fs::File::open(path)?
-            .take(MAX_INVENTORY_BYTES + 1)
-            .read_to_end(&mut bytes)?;
+        file.take(MAX_INVENTORY_BYTES + 1).read_to_end(&mut bytes)?;
         if bytes.len() as u64 > MAX_INVENTORY_BYTES {
             anyhow::bail!("Mac 清单超过 1 MiB：{}", path.display());
         }
         let inventory: Self = serde_json::from_slice(&bytes)?;
         inventory.validate()?;
         Ok(inventory)
-    }
-
-    pub fn cache_path() -> PathBuf {
-        std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir)
-            .join("LTSCWorkspace")
-            .join("macos_inventory.json")
-    }
-
-    pub fn source_url_path() -> PathBuf {
-        Self::cache_path().with_file_name("inventory_source_url.txt")
-    }
-
-    pub fn load_cached_or_embedded() -> anyhow::Result<Self> {
-        let path = Self::cache_path();
-        let inventory = if path.exists() {
-            Self::load_file(&path)
-        } else {
-            let inventory = Self::load_embedded()?;
-            inventory.validate()?;
-            Ok(inventory)
-        }?;
-        inventory.ensure_supported()?;
-        Ok(inventory)
-    }
-
-    fn ensure_supported(&self) -> anyhow::Result<()> {
-        crate::config::SetupProfile::load_default()
-            .packages_for_inventory(self)
-            .map(|_| ())
-            .map_err(|error| {
-                anyhow::anyhow!("当前 Windows 程序无法部署这份 Mac 清单，请先更新程序：{error}")
-            })
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {
@@ -186,121 +155,6 @@ impl MacosInventory {
                     anyhow::bail!("Mac 清单中的 {label} 项无效或重复：{value}");
                 }
             }
-        }
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn fetch_from_url(
-        url: &str,
-        cancellation: &crate::utils::CancellationToken,
-    ) -> anyhow::Result<Self> {
-        Self::fetch_with_downloader(url, &Self::cache_path(), cancellation, |source, path| {
-            let output = path.to_string_lossy().into_owned();
-            let mut args = vec![
-                "--fail",
-                "--location",
-                "--silent",
-                "--show-error",
-                "--proto",
-                "=https",
-                "--proto-redir",
-                "=https",
-                "--connect-timeout",
-                "8",
-                "--max-time",
-                "20",
-                "--max-filesize",
-                "1048576",
-                "--user-agent",
-                "LTSCWorkspace/2.2",
-                "--url",
-                source,
-                "--output",
-                &output,
-            ];
-            if source == GITHUB_API_INVENTORY_URL {
-                args.extend(["--header", "Accept: application/vnd.github.raw+json"]);
-            }
-            let result = crate::utils::run_native_cmd_timeout("curl.exe", &args, 25, cancellation);
-            if !result.succeeded() {
-                anyhow::bail!("{}", result.diagnostic());
-            }
-            Ok(())
-        })
-    }
-
-    #[cfg(any(target_os = "windows", test))]
-    fn fetch_with_downloader(
-        url: &str,
-        destination: &Path,
-        cancellation: &crate::utils::CancellationToken,
-        mut download: impl FnMut(&str, &Path) -> anyhow::Result<()>,
-    ) -> anyhow::Result<Self> {
-        Self::validate_inventory_url(url)?;
-        let sources: &[(&str, &str)] = if url == DEFAULT_INVENTORY_URL {
-            &[
-                ("GitHub Raw", DEFAULT_INVENTORY_URL),
-                ("GitHub API", GITHUB_API_INVENTORY_URL),
-            ]
-        } else {
-            &[("自定义 HTTPS 地址", url)]
-        };
-        if cancellation.is_cancelled() {
-            anyhow::bail!("清单更新已取消；仍保留原清单");
-        }
-        if let Some(parent) = destination.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
-        let temporary =
-            destination.with_extension(format!("{}-{stamp}.download", std::process::id()));
-        let mut failures = Vec::new();
-        for (label, source) in sources {
-            if cancellation.is_cancelled() {
-                anyhow::bail!("清单更新已取消；仍保留原清单");
-            }
-            let result = download(source, &temporary);
-            if cancellation.is_cancelled() {
-                let _ = std::fs::remove_file(&temporary);
-                anyhow::bail!("清单更新已取消；仍保留原清单");
-            }
-            let result = result.and_then(|()| Self::adopt_file(&temporary, destination));
-            let _ = std::fs::remove_file(&temporary);
-            match result {
-                Ok(inventory) => return Ok(inventory),
-                Err(error) => failures.push(format!("{label}：{error}")),
-            }
-        }
-        anyhow::bail!(
-            "清单更新失败，仍保留原清单。可改用可访问的 HTTPS 地址或导入本地 JSON。{}",
-            failures.join("；")
-        )
-    }
-
-    #[cfg(any(target_os = "windows", test))]
-    pub fn adopt_file(source: &Path, destination: &Path) -> anyhow::Result<Self> {
-        let inventory = Self::load_file(source)?;
-        inventory.ensure_supported()?;
-        inventory.save_atomic(destination)?;
-        Ok(inventory)
-    }
-
-    pub fn validate_inventory_url(url: &str) -> anyhow::Result<()> {
-        let Some(authority) = url.strip_prefix("https://") else {
-            anyhow::bail!("清单地址必须使用 HTTPS");
-        };
-        let host = authority.split(['/', '?', '#']).next().unwrap_or_default();
-        if url.len() > 2048
-            || host.is_empty()
-            || host.contains('@')
-            || url
-                .chars()
-                .any(|character| character.is_whitespace() || character.is_control())
-        {
-            anyhow::bail!("清单 HTTPS 地址无效");
         }
         Ok(())
     }
@@ -579,141 +433,62 @@ mod tests {
     }
 
     #[test]
-    fn unmapped_download_keeps_the_last_usable_cache() {
+    fn local_inventory_load_rejects_invalid_or_oversized_input() {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "ltsc-inventory-cache-{}-{stamp}",
+            "devenv-inventory-input-{}-{stamp}",
             std::process::id()
         ));
         std::fs::create_dir_all(&root).unwrap();
-        let destination = root.join("macos_inventory.json");
-        let download = root.join("download.json");
-        let current = MacosInventory::load_embedded().unwrap();
-        current.save_atomic(&destination).unwrap();
-        let previous_bytes = std::fs::read(&destination).unwrap();
+        let root = root.canonicalize().unwrap();
+        let source = root.join("inventory.json");
+        let inventory = MacosInventory::load_embedded().unwrap();
+        inventory.save_atomic(&source).unwrap();
+        assert_eq!(MacosInventory::load_file(&source).unwrap(), inventory);
+        assert!(
+            MacosInventory::load_file(&root)
+                .unwrap_err()
+                .to_string()
+                .contains("不是普通文件")
+        );
+        #[cfg(unix)]
+        {
+            let linked = root.join("linked.json");
+            std::os::unix::fs::symlink(&source, &linked).unwrap();
+            assert!(
+                MacosInventory::load_file(&linked)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("link")
+            );
+            let linked_directory = root.join("linked-directory");
+            std::os::unix::fs::symlink(&root, &linked_directory).unwrap();
+            assert!(MacosInventory::load_file(&linked_directory.join("inventory.json")).is_err());
+        }
 
-        let mut incompatible = current.clone();
-        incompatible
+        std::fs::write(&source, b"<html>invalid inventory</html>").unwrap();
+        assert!(MacosInventory::load_file(&source).is_err());
+        let mut duplicate = inventory;
+        duplicate
             .homebrew_formulae
-            .push("ltsc-unmapped-sentinel".into());
-        incompatible.save_atomic(&download).unwrap();
-        assert!(MacosInventory::adopt_file(&download, &destination).is_err());
-        assert_eq!(std::fs::read(&destination).unwrap(), previous_bytes);
+            .push(duplicate.homebrew_formulae[0].clone());
+        duplicate.save_atomic(&source).unwrap();
+        assert!(MacosInventory::load_file(&source).is_err());
 
-        std::fs::File::create(&download)
+        std::fs::File::create(&source)
             .unwrap()
             .set_len(super::MAX_INVENTORY_BYTES + 1)
             .unwrap();
         assert!(
-            MacosInventory::adopt_file(&download, &destination)
+            MacosInventory::load_file(&source)
                 .unwrap_err()
                 .to_string()
                 .contains("1 MiB")
         );
-        assert_eq!(std::fs::read(&destination).unwrap(), previous_bytes);
-
-        let mut compatible = current;
-        compatible.captured_at = "2026-09-27T00:00:00Z".into();
-        compatible.save_atomic(&download).unwrap();
-        assert_eq!(
-            MacosInventory::adopt_file(&download, &destination).unwrap(),
-            compatible
-        );
-        assert_eq!(MacosInventory::load_file(&destination).unwrap(), compatible);
         std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn inventory_download_fallback_preserves_cache_and_honors_cancellation() {
-        use super::{DEFAULT_INVENTORY_URL, GITHUB_API_INVENTORY_URL};
-        use crate::utils::CancellationToken;
-
-        for (scenario, succeeds, attempts) in [
-            ("raw-blocked", true, 2),
-            ("raw-html", true, 2),
-            ("raw-unmapped", true, 2),
-            ("raw-valid", true, 1),
-            ("both-fail", false, 2),
-            ("custom-fail", false, 1),
-            ("cancel-before", false, 0),
-            ("cancel-during", false, 1),
-        ] {
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
-            let root = std::env::temp_dir().join(format!(
-                "ltsc-inventory-{scenario}-{}-{stamp}",
-                std::process::id()
-            ));
-            let destination = root.join("macos_inventory.json");
-            let current = MacosInventory::load_embedded().unwrap();
-            current.save_atomic(&destination).unwrap();
-            let previous = std::fs::read(&destination).unwrap();
-            let mut updated = current.clone();
-            updated.captured_at = "2026-10-01T00:00:00Z".into();
-            let cancellation = CancellationToken::default();
-            if scenario == "cancel-before" {
-                cancellation.cancel();
-            }
-            let url = if scenario == "custom-fail" {
-                "https://example.com/inventory.json?token=private"
-            } else {
-                DEFAULT_INVENTORY_URL
-            };
-            let mut called = Vec::new();
-            let mut temporary_paths = Vec::new();
-            let result = MacosInventory::fetch_with_downloader(
-                url,
-                &destination,
-                &cancellation,
-                |source, temporary| {
-                    called.push(source.to_string());
-                    temporary_paths.push(temporary.to_path_buf());
-                    if scenario == "cancel-during" {
-                        updated.save_atomic(temporary)?;
-                        cancellation.cancel();
-                    } else if matches!(scenario, "both-fail" | "custom-fail")
-                        || (source == DEFAULT_INVENTORY_URL && scenario == "raw-blocked")
-                    {
-                        std::fs::write(temporary, b"partial")?;
-                        anyhow::bail!("network unavailable");
-                    } else if source == DEFAULT_INVENTORY_URL && scenario == "raw-html" {
-                        std::fs::write(temporary, b"<html>blocked</html>")?;
-                    } else if source == DEFAULT_INVENTORY_URL && scenario == "raw-unmapped" {
-                        let mut incompatible = updated.clone();
-                        incompatible
-                            .homebrew_formulae
-                            .push("ltsc-unmapped-sentinel".into());
-                        incompatible.save_atomic(temporary)?;
-                    } else {
-                        updated.save_atomic(temporary)?;
-                    }
-                    Ok(())
-                },
-            );
-            assert_eq!(result.is_ok(), succeeds, "{scenario}: {result:?}");
-            assert_eq!(called.len(), attempts, "{scenario}");
-            if called.len() == 2 {
-                assert_eq!(called, [DEFAULT_INVENTORY_URL, GITHUB_API_INVENTORY_URL]);
-            }
-            assert!(temporary_paths.iter().all(|path| !path.exists()));
-            if succeeds {
-                assert_eq!(result.unwrap(), updated);
-                assert_eq!(MacosInventory::load_file(&destination).unwrap(), updated);
-            } else {
-                let error = result.unwrap_err().to_string();
-                assert!(!error.contains("token=private"));
-                if scenario == "both-fail" {
-                    assert!(error.contains("GitHub Raw") && error.contains("GitHub API"));
-                }
-                assert_eq!(std::fs::read(&destination).unwrap(), previous, "{scenario}");
-            }
-            std::fs::remove_dir_all(root).unwrap();
-        }
     }
 
     #[test]
@@ -727,6 +502,7 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
         let destination = root.join("inventory.json");
         let unrelated = destination.with_extension("json.tmp");
         std::fs::write(&unrelated, b"another writer's data").unwrap();
@@ -735,25 +511,6 @@ mod tests {
         assert_eq!(std::fs::read(&unrelated).unwrap(), b"another writer's data");
         assert_eq!(MacosInventory::load_file(&destination).unwrap(), inventory);
         std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn inventory_source_requires_a_valid_https_url() {
-        assert!(
-            MacosInventory::validate_inventory_url("https://example.com/path/macos_inventory.json")
-                .is_ok()
-        );
-        assert!(
-            MacosInventory::validate_inventory_url("http://example.com/inventory.json").is_err()
-        );
-        assert!(MacosInventory::validate_inventory_url("https:///inventory.json").is_err());
-        assert!(
-            MacosInventory::validate_inventory_url("https://user@example.com/inventory.json")
-                .is_err()
-        );
-        assert!(
-            MacosInventory::validate_inventory_url("https://example.com/path with spaces").is_err()
-        );
     }
 
     #[test]

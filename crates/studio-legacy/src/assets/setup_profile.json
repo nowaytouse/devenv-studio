@@ -117,6 +117,14 @@
       { "id": "Anthropic.Claude", "name": "Claude Desktop" },
       { "id": "Valve.Steam", "name": "Steam Gaming Client" }
     ],
+    "store_apps": [
+      { "id": "9WZDNCRFHVN5", "name": "Windows Calculator" },
+      { "id": "9WZDNCRFJBH4", "name": "Microsoft Photos" },
+      { "id": "9PCFS5B6T72H", "name": "Microsoft Paint" },
+      { "id": "9MZ95KL8MR0L", "name": "Snipping Tool" },
+      { "id": "9N0DX20HK701", "name": "Windows Terminal" },
+      { "id": "9NT1R1C2HH7J", "name": "ChatGPT" }
+    ],
     "scoop_tools": [
       "gh", "git-lfs", "restic", "chezmoi", "atuin", "direnv", "starship", "fastfetch",
       "python", "nodejs-lts", "go", "zig", "deno", "fnm", "bun", "pnpm", "neovim", "mise", "zoxide",
