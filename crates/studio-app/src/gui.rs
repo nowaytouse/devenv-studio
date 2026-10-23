@@ -20,6 +20,7 @@ mod app_pages;
 mod backup;
 mod environment;
 mod hybrid;
+mod network;
 mod power;
 mod rust_toolchains;
 mod storage;
@@ -54,6 +55,7 @@ enum Page {
     Recipes,
     Backup,
     Environment,
+    Network,
     Migration,
     Developer,
     Workbench,
@@ -86,6 +88,9 @@ enum FileOperation {
     ExportRustToolchain,
     ExportMise,
     SaveRustReport,
+    NetworkSave,
+    NetworkLoad,
+    NetworkExportConfig,
 }
 
 impl FileOperation {
@@ -106,6 +111,11 @@ impl FileOperation {
             }
             Self::ExportMise => tx("导出 mise.toml", "Export mise.toml"),
             Self::SaveRustReport => tx("保存 Rust 重部署结果", "Save Rust redeployment result"),
+            Self::NetworkSave => tx("保存网络方案", "Save network profile"),
+            Self::NetworkLoad => tx("载入网络方案", "Load network profile"),
+            Self::NetworkExportConfig => {
+                tx("导出工具网络配置", "Export tool network configuration")
+            }
         }
     }
 }
@@ -158,6 +168,7 @@ struct Notice {
 struct Studio {
     hybrid: hybrid::HybridState,
     backup: backup::BackupUiState,
+    network: network::NetworkUiState,
     power: power::PowerUiState,
     storage_status: Option<Result<studio_deployment::StorageStatus, String>>,
     preferences: Preferences,
@@ -199,6 +210,7 @@ impl Studio {
         let mut app = Self {
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
+            network: network::NetworkUiState::default(),
             power: power::PowerUiState::default(),
             storage_status: None,
             saved_preferences: preferences.clone(),
@@ -228,6 +240,7 @@ impl Studio {
             screenshot,
             frames: 0,
         };
+        app.network = network::NetworkUiState::load();
         app.refresh_recovery();
         app
     }
@@ -487,6 +500,64 @@ impl Studio {
         self.setting_states.clear();
     }
 
+    fn network_summary(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .button(tx("开发网络方案…", "Developer network profile…"))
+                .clicked()
+            {
+                self.page = Page::Network;
+            }
+            match &self.network.active {
+                Ok(profile) => {
+                    let mode = match profile.mode {
+                        studio_deployment::network::ProxyMode::Inherit => {
+                            tx("继承进程代理", "Inherit process proxy")
+                        }
+                        studio_deployment::network::ProxyMode::Direct => {
+                            tx("HTTP 直连", "Direct HTTP")
+                        }
+                        studio_deployment::network::ProxyMode::Manual => profile.proxy_url.as_str(),
+                    };
+                    ui.label(lf!("本次部署将使用：{}", "Next deployment uses: {}", mode));
+                }
+                Err(_) => {
+                    ui.colored_label(
+                        palette().danger,
+                        tx(
+                            "网络方案不可用，部署将停止。",
+                            "Network profile unavailable; deployment will stop.",
+                        ),
+                    );
+                }
+            }
+        });
+        ui.label(RichText::new(tx("仅影响本应用启动的受支持开发工具；系统代理、DNS、WinGet、DISM、VS Code 与 SSH 不在此范围。", "Applies only to supported developer tools launched by this app; system proxy, DNS, WinGet, DISM, VS Code and SSH are outside this scope.")).size(12.0).color(palette().muted));
+    }
+
+    fn start_network_worker<F>(&mut self, label: &'static str, operation: F)
+    where
+        F: FnOnce(Arc<AtomicBool>) -> anyhow::Result<WorkerResult> + Send + 'static,
+    {
+        let profile = match &self.network.active {
+            Ok(profile) => profile.clone(),
+            Err(error) => {
+                self.notice = Some(Notice {
+                    text: lf!(
+                        "网络方案不可用：{error}",
+                        "Network profile unavailable: {error}",
+                        error = error
+                    ),
+                    error: true,
+                });
+                return;
+            }
+        };
+        self.start_worker(label, move |cancel| {
+            studio_deployment::network::with_profile(&profile, || operation(cancel))
+        });
+    }
+
     fn start_worker<F>(&mut self, label: &'static str, operation: F)
     where
         F: FnOnce(Arc<AtomicBool>) -> anyhow::Result<WorkerResult> + Send + 'static,
@@ -600,7 +671,7 @@ impl Studio {
             }
         };
         let (sender, receiver) = mpsc::channel();
-        self.start_worker("正在执行部署 / 功能 / 维护", move |cancel| {
+        self.start_network_worker("正在执行部署 / 功能 / 维护", move |cancel| {
             studio_deployment::execute(plan, cancel, Some(sender)).map(WorkerResult::Deployment)
         });
         if let Some(worker) = &mut self.worker {
@@ -644,6 +715,7 @@ impl Studio {
                                         Page::Environment,
                                         tx("环境配置", "Environment configuration"),
                                     ),
+                                    (Page::Network, tx("网络环境", "Network environment")),
                                     (Page::Migration, tx("迁移与映射", "Migration & mapping")),
                                     (Page::Developer, tx("开发环境", "Developer tools")),
                                     (Page::Status, tx("状态", "Status")),
@@ -779,6 +851,7 @@ impl Studio {
                     Page::Recipes => tx("方案工作区", "Workspace recipes"),
                     Page::Backup => tx("环境备份", "Environment backup"),
                     Page::Environment => tx("环境配置", "Environment configuration"),
+                    Page::Network => tx("网络环境", "Network environment"),
                     Page::Migration => tx("迁移与映射", "Migration & mapping"),
                     Page::Developer => tx("开发环境", "Developer tools"),
                     Page::Workbench => t("配置工作台"),
@@ -808,7 +881,7 @@ impl Studio {
                         } else {
                             preview_host_name()
                         },
-                        if matches!(self.page, Page::Backup | Page::Environment)
+                        if matches!(self.page, Page::Backup | Page::Environment | Page::Network)
                             && cfg!(any(target_os = "macos", windows))
                         {
                             tx("本机开发环境", "Local developer environment")
@@ -1389,6 +1462,7 @@ impl Studio {
     }
 
     fn plan(&mut self, ui: &mut egui::Ui) {
+        self.network_summary(ui);
         ui.heading(t("检查完整工作方案"));
         ui.label(
             RichText::new(lf!(
@@ -1768,7 +1842,7 @@ impl Studio {
                 match &mut dialog {
                     Dialog::File { operation, path, error } => {
                         ui.heading(operation.title());
-                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
+                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::NetworkLoad) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
                         ui.add_space(12.0);
                         ui.add(egui::TextEdit::singleline(path).desired_width(f32::INFINITY).hint_text(t("完整文件路径，例如 /Users/you/Desktop/lt-sc.json")));
                         if let Some(error) = error.as_ref() { ui.colored_label(palette().danger, error); }
@@ -1919,8 +1993,21 @@ impl Studio {
         ) {
             return self.rust_file_operation(operation, &path);
         }
+        if matches!(
+            operation,
+            FileOperation::NetworkSave
+                | FileOperation::NetworkLoad
+                | FileOperation::NetworkExportConfig
+        ) {
+            return self.network_file_operation(operation, &path);
+        }
         let catalog = self.catalog.as_ref().map_err(Clone::clone)?;
         match operation {
+            FileOperation::NetworkSave
+            | FileOperation::NetworkLoad
+            | FileOperation::NetworkExportConfig => {
+                Err("Network operation was not dispatched".into())
+            }
             FileOperation::SaveRustRequest
             | FileOperation::LoadRustRequest
             | FileOperation::ExportRustToolchain
@@ -2015,6 +2102,7 @@ impl eframe::App for Studio {
                             Page::Recipes => self.recipes_page(ui),
                             Page::Backup => self.backup_page(ui),
                             Page::Environment => self.environment_page(ui),
+                            Page::Network => self.network_page(ui),
                             Page::Migration => self.migration_page(ui),
                             Page::Workbench => self.workbench(ui),
                             Page::Power => self.power_page(ui),
@@ -2443,6 +2531,7 @@ mod tests {
         Studio {
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
+            network: network::NetworkUiState::default(),
             power: power::PowerUiState::default(),
             storage_status: None,
             preferences: Preferences::default(),
@@ -2555,6 +2644,118 @@ mod tests {
             label: "test",
         });
         assert!(!app.mutation_available());
+    }
+
+    #[test]
+    fn network_profile_roundtrip_preserves_active_state_and_exports_without_clobbering()
+    -> anyhow::Result<()> {
+        use studio_deployment::network::{Format, NetworkProfile, ProxyMode};
+        let dir = std::env::temp_dir().join(format!(
+            "studio-network-gui-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir)?;
+        let mut app = preview();
+        let original = app.network.active.clone().unwrap();
+        let profile = NetworkProfile {
+            mode: ProxyMode::Manual,
+            proxy_url: "http://127.0.0.1:7890".into(),
+            ..NetworkProfile::default()
+        };
+        app.network.draft = profile.clone();
+        let path = dir.join("network.json");
+        app.file_operation(FileOperation::NetworkSave, path.clone())
+            .map_err(anyhow::Error::msg)?;
+        assert!(
+            app.file_operation(FileOperation::NetworkSave, path.clone())
+                .is_err()
+        );
+        app.network.draft = NetworkProfile::default();
+        app.network.confirmed = true;
+        app.file_operation(FileOperation::NetworkLoad, path)
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(app.network.draft, profile);
+        assert_eq!(app.network.active.as_ref().ok(), Some(&original));
+        assert!(!app.network.confirmed);
+        for (format, name) in [
+            (Format::Git, "gitconfig"),
+            (Format::Cargo, "config.toml"),
+            (Format::Npm, "npmrc"),
+            (Format::Pip, "pip.conf"),
+            (Format::Uv, "uv.toml"),
+        ] {
+            app.network.format = format;
+            let path = dir.join(name);
+            app.file_operation(FileOperation::NetworkExportConfig, path.clone())
+                .map_err(anyhow::Error::msg)?;
+            let bytes = std::fs::read(&path)?;
+            assert!(
+                app.file_operation(FileOperation::NetworkExportConfig, path.clone())
+                    .is_err()
+            );
+            assert_eq!(std::fs::read(path)?, bytes);
+        }
+        let bad = dir.join("invalid.json");
+        std::fs::write(&bad, br#"{"schema_version":1,"proxy":"private"}"#)?;
+        assert!(app.file_operation(FileOperation::NetworkLoad, bad).is_err());
+        assert_eq!(app.network.draft, profile);
+        assert!(
+            app.worker.is_none() && app.selected.is_empty() && app.deployment_selected.is_empty()
+        );
+        std::fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn network_workers_pin_the_reviewed_profile_and_invalid_active_state_prevents_start()
+    -> anyhow::Result<()> {
+        use studio_deployment::network::{NetworkProfile, ProxyMode};
+        let mut app = preview();
+        app.network.active = Err("Synthetic unreadable profile".into());
+        app.start_network_worker("synthetic network", |_| {
+            panic!("Invalid active state must not run")
+        });
+        assert!(app.worker.is_none());
+        let profile = NetworkProfile {
+            mode: ProxyMode::Manual,
+            proxy_url: "http://localhost:7890".into(),
+            ..NetworkProfile::default()
+        };
+        app.network.active = Ok(profile.clone());
+        let dir = std::env::temp_dir().join(format!(
+            "studio-network-scope-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir)?;
+        let path = dir.join("network.json");
+        let output = path.clone();
+        let (release, wait) = mpsc::channel();
+        app.start_network_worker("synthetic network", move |_| {
+            wait.recv()?;
+            studio_deployment::network::record_current(&output)?;
+            Ok(WorkerResult::RustInventory(vec![]))
+        });
+        app.network.active = Ok(NetworkProfile::default());
+        release.send(())?;
+        app.worker
+            .as_mut()
+            .unwrap()
+            .thread
+            .take()
+            .unwrap()
+            .join()
+            .unwrap();
+        app.poll_worker(&egui::Context::default());
+        assert_eq!(studio_deployment::network::load(&path)?, profile);
+        assert!(app.worker.is_none());
+        std::fs::remove_dir_all(dir)?;
+        Ok(())
     }
 
     #[test]
@@ -2714,6 +2915,7 @@ mod tests {
             Page::Recipes,
             Page::Backup,
             Page::Environment,
+            Page::Network,
             Page::Migration,
             Page::Developer,
             Page::Workbench,
@@ -2797,6 +2999,7 @@ mod tests {
                                     Page::Recipes => app.recipes_page(ui),
                                     Page::Backup => app.backup_page(ui),
                                     Page::Environment => app.environment_page(ui),
+                                    Page::Network => app.network_page(ui),
                                     Page::Migration => app.migration_page(ui),
                                     Page::Workbench => app.workbench(ui),
                                     Page::Power => app.power_page(ui),

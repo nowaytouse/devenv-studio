@@ -1,5 +1,11 @@
 # LTSC Studio — design record
 
+## 0.10 application-scoped developer networking
+
+The GUI keeps a separate validated network draft and active profile. Activation preserves exact prior bytes, records the reviewed request under a cooperative file lock, replaces only the application profile and verifies readback before success. Imports never activate automatically. Network-aware deployment workers clone and scope the active profile for their whole lifetime; registry recovery and read-only inventory remain independent.
+
+The process adapter applies validated source arguments before the package delimiter and proxy environment after provider isolation. npm/pip fixed sources are explicitly rewritten; custom Cargo sparse mirrors use source replacement; uv receives a default index. Existing TLS, no-script, wheel-only, install-scope and result checks remain. Homebrew/rustup/Windows deployment evidence records network.json before mutations. Native exports create new files and cannot claim to control inherited global tool config, SSH, OS proxy or DNS. No new external dependency was added.
+
 ## 0.9 channel-aware redeployment
 
 Homebrew policies distinguish missing-only Bundle configuration, rolling updates using local metadata, and native HEAD installation/update with independent installed-channel readback. Existing HEAD upgrades require a matching linked HEAD keg; ambiguous stable/HEAD or keg-only opt state fails before mutation. No forced unlink, overwrite, cleanup or revision-lock claim is introduced.

@@ -14,6 +14,7 @@ mod developer_ids;
 mod engine;
 pub mod environment;
 mod history;
+pub mod network;
 #[cfg(any(windows, test))]
 mod pip;
 #[cfg(any(windows, target_os = "macos", test))]

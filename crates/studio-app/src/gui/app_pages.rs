@@ -509,6 +509,14 @@ impl Studio {
                 ui.label(tx("Windows 备份在迁移页按可信身份映射；筛选和分页保留勾选。Windows 配置使用原有方案和提供程序，WinGet 导出仅含所选 WinGet 软件；其他工具继续使用应用档案。", "Windows backups map trusted identities on the review page; filtering and paging preserve checks. Windows configuration uses the existing workspace and providers. WinGet export contains only selected WinGet applications; other tools remain in app profiles."));
             },
         );
+        settings_section(
+            ui,
+            tx("开发网络环境", "Developer network environment"),
+            |ui| {
+                ui.label(tx("网络页保存本应用部署使用的继承、直连或明确 HTTP 代理与 npm/Python/Cargo 软件源。先审核草稿并启用，后续适用任务才会使用；每次任务固定一份配置。原值可从历史 before.json 重新载入并审核恢复。", "The network page saves inherited, direct or explicit HTTP proxy and npm/Python/Cargo package sources for this app. Review and activate the draft before supported tasks use it; each task pins one profile. Restore prior values by loading and reviewing before.json from history."));
+                ui.label(tx("可导出 Git/Cargo/npm/Pip/uv 原生配置新文件；不覆盖全局文件，不修改系统代理、DNS、VPN、WinGet、DISM、VS Code 或 SSH，也不自动测试连接。自定义源需自行审核服务方。", "Export new native Git/Cargo/npm/Pip/uv configuration files. Global files, system proxy, DNS, VPN, WinGet, DISM, VS Code and SSH are not changed, and connectivity is not automatically tested. Review custom source operators."));
+            },
+        );
         settings_section(ui, tx("开始使用", "Get started"), |ui| {
             for (zh, en) in [
                 (

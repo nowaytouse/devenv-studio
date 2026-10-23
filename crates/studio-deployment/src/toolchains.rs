@@ -148,6 +148,7 @@ pub fn configure(request: RustRequest, cancel: Arc<AtomicBool>) -> Result<RustRe
     {
         let program = rustup_program()?;
         let history = crate::environment::create_history(&studio_platform::data_directory()?)?;
+        crate::network::record_current(&history.join("network.json"))?;
         let mut report = run_recorded(
             &mut Native(std::time::Duration::from_secs(90 * 60)), &program, &request, &cancel,
             &mut |name, value| studio_core::export_document(value, &history.join(name)),

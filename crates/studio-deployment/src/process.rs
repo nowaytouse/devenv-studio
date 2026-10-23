@@ -101,6 +101,157 @@ fn configure_macos_inventory(command: &mut Command) {
         .env("LC_ALL", "C")
         .env("LANG", "C");
 }
+
+fn network_provider(invocation: &Invocation) -> Option<&'static str> {
+    if invocation.npm_node {
+        return Some("npm");
+    }
+    #[cfg(any(windows, test))]
+    if crate::pip::is_invocation(invocation) {
+        return Some("pip");
+    }
+    let name = invocation
+        .program
+        .file_name()?
+        .to_str()?
+        .trim_end_matches(".exe");
+    match name {
+        "brew" => Some("brew"),
+        "rustup" => Some("rustup"),
+        "cargo" => Some("cargo"),
+        "uv" => Some("uv"),
+        _ => None,
+    }
+}
+fn network_arguments(
+    invocation: &Invocation,
+    profile: &crate::network::NetworkProfile,
+) -> Result<Vec<String>> {
+    use crate::network::ProxyMode;
+    crate::network::validate(profile)?;
+    let mut args = invocation.args.clone();
+    let Some(provider) = network_provider(invocation) else {
+        return Ok(args);
+    };
+    let mut options = Vec::new();
+    match provider {
+        "npm" => {
+            for arg in &mut args {
+                if arg.starts_with("--registry=") {
+                    *arg = format!("--registry={}", profile.npm_registry);
+                }
+            }
+            options.push("--strict-ssl=true".into());
+            match profile.mode {
+                ProxyMode::Manual => options.extend([
+                    format!("--proxy={}", profile.proxy_url),
+                    format!("--https-proxy={}", profile.proxy_url),
+                    "--noproxy=".into(),
+                ]),
+                ProxyMode::Direct => options.extend([
+                    "--proxy=null".into(),
+                    "--https-proxy=null".into(),
+                    "--noproxy=*".into(),
+                ]),
+                ProxyMode::Inherit => {}
+            }
+        }
+        "pip" => {
+            for arg in &mut args {
+                if arg.starts_with("--index-url=") {
+                    *arg = format!("--index-url={}", profile.python_index);
+                }
+            }
+            if profile.mode == ProxyMode::Manual {
+                options.push(format!("--proxy={}", profile.proxy_url));
+            }
+        }
+        "uv" if args.first().is_some_and(|a| a == "tool")
+            && args.get(1).is_some_and(|a| a == "install") =>
+        {
+            options.push(format!("--default-index={}", profile.python_index));
+        }
+        "cargo" if profile.cargo_index != crate::network::NetworkProfile::default().cargo_index => {
+            // CLI source replacement preserves Cargo's checksum validation and existing --locked policy.
+            options.extend([
+                "--config".into(),
+                "source.crates-io.replace-with=\"ltsc-studio\"".into(),
+                "--config".into(),
+                format!("source.ltsc-studio.registry=\"{}\"", profile.cargo_index),
+            ]);
+            options.extend(args);
+            return Ok(options);
+        }
+        _ => {}
+    }
+    let insert = args.iter().position(|a| a == "--").unwrap_or(args.len());
+    args.splice(insert..insert, options);
+    Ok(args)
+}
+fn configure_network(
+    command: &mut Command,
+    invocation: &Invocation,
+    profile: &crate::network::NetworkProfile,
+) -> Result<()> {
+    use crate::network::ProxyMode;
+    crate::network::validate(profile)?;
+    let Some(provider) = network_provider(invocation) else {
+        return Ok(());
+    };
+    if provider == "uv" {
+        for (name, _) in std::env::vars_os() {
+            let name_text = name.to_string_lossy().to_ascii_uppercase();
+            if name_text.starts_with("UV_INDEX")
+                || matches!(
+                    name_text.as_str(),
+                    "UV_DEFAULT_INDEX"
+                        | "UV_EXTRA_INDEX_URL"
+                        | "UV_FIND_LINKS"
+                        | "UV_NO_INDEX"
+                        | "UV_INSECURE_HOST"
+                        | "UV_NATIVE_TLS"
+                        | "UV_NO_VERIFY_HASHES"
+                )
+            {
+                command.env_remove(name);
+            }
+        }
+    }
+    if profile.mode == ProxyMode::Inherit {
+        return Ok(());
+    }
+    for (name, _) in std::env::vars_os() {
+        if matches!(
+            name.to_string_lossy().to_ascii_uppercase().as_str(),
+            "HTTP_PROXY" | "HTTPS_PROXY" | "ALL_PROXY" | "NO_PROXY" | "PROXY" | "CARGO_HTTP_PROXY"
+        ) {
+            command.env_remove(name);
+        }
+    }
+    command.env_remove("PROXY").env_remove("proxy");
+    let proxy = if profile.mode == ProxyMode::Manual {
+        profile.proxy_url.as_str()
+    } else {
+        ""
+    };
+    let bypass = if profile.mode == ProxyMode::Direct {
+        "*"
+    } else {
+        ""
+    };
+    for name in ["http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY"] {
+        command.env(name, proxy);
+    }
+    for name in ["all_proxy", "ALL_PROXY"] {
+        command.env(name, "");
+    }
+    for name in ["no_proxy", "NO_PROXY"] {
+        command.env(name, bypass);
+    }
+    command.env("CARGO_HTTP_PROXY", proxy);
+    Ok(())
+}
+
 fn capture(mut reader: impl Read) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     let mut buffer = [0u8; 8192];
@@ -206,9 +357,15 @@ fn run_configured(
             timed_out: false,
         });
     }
+    let network = crate::network::active_profile();
+    let args = if let Some(profile) = &network {
+        network_arguments(invocation, profile)?
+    } else {
+        invocation.args.clone()
+    };
     let mut command = Command::new(&invocation.program);
     command
-        .args(&invocation.args)
+        .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -251,6 +408,9 @@ fn run_configured(
         command.creation_flags(0x08000000);
     }
     configure(&mut command);
+    if let Some(profile) = &network {
+        configure_network(&mut command, invocation, profile)?;
+    }
     let mut child = command
         .spawn()
         .with_context(|| format!("Spawn {}", invocation.program.display()))?;
@@ -348,6 +508,146 @@ mod tests {
             Err(io::Error::other("injected pipe error"))
         }
     }
+
+    #[test]
+    fn reviewed_network_rewrites_sources_and_proxy_before_package_delimiter() {
+        use crate::network::{NetworkProfile, ProxyMode};
+        let profile = NetworkProfile {
+            mode: ProxyMode::Manual,
+            proxy_url: "http://127.0.0.1:7890".into(),
+            npm_registry: "https://packages.example/npm/".into(),
+            python_index: "https://packages.example/simple/".into(),
+            cargo_index: "sparse+https://packages.example/crates/".into(),
+            ..NetworkProfile::default()
+        };
+        let make = |name: &str, args: &[&str]| Invocation {
+            program: std::env::temp_dir().join(name),
+            args: args.iter().map(|s| s.to_string()).collect(),
+            npm_node: name == "node",
+            vscode_node: false,
+        };
+        let npm = make(
+            "node",
+            &[
+                "npm-cli.js",
+                "install",
+                "--registry=https://registry.npmjs.org/",
+                "--ignore-scripts",
+                "--",
+                "typescript",
+            ],
+        );
+        let args = network_arguments(&npm, &profile).unwrap();
+        let delimiter = args.iter().position(|a| a == "--").unwrap();
+        assert_eq!(&args[delimiter + 1..], ["typescript"]);
+        assert!(args[..delimiter].contains(&"--registry=https://packages.example/npm/".into()));
+        assert!(args[..delimiter].contains(&"--proxy=http://127.0.0.1:7890".into()));
+        assert!(
+            args.contains(&"--strict-ssl=true".into()) && args.contains(&"--ignore-scripts".into())
+        );
+        let uv = make(
+            "uv",
+            &[
+                "tool",
+                "install",
+                "--no-config",
+                "--no-python-downloads",
+                "ruff",
+            ],
+        );
+        assert!(
+            network_arguments(&uv, &profile)
+                .unwrap()
+                .contains(&"--default-index=https://packages.example/simple/".into())
+        );
+        let cargo = make(
+            "cargo",
+            &["install", "--locked", "--registry", "crates-io", "ripgrep"],
+        );
+        let args = network_arguments(&cargo, &profile).unwrap();
+        assert_eq!(args[0], "--config");
+        assert!(args.contains(&"source.crates-io.replace-with=\"ltsc-studio\"".into()));
+        assert!(args.contains(&"--locked".into()));
+        let pip = make(
+            "python.exe",
+            &[
+                "-E",
+                "-P",
+                "-m",
+                "pip",
+                "--isolated",
+                "install",
+                "--index-url=https://pypi.org/simple",
+                "--only-binary=:all:",
+                "--",
+                "ruff",
+            ],
+        );
+        let args = network_arguments(&pip, &profile).unwrap();
+        assert!(args.contains(&"--index-url=https://packages.example/simple/".into()));
+        assert!(
+            args.contains(&"--only-binary=:all:".into()) && args.contains(&"--isolated".into())
+        );
+        let unsupported = make("winget.exe", &["install", "--id", "Git.Git"]);
+        assert_eq!(
+            network_arguments(&unsupported, &profile).unwrap(),
+            unsupported.args
+        );
+    }
+
+    #[test]
+    fn direct_and_manual_network_environment_override_conflicting_routes_without_mutating_parent() {
+        use crate::network::{NetworkProfile, ProxyMode};
+        let invocation = Invocation {
+            program: std::env::temp_dir().join("cargo"),
+            args: vec![],
+            vscode_node: false,
+            npm_node: false,
+        };
+        let parent = std::env::var_os("HTTPS_PROXY");
+        for mode in [ProxyMode::Direct, ProxyMode::Manual] {
+            let profile = NetworkProfile {
+                mode,
+                proxy_url: if mode == ProxyMode::Manual {
+                    "http://[::1]:7890".into()
+                } else {
+                    String::new()
+                },
+                ..NetworkProfile::default()
+            };
+            let mut command = Command::new("unused");
+            command.env("PROXY", "http://old.invalid:80");
+            configure_network(&mut command, &invocation, &profile).unwrap();
+            let values: std::collections::BTreeMap<_, _> = command
+                .get_envs()
+                .map(|(k, v)| {
+                    (
+                        k.to_string_lossy().into_owned(),
+                        v.map(|v| v.to_string_lossy().into_owned()),
+                    )
+                })
+                .collect();
+            assert_eq!(values["PROXY"], None);
+            assert_eq!(
+                values["CARGO_HTTP_PROXY"].as_deref(),
+                Some(profile.proxy_url.as_str())
+            );
+            assert_eq!(values["http_proxy"], values["HTTPS_PROXY"]);
+            assert_eq!(
+                values["NO_PROXY"].as_deref(),
+                Some(if mode == ProxyMode::Direct { "*" } else { "" })
+            );
+        }
+        assert_eq!(std::env::var_os("HTTPS_PROXY"), parent);
+        let mut unsupported = Command::new("unused");
+        let command = Invocation {
+            program: std::env::temp_dir().join("winget.exe"),
+            ..invocation
+        };
+        configure_network(&mut unsupported, &command, &NetworkProfile::default()).unwrap();
+        assert_eq!(unsupported.get_envs().count(), 0);
+    }
+
     #[test]
     fn capture_failures_and_limits_are_errors() {
         assert!(capture(Broken).is_err());

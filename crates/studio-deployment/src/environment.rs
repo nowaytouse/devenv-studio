@@ -1,6 +1,5 @@
 //! Reviewed native package configuration, using Homebrew Bundle rather than a shell script.
 use crate::backup::Snapshot;
-#[cfg(any(windows, target_os = "macos", test))]
 use anyhow::Context;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -183,6 +182,7 @@ pub fn configure_brew_with_policy(
         let manifest = PrivateBundle::create(&text)?;
         let result: Result<BundleReport> = (|| {
             let history = create_history(&studio_platform::data_directory()?)?;
+            crate::network::record_current(&history.join("network.json"))?;
             let before = crate::backup::collect(Arc::clone(&cancel))?;
             save_baseline(&before, &history.join("before.json"))?;
             let mut report = run_recorded_bundle(
@@ -235,7 +235,6 @@ fn save_baseline(snapshot: &Snapshot, path: &Path) -> Result<()> {
         .context("Persist the native inventory before configuration")
 }
 
-#[cfg(any(windows, target_os = "macos", test))]
 pub(crate) fn create_history(data: &Path) -> Result<std::path::PathBuf> {
     use std::{
         fs,

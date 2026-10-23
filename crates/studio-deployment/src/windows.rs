@@ -794,6 +794,7 @@ pub(super) fn execute(
     ));
     let file = File::create_new(&history)
         .context("Create deployment history before running any command")?;
+    crate::network::record_current(&history.with_extension("network.json"))?;
     let mut history_store = FileHistory { file, bytes: 0 };
     let mut runner = DeadlineRunner {
         deadline: Instant::now() + TASK_TIMEOUT,

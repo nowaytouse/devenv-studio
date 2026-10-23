@@ -64,7 +64,7 @@ impl Studio {
                 self.backup.bundle_report = None;
                 self.backup.brew_confirm = false;
                 let policy = self.backup.brew_policy;
-                self.start_worker("正在配置 macOS 开发环境", move |cancel| {
+                self.start_network_worker("正在配置 macOS 开发环境", move |cancel| {
                     native::configure_brew_with_policy(entries, policy, cancel)
                         .map(WorkerResult::Bundle)
                 });
@@ -80,6 +80,7 @@ impl Studio {
 
     pub(super) fn environment_page(&mut self, ui: &mut egui::Ui) {
         ui.heading(tx("开发环境配置", "Developer environment configuration"));
+        self.network_summary(ui);
         ui.label(tx("选择目标平台，再审核该平台实际使用的工具清单。备份、配置和结果分别保留。", "Choose a platform and review its native tool inventory. Backups, configuration and results are separate."));
         ui.horizontal_wrapped(|ui| {
             if ui
@@ -308,6 +309,7 @@ mod tests {
         Studio {
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
+            network: network::NetworkUiState::default(),
             power: power::PowerUiState::default(),
             storage_status: None,
             preferences: Preferences::default(),

@@ -1785,7 +1785,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "ltsc-studio"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -3030,7 +3030,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "studio-core"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -3039,7 +3039,7 @@ dependencies = [
 
 [[package]]
 name = "studio-deployment"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -3051,7 +3051,7 @@ dependencies = [
 
 [[package]]
 name = "studio-platform"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "blake3",

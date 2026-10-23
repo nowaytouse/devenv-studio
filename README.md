@@ -2,7 +2,7 @@
 
 用 Rust 构建的 macOS 与 Windows 开发环境备份、配置工作台。两端采集本机工具与版本，保存、载入和审核清单；Mac 使用 Homebrew Bundle 配置所选 formula/cask，Windows 使用 WinGet、Cargo、uv、Pip、NPM 和 VS Code 的可信任务。Windows LTSC 系统设置继续作为独立区域，Linux 可载入、预览和导出。
 
-当前为 0.9.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、63 个开发工具/Python包/扩展、7 个 Windows 可选功能、4 个系统维护任务、4 个存储分析/优化任务，以及五组16个插电电源选项。所有选择默认关闭。
+当前为 0.10.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、63 个开发工具/Python包/扩展、7 个 Windows 可选功能、4 个系统维护任务、4 个存储分析/优化任务，以及五组16个插电电源选项。所有选择默认关闭。
 
 ## 双平台开发环境
 
@@ -17,6 +17,12 @@
 同一页提供 macOS/Windows 共用的 Rust 工具链重部署：读取已安装渠道，选择 stable、beta、nightly、精确版本或按日期 nightly，保存/载入请求，审核后明确安装。使用标准位置现有 rustup 和已有官方默认工具链；安装 minimal profile、不自更新，独立核对安装身份、默认工具链未变及实际编译器版本/完整提交标识/日期，持久化结果后才显示成功。额外 targets、自定义组件、任意 Git URL 与首次 rustup 引导不在本轮范围。
 
 所选请求可以导出原生 rust-toolchain.toml 和 Rust mise.toml，配合现有 Brewfile、WinGet 清单组成多个成熟项目的实际交换入口。mise 当前接入受限清单导出，尚未执行 mise 安装或生成锁文件；固定请求也不等于完整环境的字节级恢复。见[重部署契约](docs/REDEPLOYMENT.md)与[依赖审查](docs/DEPENDENCY_REVIEW.md)。
+
+## 开发网络环境
+
+新增网络环境页，可为下一次 GUI 部署保存“继承代理环境／直连／明确 HTTP 代理”和 npm、Python、Cargo 软件源。代理不含认证信息，软件源仅接受受限 HTTPS；启用前对照已启用内容与草稿，保存原值、记录历史并独立回读。支持 JSON 保存/载入、旧档案恢复，以及 Git、Cargo、npm、Pip、uv 原生配置导出；导出不覆盖用户现有工具配置。
+
+网络方案实际接入本应用的 Homebrew、rustup 和 Windows Cargo/npm/Pip/uv 部署。每次任务固定一份配置，传入真实参数与子进程环境，并写入部署证据；保持 npm 禁脚本、Pip wheel-only 等既有保护。它不修改系统代理、DNS、VPN、SSH、WinGet、DISM 或 VS Code 网络，也不提供网络隔离。官方 Cargo 请求仍可能受已有本地 source 配置影响；自定义 mirror 使用明确 source replacement。详见[网络配置范围与原生契约](docs/NETWORK.md)。
 
 ## 配置覆盖
 
