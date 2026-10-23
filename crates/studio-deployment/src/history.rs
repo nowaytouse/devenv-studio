@@ -365,6 +365,7 @@ fn read_record(
                                 | "uv"
                                 | "vscode"
                                 | "npm"
+                                | "pip"
                         ),
                     "Invalid historical task identity"
                 );
@@ -777,7 +778,7 @@ mod tests {
     }
     #[test]
     fn developer_kind_history_and_legacy_schema_are_both_readable() {
-        for kind in ["cargo", "uv", "vscode", "npm"] {
+        for kind in ["cargo", "uv", "vscode", "npm", "pip"] {
             let f = Fixture::new();
             let mut plan = header();
             plan["plan"]["tasks"][0]["kind"] = Value::String(kind.into());

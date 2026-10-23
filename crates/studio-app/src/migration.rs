@@ -57,6 +57,11 @@ pub fn analyze(bytes: &[u8], target: Target) -> Result<MigrationReport> {
     let mut nodes = 0;
     check_shape(&root, 0, &mut nodes)?;
     let object = object(&root, "document")?;
+    if object.contains_key("platform") || object.contains_key("providers") {
+        let snapshot: studio_deployment::backup::Snapshot = serde_json::from_value(root.clone())
+            .map_err(|_| anyhow::anyhow!("Invalid native macOS backup schema"))?;
+        return crate::backup_migration::analyze(&snapshot, target);
+    }
     let source = match (
         object.contains_key("profile_version"),
         object.contains_key("schema_version"),
@@ -170,6 +175,9 @@ impl Analyzer {
             "uv" => {
                 " Requires an existing usable Python interpreter and uv on Windows; automatic Python downloads are disabled. The source environment is not copied."
             }
+            "pip" => {
+                " Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a supported standard location with bundled pip. Uses compatible wheels only for current-user installation from PyPI; pip resolves dependencies. No project, virtual environment, requirement, PATH or source configuration is imported, and Python/pip are not bootstrapped."
+            }
             "npm" => {
                 " Requires official Node.js and bundled npm on Windows. Uses the fixed current-user npm prefix and official registry with lifecycle scripts disabled; no PATH, mirror or project configuration is imported."
             }
@@ -188,6 +196,39 @@ impl Analyzer {
             Vec::new(),
             vec![id],
         );
+    }
+    fn pip_list(&mut self, value: &Value, origin: &str) -> Result<()> {
+        let list = array(value, origin)?;
+        if list.is_empty() {
+            self.empty(origin);
+        }
+        let mut seen = BTreeSet::new();
+        for value in list {
+            let requested = value
+                .as_str()
+                .context("Legacy Pip entry must be a string")?;
+            ensure!(
+                !requested.is_empty()
+                    && requested.len() <= 256
+                    && !requested.chars().any(char::is_control),
+                "Invalid legacy Pip entry"
+            );
+            let identity = studio_deployment::normalize_pip_id(requested);
+            ensure!(
+                seen.insert(
+                    identity
+                        .clone()
+                        .unwrap_or_else(|| requested.to_ascii_lowercase())
+                ),
+                "Duplicate legacy Pip identity"
+            );
+            if let Some(identity) = identity {
+                self.package(origin, requested, "pip", &identity, "Exact PEP 503-normalized Pip distribution ID exists in the trusted catalog. This is a review suggestion only; installed state, version and configuration have not been migrated.");
+            } else {
+                self.redacted(origin, "Only bare Pip distribution names can be mapped. Requirement specifiers, extras, URLs, paths and custom options are withheld and left for manual review; no installation or alternative provider was selected.");
+            }
+        }
+        Ok(())
     }
     fn provider_list(&mut self, value: &Value, origin: &str, kind: Option<&str>) -> Result<usize> {
         let list = identifiers(value, origin)?;
@@ -249,7 +290,6 @@ impl Analyzer {
             ("cargo_packages", Some("cargo")),
             ("uv_tools", Some("uv")),
             ("npm_globals", Some("npm")),
-            ("pip_packages", None),
             ("scoop_tools", None),
         ] {
             self.provider_list(
@@ -258,6 +298,7 @@ impl Analyzer {
                 kind,
             )?;
         }
+        self.pip_list(required(packages, "pip_packages")?, "packages.pip_packages")?;
         self.unknown(
             packages,
             &[
@@ -753,7 +794,10 @@ impl MacMappings {
         for mapping in &self.mappings {
             ensure!(
                 matches!(mapping.source_kind.as_str(), "formula" | "cask")
-                    && matches!(mapping.kind.as_str(), "package" | "cargo" | "uv" | "vscode"),
+                    && matches!(
+                        mapping.kind.as_str(),
+                        "package" | "cargo" | "uv" | "vscode" | "pip"
+                    ),
                 "Invalid embedded Mac mapping provider"
             );
             ensure!(
@@ -1026,6 +1070,222 @@ mod tests {
                 .settings
                 .contains("experience-consumer-features-off")
         );
+    }
+
+    #[test]
+    fn pip_profile_maps_exact_normalized_ids_without_requirements_or_provider_substitution() {
+        for target in [Target::Win10Ltsc2021, Target::Win11Ltsc2024] {
+            let mut value = profile();
+            value["packages"]["pip_packages"] = serde_json::json!([
+                "IPython",
+                "JUPYTERLAB",
+                "pytest",
+                "black",
+                "isort",
+                "mypy",
+                "rich",
+                "requests",
+                "httpx",
+                "pydantic",
+                "numpy",
+                "pandas",
+                "yamllint",
+                "unknown-pip",
+                "requests[socks]",
+                "requests==1",
+                "requests>=1",
+                "https://example.invalid/PRIVATE_URL?token=PRIVATE_TOKEN",
+                "requests @ https://example.invalid/PRIVATE_URL"
+            ]);
+            let report = analyze(&serde_json::to_vec(&value).unwrap(), target).unwrap();
+            let selected: BTreeSet<_> = report
+                .deployment
+                .iter()
+                .filter(|id| id.starts_with("developer-pip-"))
+                .map(String::as_str)
+                .collect();
+            assert_eq!(
+                selected,
+                BTreeSet::from([
+                    "developer-pip-ipython",
+                    "developer-pip-jupyterlab",
+                    "developer-pip-pytest",
+                    "developer-pip-black",
+                    "developer-pip-isort",
+                    "developer-pip-mypy",
+                    "developer-pip-rich",
+                    "developer-pip-requests",
+                    "developer-pip-httpx",
+                    "developer-pip-pydantic",
+                    "developer-pip-numpy",
+                    "developer-pip-pandas",
+                ])
+            );
+            for requested in ["yamllint", "unknown-pip"] {
+                assert!(report.items.iter().any(|item| {
+                    item.origin == "packages.pip_packages"
+                        && item.requested == requested
+                        && item.status == "manual"
+                        && item.settings.is_empty()
+                        && item.deployment.is_empty()
+                }));
+            }
+            let serialized = serde_json::to_string(&report).unwrap();
+            for withheld in [
+                "requests[socks]",
+                "requests==1",
+                "requests>=1",
+                "PRIVATE_URL",
+                "PRIVATE_TOKEN",
+            ] {
+                assert!(!serialized.contains(withheld));
+            }
+            let redacted: Vec<_> = report
+                .items
+                .iter()
+                .filter(|item| {
+                    item.origin == "packages.pip_packages" && item.requested == "[value redacted]"
+                })
+                .collect();
+            assert_eq!(redacted.len(), 5);
+            assert!(redacted.iter().all(|item| {
+                item.status == "manual" && item.settings.is_empty() && item.deployment.is_empty()
+            }));
+        }
+    }
+
+    #[test]
+    fn fixed_legacy_pip_names_all_map_to_their_reviewed_pip_provider() {
+        let legacy_names = [
+            "buku",
+            "flask",
+            "flask-cors",
+            "numpy",
+            "scipy",
+            "scikit-learn",
+            "pillow",
+            "opencv-python",
+            "torch",
+            "lightgbm",
+            "openvino",
+            "tqdm",
+            "joblib",
+            "sympy",
+            "networkx",
+            "PyWavelets",
+            "certifi",
+            "cryptography",
+            "filelock",
+            "fsspec",
+            "ruff",
+            "pyupgrade",
+            "docutils",
+            "asciidoc",
+            "setuptools",
+            "sphinx",
+        ];
+        for target in [Target::Win10Ltsc2021, Target::Win11Ltsc2024] {
+            let mut value = profile();
+            value["packages"]["pip_packages"] = serde_json::json!(legacy_names);
+            let report = analyze(&serde_json::to_vec(&value).unwrap(), target).unwrap();
+            let entries: Vec<_> = report
+                .items
+                .iter()
+                .filter(|item| item.origin == "packages.pip_packages")
+                .collect();
+            assert_eq!(entries.len(), 26);
+            assert!(entries.iter().all(|item| {
+                item.status == "mapped" && item.settings.is_empty() && item.deployment.len() == 1
+            }));
+            for name in legacy_names {
+                let normalized = studio_deployment::normalize_pip_id(name).unwrap();
+                assert!(
+                    report
+                        .deployment
+                        .contains(&format!("developer-pip-{normalized}"))
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn reviewed_legacy_formula_aliases_select_only_named_pip_distributions() {
+        let inventory = serde_json::json!({
+            "schema_version": 1, "captured_at": "synthetic",
+            "homebrew_formulae": [
+                "asciidoc", "buku", "docutils", "opencv", "python-setuptools",
+                "pyupgrade", "sphinx-doc", "ruff", "opencv@4"
+            ],
+            "homebrew_casks": [], "homebrew_taps": [], "cargo_packages": [],
+            "uv_tools": [], "npm_globals": [], "vscode_extensions": [],
+            "cursor_extensions": [], "warnings": []
+        });
+        let report = analyze_value(&inventory).unwrap();
+        assert_eq!(
+            report.deployment,
+            BTreeSet::from([
+                "developer-pip-asciidoc".into(),
+                "developer-pip-buku".into(),
+                "developer-pip-docutils".into(),
+                "developer-pip-opencv-python".into(),
+                "developer-pip-setuptools".into(),
+                "developer-pip-pyupgrade".into(),
+                "developer-pip-sphinx".into(),
+                "developer-uv-ruff".into(),
+            ])
+        );
+        let opencv = report
+            .items
+            .iter()
+            .find(|item| item.requested == "opencv")
+            .unwrap();
+        assert!(opencv.detail.contains("Python bindings only"));
+        assert!(opencv.detail.contains("no C++ SDK"));
+        assert!(report.items.iter().any(|item| {
+            item.requested == "opencv@4" && item.status == "manual" && item.deployment.is_empty()
+        }));
+        assert!(!report.deployment.contains("developer-pip-ruff"));
+        assert!(report.settings.is_empty());
+    }
+
+    #[test]
+    fn pip_import_preserves_empty_duplicate_type_and_inventory_boundaries() {
+        let mut value = profile();
+        let empty = analyze_value(&value).unwrap();
+        assert!(empty.items.iter().any(|item| {
+            item.origin == "packages.pip_packages"
+                && item.requested == "(empty list)"
+                && item.deployment.is_empty()
+        }));
+        value["packages"]["pip_packages"] = serde_json::json!(["Friendly._-Bard", "friendly-bard"]);
+        assert!(analyze_value(&value).is_err());
+        for entries in [
+            serde_json::json!(["requests", "REQUESTS"]),
+            serde_json::json!([true]),
+            serde_json::json!(["requests\n"]),
+            serde_json::json!([""]),
+            serde_json::json!(["x".repeat(257)]),
+            serde_json::json!("requests"),
+        ] {
+            value["packages"]["pip_packages"] = entries;
+            assert!(analyze_value(&value).is_err());
+        }
+        let inventory = serde_json::json!({
+            "schema_version": 1, "captured_at": "synthetic", "homebrew_formulae": [],
+            "homebrew_casks": [], "homebrew_taps": [], "cargo_packages": [],
+            "uv_tools": ["ruff"], "npm_globals": [], "vscode_extensions": [],
+            "cursor_extensions": [], "warnings": [],
+            "pip_packages": ["requests", "PRIVATE_TOKEN"]
+        });
+        let report = analyze_value(&inventory).unwrap();
+        assert_eq!(
+            report.deployment,
+            BTreeSet::from(["developer-uv-ruff".to_owned()])
+        );
+        assert!(report.settings.is_empty());
+        let serialized = serde_json::to_string(&report).unwrap();
+        assert!(!serialized.contains("PRIVATE_TOKEN"));
+        assert!(!serialized.contains("pip_packages"));
     }
 
     #[test]

@@ -17,6 +17,8 @@ use crate::workspace_io;
 mod i18n;
 use i18n::{lf, t, tx};
 mod app_pages;
+mod backup;
+mod environment;
 mod hybrid;
 mod power;
 mod storage;
@@ -49,6 +51,8 @@ pub fn run_with_options(screenshot: Option<PathBuf>) -> eframe::Result<()> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
     Recipes,
+    Backup,
+    Environment,
     Migration,
     Developer,
     Workbench,
@@ -71,6 +75,11 @@ enum FileOperation {
     Export,
     Save,
     Load,
+    SaveBackup,
+    LoadBackup,
+    ExportBrewfile,
+    ExportWinget,
+    SaveBundleReport,
 }
 
 impl FileOperation {
@@ -79,6 +88,11 @@ impl FileOperation {
             Self::Export => t("导出变更方案"),
             Self::Save => t("保存配置档案"),
             Self::Load => t("载入配置档案"),
+            Self::SaveBackup => tx("保存开发环境备份", "Save environment backup"),
+            Self::LoadBackup => tx("载入开发环境备份", "Load environment backup"),
+            Self::ExportBrewfile => tx("导出 Brewfile", "Export Brewfile"),
+            Self::ExportWinget => tx("导出 WinGet 清单", "Export WinGet inventory"),
+            Self::SaveBundleReport => tx("保存 Mac 配置结果", "Save Mac configuration result"),
         }
     }
 }
@@ -110,6 +124,8 @@ enum WorkerResult {
     Power(RunReport),
     Deployment(studio_deployment::DeploymentReport),
     StorageStatus(Result<studio_deployment::StorageStatus, String>),
+    Backup(studio_deployment::backup::Snapshot),
+    Bundle(studio_deployment::environment::BundleReport),
     Inspection {
         settings: Vec<studio_platform::SettingState>,
         power: Vec<studio_platform::SettingState>,
@@ -126,6 +142,7 @@ struct Notice {
 
 struct Studio {
     hybrid: hybrid::HybridState,
+    backup: backup::BackupUiState,
     power: power::PowerUiState,
     storage_status: Option<Result<studio_deployment::StorageStatus, String>>,
     preferences: Preferences,
@@ -166,6 +183,7 @@ impl Studio {
         };
         let mut app = Self {
             hybrid: hybrid::HybridState::default(),
+            backup: backup::BackupUiState::default(),
             power: power::PowerUiState::default(),
             storage_status: None,
             saved_preferences: preferences.clone(),
@@ -252,11 +270,21 @@ impl Studio {
                 Err(mpsc::TryRecvError::Empty) => None,
             });
         if let Some(mut result) = result {
+            let cancelled = self
+                .worker
+                .as_ref()
+                .is_some_and(|worker| worker.cancel.load(Ordering::Acquire));
             if let Some(mut worker) = self.worker.take()
                 && let Some(thread) = worker.thread.take()
                 && thread.join().is_err()
             {
                 result = Err(t("后台任务发生异常；请检查已有恢复记录。").into());
+            }
+            if cancelled && matches!(&result, Ok(WorkerResult::Backup(_))) {
+                result = Err(tx(
+                    "开发环境采集已取消，保留上一次清单与保存路径。",
+                    "Environment collection cancelled; the previous inventory and saved path were preserved.",
+                ).into());
             }
             self.notice = Some(match result {
                 Ok(WorkerResult::Registry(report) | WorkerResult::Power(report)) => Notice {
@@ -275,6 +303,15 @@ impl Studio {
                     ),
                     error: report.cancelled,
                 },
+                Ok(WorkerResult::Backup(snapshot)) => self.accept_backup(snapshot),
+                Ok(WorkerResult::Bundle(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.bundle_report = Some(report);
+                    notice
+                }
                 Ok(WorkerResult::StorageStatus(result)) => {
                     let notice = match &result {
                         Ok(status) => Notice {
@@ -562,6 +599,11 @@ impl Studio {
                                 tx("工作空间", "Workspace"),
                                 vec![
                                     (Page::Recipes, tx("方案工作区", "Workspace recipes")),
+                                    (Page::Backup, tx("环境备份", "Environment backup")),
+                                    (
+                                        Page::Environment,
+                                        tx("环境配置", "Environment configuration"),
+                                    ),
                                     (Page::Migration, tx("迁移与映射", "Migration & mapping")),
                                     (Page::Developer, tx("开发环境", "Developer tools")),
                                     (Page::Status, tx("状态", "Status")),
@@ -695,6 +737,8 @@ impl Studio {
             ui.label(
                 RichText::new(match self.page {
                     Page::Recipes => tx("方案工作区", "Workspace recipes"),
+                    Page::Backup => tx("环境备份", "Environment backup"),
+                    Page::Environment => tx("环境配置", "Environment configuration"),
                     Page::Migration => tx("迁移与映射", "Migration & mapping"),
                     Page::Developer => tx("开发环境", "Developer tools"),
                     Page::Workbench => t("配置工作台"),
@@ -724,7 +768,11 @@ impl Studio {
                         } else {
                             preview_host_name()
                         },
-                        if self.host.can_apply {
+                        if matches!(self.page, Page::Backup | Page::Environment)
+                            && cfg!(any(target_os = "macos", windows))
+                        {
+                            tx("本机开发环境", "Local developer environment")
+                        } else if self.host.can_apply {
                             t("本机执行")
                         } else {
                             t("交互预览")
@@ -1101,8 +1149,8 @@ impl Studio {
                 "developer",
                 tx("开发环境", "Developer tools"),
                 tx(
-                    "通过 Cargo、uv、NPM 与 VS Code 安装工具及扩展，固定包标识并记录执行结果。",
-                    "Install tools and extensions with Cargo, uv, NPM and VS Code, using exact identities and recorded outcomes.",
+                    "通过 Cargo、uv、Pip、NPM 与 VS Code 安装工具、Python 包及扩展，固定包标识并记录执行结果。",
+                    "Install tools, Python packages and extensions with Cargo, uv, Pip, NPM and VS Code, using exact identities and recorded outcomes.",
                 ),
             ),
             Page::Storage => (
@@ -1206,6 +1254,9 @@ impl Studio {
             .iter()
             .filter(|task| {
                 task.category == category
+                    && (self.page != Page::Developer
+                        || self.hybrid.developer_filter.is_empty()
+                        || task.kind == self.hybrid.developer_filter)
                     && (query.is_empty()
                         || format!(
                             "{} {} {} {:?} {:?}",
@@ -1677,7 +1728,7 @@ impl Studio {
                 match &mut dialog {
                     Dialog::File { operation, path, error } => {
                         ui.heading(operation.title());
-                        ui.label(RichText::new(if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
+                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
                         ui.add_space(12.0);
                         ui.add(egui::TextEdit::singleline(path).desired_width(f32::INFINITY).hint_text(t("完整文件路径，例如 /Users/you/Desktop/lt-sc.json")));
                         if let Some(error) = error.as_ref() { ui.colored_label(palette().danger, error); }
@@ -1808,8 +1859,23 @@ impl Studio {
         if !path.is_absolute() {
             return Err(t("请输入完整的绝对路径。").into());
         }
+        if matches!(
+            operation,
+            FileOperation::SaveBackup
+                | FileOperation::LoadBackup
+                | FileOperation::ExportBrewfile
+                | FileOperation::ExportWinget
+                | FileOperation::SaveBundleReport
+        ) {
+            return self.backup_file_operation(operation, path);
+        }
         let catalog = self.catalog.as_ref().map_err(Clone::clone)?;
         match operation {
+            FileOperation::SaveBackup
+            | FileOperation::LoadBackup
+            | FileOperation::ExportBrewfile
+            | FileOperation::ExportWinget
+            | FileOperation::SaveBundleReport => Err("Backup operation was not dispatched".into()),
             FileOperation::Export => {
                 let plan = workspace_io::plan(
                     catalog,
@@ -1892,6 +1958,8 @@ impl eframe::App for Studio {
                     .show(ui, |ui| {
                         match self.page {
                             Page::Recipes => self.recipes_page(ui),
+                            Page::Backup => self.backup_page(ui),
+                            Page::Environment => self.environment_page(ui),
                             Page::Migration => self.migration_page(ui),
                             Page::Workbench => self.workbench(ui),
                             Page::Power => self.power_page(ui),
@@ -2319,6 +2387,7 @@ mod tests {
     fn preview() -> Studio {
         Studio {
             hybrid: hybrid::HybridState::default(),
+            backup: backup::BackupUiState::default(),
             power: power::PowerUiState::default(),
             storage_status: None,
             preferences: Preferences::default(),
@@ -2588,6 +2657,8 @@ mod tests {
     fn every_page_renders_bilingually_at_minimum_size_without_enabling_preview_mutation() {
         let pages = [
             Page::Recipes,
+            Page::Backup,
+            Page::Environment,
             Page::Migration,
             Page::Developer,
             Page::Workbench,
@@ -2633,6 +2704,12 @@ mod tests {
                     .iter()
                     .find(|task| task.targets.contains(&app.target))
                     .unwrap();
+                app.backup.snapshot = Some(
+                    serde_json::from_slice(include_bytes!(
+                        "../../../examples/mac-development-backup.json"
+                    ))
+                    .unwrap(),
+                );
                 app.deployment_selected.insert(task.id.clone());
                 app.deployment_selected
                     .insert("storage-analyze-system".into());
@@ -2663,6 +2740,8 @@ mod tests {
                                 app.header(ui);
                                 egui::ScrollArea::vertical().show(ui, |ui| match page {
                                     Page::Recipes => app.recipes_page(ui),
+                                    Page::Backup => app.backup_page(ui),
+                                    Page::Environment => app.environment_page(ui),
                                     Page::Migration => app.migration_page(ui),
                                     Page::Workbench => app.workbench(ui),
                                     Page::Power => app.power_page(ui),
@@ -2956,6 +3035,388 @@ mod tests {
         assert!(!app.mutation_available());
         app.notice = None;
         assert!(app.storage_status.is_some());
+    }
+
+    #[test]
+    fn mac_backup_save_load_and_mapping_keep_windows_selection_opt_in() -> anyhow::Result<()> {
+        struct TestDir(PathBuf);
+        impl Drop for TestDir {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let directory = TestDir(std::env::temp_dir().join(format!(
+                "studio-backup-gui-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_nanos()
+            )));
+        std::fs::create_dir(&directory.0)?;
+        let mut app = preview();
+        let snapshot: studio_deployment::backup::Snapshot = serde_json::from_slice(
+            include_bytes!("../../../examples/mac-development-backup.json"),
+        )?;
+        let previous = snapshot.clone();
+        app.accept_backup(snapshot);
+        let path = directory.0.join("environment.json");
+        app.file_operation(FileOperation::SaveBackup, path.clone())
+            .map_err(anyhow::Error::msg)?;
+        assert!(
+            app.file_operation(FileOperation::SaveBackup, path.clone())
+                .is_err()
+        );
+        app.backup.snapshot = None;
+        app.file_operation(FileOperation::LoadBackup, path.clone())
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(app.backup.snapshot.as_ref(), Some(&previous));
+        let invalid = directory.0.join("invalid.json");
+        std::fs::write(&invalid, b"{}")?;
+        assert!(
+            app.file_operation(FileOperation::LoadBackup, invalid)
+                .is_err()
+        );
+        assert_eq!(app.backup.snapshot.as_ref(), Some(&previous));
+        assert_eq!(app.backup.path, Some(path));
+        app.hybrid.review_page = 99;
+        app.hybrid.review_filter = "other".into();
+        app.hybrid.selected_rows.insert(0);
+        app.review_backup()?;
+        assert_eq!(app.hybrid.review_page, 0);
+        assert!(app.hybrid.review_filter.is_empty());
+        assert!(app.page == Page::Migration);
+        assert!(app.migration_current());
+        assert!(
+            app.hybrid
+                .report
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .any(|item| item.status == "mapped")
+        );
+        assert!(app.hybrid.selected_rows.is_empty());
+        assert!(
+            app.selected.is_empty()
+                && app.deployment_selected.is_empty()
+                && app.power_selected.is_empty()
+        );
+        assert!(app.worker.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn cancelled_backup_discards_queued_success_and_preserves_previous_saved_inventory()
+    -> anyhow::Result<()> {
+        let mut app = preview();
+        let previous: studio_deployment::backup::Snapshot = serde_json::from_slice(
+            include_bytes!("../../../examples/mac-development-backup.json"),
+        )?;
+        let path = PathBuf::from("/synthetic/previous-environment.json");
+        app.backup.snapshot = Some(previous.clone());
+        app.backup.path = Some(path.clone());
+        let mut late = previous.clone();
+        late.captured_at = "1792800000".into();
+        let (sender, receiver) = mpsc::channel();
+        sender.send(Ok(WorkerResult::Backup(late)))?;
+        app.worker = Some(Worker {
+            cancel: Arc::new(AtomicBool::new(true)),
+            receiver,
+            thread: None,
+            events: None,
+            label: "test",
+        });
+        app.poll_worker(&egui::Context::default());
+        assert_eq!(app.backup.snapshot.as_ref(), Some(&previous));
+        assert_eq!(app.backup.path.as_ref(), Some(&path));
+        assert!(app.worker.is_none());
+        assert!(app.notice.as_ref().is_some_and(|notice| notice.error));
+        assert!(
+            app.selected.is_empty()
+                && app.deployment_selected.is_empty()
+                && app.power_selected.is_empty()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn large_backup_keeps_controls_accessible_and_searches_all_virtual_rows() -> anyhow::Result<()>
+    {
+        fn render(
+            app: &mut Studio,
+            context: &egui::Context,
+            expand: bool,
+        ) -> Vec<(egui::accesskit::NodeId, String)> {
+            let mut output = context.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(980.0, 680.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("backup-test-main")
+                            .show(ui, |ui| {
+                                if expand {
+                                    app.backup.query = "synthetic-".into();
+                                }
+                                app.backup_page(ui);
+                            });
+                    });
+                },
+            );
+            output.textures_delta.clear();
+            let tree = output
+                .platform_output
+                .accesskit_update
+                .expect("accessibility update");
+            let nodes: std::collections::BTreeMap<_, _> = tree.nodes.into_iter().collect();
+            let mut pending = vec![egui::accesskit_root_id().accesskit_id()];
+            let mut seen = BTreeSet::new();
+            let mut labels = Vec::new();
+            while let Some(id) = pending.pop() {
+                if !seen.insert(id) {
+                    continue;
+                }
+                let node = nodes.get(&id).expect("reachable node");
+                pending.extend_from_slice(node.children());
+                if let Some(label) = node.label().or_else(|| node.value()) {
+                    labels.push((id, label.to_owned()));
+                }
+            }
+            labels
+        }
+        let mut app = preview();
+        app.preferences.language = Language::EnUs;
+        i18n::set_language(Language::EnUs);
+        let mut snapshot: studio_deployment::backup::Snapshot = serde_json::from_slice(
+            include_bytes!("../../../examples/mac-development-backup.json"),
+        )?;
+        snapshot
+            .providers
+            .iter_mut()
+            .find(|provider| provider.kind == "brew_formula")
+            .unwrap()
+            .packages = (0..447)
+            .map(|index| studio_deployment::backup::Package {
+                name: format!("synthetic-{index:04}"),
+                version: "1.2.3".into(),
+            })
+            .collect();
+        studio_deployment::backup::validate(&snapshot)?;
+        app.backup.snapshot = Some(snapshot.clone());
+        app.backup.path = Some(PathBuf::from("/synthetic/environment.json"));
+        let context = egui::Context::default();
+        context.all_styles_mut(|style| style.animation_time = 0.0);
+        context.enable_accesskit();
+        let collapsed = render(&mut app, &context, false);
+        for control in ["Save backup…", "Review Windows mappings"] {
+            assert!(
+                collapsed.iter().any(|(_, label)| label == control),
+                "{control} is reachable"
+            );
+        }
+        assert!(!collapsed.iter().any(|(_, label)| label == "synthetic-0000"));
+        render(&mut app, &context, true);
+        let expanded = render(&mut app, &context, true);
+        assert!(
+            expanded.iter().any(|(_, label)| label == "synthetic-0000"),
+            "Expanded AX labels: {expanded:?}"
+        );
+        assert!(
+            expanded
+                .iter()
+                .filter(|(_, label)| label.starts_with("synthetic-"))
+                .count()
+                < 25
+        );
+        assert!(!expanded.iter().any(|(_, label)| label == "synthetic-0446"));
+        let first_id = expanded
+            .iter()
+            .find(|(_, label)| label == "synthetic-0000")
+            .unwrap()
+            .0;
+        app.backup.query = "synthetic-0000".into();
+        render(&mut app, &context, false);
+        let filtered_first = render(&mut app, &context, false);
+        assert_eq!(
+            filtered_first
+                .iter()
+                .find(|(_, label)| label == "synthetic-0000")
+                .unwrap()
+                .0,
+            first_id
+        );
+        app.backup.query = "synthetic-0446".into();
+        render(&mut app, &context, false);
+        let tail = render(&mut app, &context, false);
+        assert!(tail.iter().any(|(_, label)| label == "synthetic-0446"));
+        assert_eq!(app.backup.snapshot.as_ref(), Some(&snapshot));
+        let report = crate::backup_migration::analyze(&snapshot, app.target)?;
+        assert_eq!(
+            report
+                .items
+                .iter()
+                .filter(|item| item.origin == "homebrew_formulae")
+                .count(),
+            447
+        );
+        assert!(
+            app.selected.is_empty()
+                && app.deployment_selected.is_empty()
+                && app.power_selected.is_empty()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn migration_pagination_keeps_accessible_review_and_full_report_checked_requests()
+    -> anyhow::Result<()> {
+        fn render(app: &mut Studio, context: &egui::Context) -> Vec<String> {
+            let mut output = context.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(980.0, 680.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("migration-test-main")
+                            .show(ui, |ui| app.migration_page(ui));
+                    });
+                },
+            );
+            output.textures_delta.clear();
+            let nodes: std::collections::BTreeMap<_, _> = output
+                .platform_output
+                .accesskit_update
+                .expect("AX update")
+                .nodes
+                .into_iter()
+                .collect();
+            let mut pending = vec![egui::accesskit_root_id().accesskit_id()];
+            let mut seen = BTreeSet::new();
+            let mut labels = Vec::new();
+            while let Some(id) = pending.pop() {
+                if !seen.insert(id) {
+                    continue;
+                }
+                let node = nodes.get(&id).expect("reachable AX node");
+                pending.extend_from_slice(node.children());
+                if let Some(label) = node.label().or_else(|| node.value()) {
+                    labels.push(label.to_owned());
+                }
+            }
+            labels
+        }
+        let mut app = preview();
+        app.preferences.language = Language::EnUs;
+        i18n::set_language(Language::EnUs);
+        app.catalog = Ok(studio_core::load_catalog()?);
+        app.deployment_catalog = Ok(studio_deployment::catalog()?);
+        let mut report = crate::migration::analyze(
+            include_bytes!("../../../examples/migration-profile.json"),
+            app.target,
+        )?;
+        let first = report
+            .items
+            .iter()
+            .find(|item| item.status == "mapped" && !item.settings.is_empty())
+            .unwrap()
+            .clone();
+        let last = report
+            .items
+            .iter()
+            .find(|item| item.status == "mapped" && !item.deployment.is_empty())
+            .unwrap()
+            .clone();
+        report.items = vec![first.clone()];
+        report.items.extend((0..447).map(|index| crate::migration::MigrationItem {
+            origin: "synthetic_notes".into(), requested: format!("synthetic-note-{index:04}"),
+            status: "manual".into(), detail: "Source package has no reviewed Windows equivalent. Captured version remains source metadata only; no installation request was selected.".into(),
+            settings: Vec::new(), deployment: Vec::new(),
+        }));
+        report.items.push(last.clone());
+        let last_index = report.items.len() - 1;
+        app.hybrid.report = Some(report);
+        app.hybrid.path = "/synthetic/migration.json".into();
+        app.hybrid.report_path = Some(app.hybrid.path.clone());
+        app.hybrid.report_target = Some(app.target);
+        let context = egui::Context::default();
+        context.enable_accesskit();
+        let initial = render(&mut app, &context);
+        for control in [
+            "All",
+            "Mapped",
+            "Other",
+            "Previous",
+            "Next",
+            "Merge checked items into workspace",
+        ] {
+            assert!(
+                initial.iter().any(|label| label == control),
+                "{control} is reachable"
+            );
+        }
+        assert!(
+            initial
+                .iter()
+                .filter(|label| label.starts_with("synthetic-note-"))
+                .count()
+                < 20
+        );
+        assert!(app.hybrid.selected_rows.is_empty());
+        assert!(
+            app.hybrid.checked_requests().0.is_empty()
+                && app.hybrid.checked_requests().1.is_empty()
+        );
+        app.hybrid.review_page = usize::MAX;
+        let tail = render(&mut app, &context);
+        assert_eq!(app.hybrid.review_page, 22);
+        assert!(tail.iter().any(|label| label == "synthetic-note-0446"));
+        app.hybrid.selected_rows.extend([0, last_index]);
+        app.hybrid.review_filter = "other".into();
+        app.hybrid.review_page = 1;
+        render(&mut app, &context);
+        assert_eq!(app.hybrid.selected_rows, BTreeSet::from([0, last_index]));
+        let manual = &mut app.hybrid.report.as_mut().unwrap().items[1];
+        manual.settings.push("manual-setting-must-not-merge".into());
+        manual.deployment.push("manual-task-must-not-merge".into());
+        app.hybrid.selected_rows.extend([1, usize::MAX]);
+        let (settings, tasks) = app.hybrid.checked_requests();
+        assert_eq!(settings, first.settings.iter().cloned().collect());
+        assert_eq!(tasks, last.deployment.iter().cloned().collect());
+        app.hybrid.selected_rows.remove(&1);
+        app.hybrid.selected_rows.remove(&usize::MAX);
+        assert!(app.migration_current());
+        let (merged_settings, merged_tasks) = crate::solutions::merge(
+            app.catalog.as_ref().unwrap(),
+            app.target,
+            &app.selected,
+            &app.deployment_selected,
+            &settings,
+            &tasks,
+        )?;
+        assert!(settings.is_subset(&merged_settings) && tasks.is_subset(&merged_tasks));
+        app.hybrid.review_filter = "mapped".into();
+        let mapped = render(&mut app, &context);
+        assert_eq!(app.hybrid.review_page, 0);
+        assert!(
+            !mapped
+                .iter()
+                .any(|label| label.starts_with("synthetic-note-"))
+        );
+        assert_eq!(app.hybrid.selected_rows, BTreeSet::from([0, last_index]));
+        app.hybrid.reset_review();
+        assert_eq!(app.hybrid.review_page, 0);
+        assert!(app.hybrid.review_filter.is_empty() && app.hybrid.selected_rows.is_empty());
+        Ok(())
     }
 
     #[test]

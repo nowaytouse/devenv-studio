@@ -2340,6 +2340,265 @@
       "restart": "No restart required. If a command is unavailable, check whether PATH already includes the user npm prefix.",
       "limitations": "Requires the official Node.js Windows installation and bundled npm. Uses the fixed current-user %APPDATA%\\npm prefix and registry.npmjs.org, preserving already installed tools. Does not change PATH, mirrors or project dependencies; user npm configuration is ignored and lifecycle scripts are disabled. Packages requiring build scripts may not work. Readback verifies exact installed identity and version, not runtime functionality. Versions follow the registry; registry recovery cannot uninstall packages."
     },
+    "developer-pip-buku": {
+      "title": "buku (Pip user install)",
+      "description": "Command-line bookmark manager; installs without reading, importing or synchronizing bookmark databases.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-flask": {
+      "title": "Flask (Pip user install)",
+      "description": "Python web application framework; installs without creating a project or starting a web service.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-flask-cors": {
+      "title": "Flask-CORS (Pip user install)",
+      "description": "Cross-origin request extension for Flask; installs without enabling site CORS policies or changing service configuration.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-scipy": {
+      "title": "SciPy (Pip user install)",
+      "description": "Scientific computing library; installs compatible wheels without compiling native code or reading user data.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-scikit-learn": {
+      "title": "scikit-learn (Pip user install)",
+      "description": "Python machine-learning library; installs without training models or reading datasets.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-pillow": {
+      "title": "Pillow (Pip user install)",
+      "description": "Python imaging library; installs without reading or converting image files.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-opencv-python": {
+      "title": "OpenCV Python (Pip user install)",
+      "description": "OpenCV Python bindings distribution; does not reproduce the Homebrew C++ SDK, optional modules or build flags, or process images or camera input.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-torch": {
+      "title": "PyTorch (Pip user install)",
+      "description": "Tensor and deep-learning library; downloads can be large. Installs compatible PyPI wheels without downloading models, configuring GPU drivers or guaranteeing accelerator support.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-lightgbm": {
+      "title": "LightGBM (Pip user install)",
+      "description": "Gradient-boosting machine-learning library; installs compatible wheels without training models or installing GPU/OpenCL runtimes.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-openvino": {
+      "title": "OpenVINO (Pip user install)",
+      "description": "Model-inference toolkit; downloads can be large. Installs compatible wheels without downloading models, configuring device drivers or validating accelerators.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-tqdm": {
+      "title": "tqdm (Pip user install)",
+      "description": "Python progress-bar library; installs without running user workloads.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-joblib": {
+      "title": "joblib (Pip user install)",
+      "description": "Python caching and parallel-execution library; installs without loading serialized data or launching parallel workloads.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-sympy": {
+      "title": "SymPy (Pip user install)",
+      "description": "Python symbolic-mathematics library; installs without running calculations.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-networkx": {
+      "title": "NetworkX (Pip user install)",
+      "description": "Graph structures and network-analysis library; installs without reading graph data or capturing network traffic.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-pywavelets": {
+      "title": "PyWavelets (Pip user install)",
+      "description": "Python wavelet-transform library; installs compatible wheels without processing user signals or images.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-certifi": {
+      "title": "certifi (Pip user install)",
+      "description": "Mozilla root-certificate collection for Python applications; does not change the Windows certificate store or disable TLS verification.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-cryptography": {
+      "title": "cryptography (Pip user install)",
+      "description": "Python cryptographic primitives library; installs compatible wheels without generating, reading or importing user keys.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-filelock": {
+      "title": "filelock (Pip user install)",
+      "description": "Cross-platform file-locking library; installs without locking user files.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-fsspec": {
+      "title": "fsspec (Pip user install)",
+      "description": "Python filesystem interface library; installs the base package without selecting optional backends, mounting storage or importing cloud credentials.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-ruff": {
+      "title": "Ruff (Pip user install)",
+      "description": "Pip distribution of the Python linter and formatter; installs without running checks or rewriting projects, separately from uv tool installations.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-pyupgrade": {
+      "title": "pyupgrade (Pip user install)",
+      "description": "Python syntax-upgrade tool; installs without rewriting source files or pre-commit configuration.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-docutils": {
+      "title": "Docutils (Pip user install)",
+      "description": "reStructuredText document-processing tools; installs without converting user documents or installing external toolchains such as TeX.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-asciidoc": {
+      "title": "AsciiDoc.py (Pip user install)",
+      "description": "Legacy AsciiDoc.py document processor; not an implementation of the current AsciiDoc specification and does not install a full DocBook or TeX toolchain.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-setuptools": {
+      "title": "setuptools (Pip user install)",
+      "description": "User installation of Python build and packaging tools; does not upgrade the interpreter's bundled pip or build or modify projects.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-sphinx": {
+      "title": "Sphinx (Pip user install)",
+      "description": "Python documentation generator; installs without building project documentation or installing optional PDF/TeX toolchains.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-ipython": {
+      "title": "IPython (Pip user install)",
+      "description": "Enhanced interactive Python shell; installs without starting a session.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-jupyterlab": {
+      "title": "JupyterLab (Pip user install)",
+      "description": "Interactive notebook and data-analysis environment; installs without starting a server, browser or notebook.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-pytest": {
+      "title": "pytest (Pip user install)",
+      "description": "Python testing framework; installs without collecting or executing project tests.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-black": {
+      "title": "Black (Pip user install)",
+      "description": "Python code formatter; installs without formatting or rewriting project files.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-isort": {
+      "title": "isort (Pip user install)",
+      "description": "Python import sorter; installs without rewriting project imports or formatting configuration.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-mypy": {
+      "title": "mypy (Pip user install)",
+      "description": "Static type checker for Python; installs without running project checks or importing type-checking configuration.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-rich": {
+      "title": "Rich (Pip user install)",
+      "description": "Library for terminal rich text, tables and progress displays; installs the distribution without running examples.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-requests": {
+      "title": "Requests (Pip user install)",
+      "description": "HTTP client library for Python; installs without sending requests or importing credentials or proxy configuration.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-httpx": {
+      "title": "HTTPX (Pip user install)",
+      "description": "Python HTTP client library with synchronous and asynchronous APIs; does not select the optional CLI extra or send requests.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-pydantic": {
+      "title": "Pydantic (Pip user install)",
+      "description": "Data validation library using Python type hints; installs without migrating existing application models or major-version APIs.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-numpy": {
+      "title": "NumPy (Pip user install)",
+      "description": "Multidimensional arrays and numerical computing for Python; installs compatible wheels without source builds.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
+    "developer-pip-pandas": {
+      "title": "pandas (Pip user install)",
+      "description": "Tabular data manipulation and analysis for Python; installs without reading, converting or uploading user data.",
+      "category": "Developer tools",
+      "restart": "No restart required. PATH is unchanged; new commands may need to be invoked through the selected Python interpreter.",
+      "limitations": "Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a standard install location with bundled pip. WindowsApps, portable, custom-location and version-manager installations are unsupported; Python and pip are not installed or upgraded automatically. Uses official PyPI and the selected interpreter's current-user site-packages, accepting compatible wheels only and failing when wheels are unavailable. Wheel availability depends on interpreter version and architecture; native libraries, drivers and GPU runtimes may still need to be supplied separately. pip resolves and installs dependencies, which may change dependency versions in the same user environment. Does not import or modify projects, virtual environments, requirements, pip configuration, mirrors or PATH. Versions follow current resolution and may be incompatible with existing apps. Metadata verification is not a runtime test; registry recovery cannot undo package or dependency changes."
+    },
     "developer-npm-serve": {
       "title": "serve (NPM)",
       "description": "Static-site preview server. Installs the tool without starting a service or changing the firewall.",

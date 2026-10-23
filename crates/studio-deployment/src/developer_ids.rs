@@ -12,6 +12,31 @@ fn ends_alphanumeric(value: &str) -> bool {
             .last()
             .is_some_and(u8::is_ascii_alphanumeric)
 }
+/// A bare distribution identity, never a requirement, URL, path or option.
+pub fn normalize_pip_id(value: &str) -> Option<String> {
+    if !bounded(value)
+        || !ends_alphanumeric(value)
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+    {
+        return None;
+    }
+    let mut result = String::with_capacity(value.len());
+    let mut separator = false;
+    for byte in value.bytes() {
+        if b"-_.".contains(&byte) {
+            if !separator {
+                result.push('-');
+            }
+            separator = true;
+        } else {
+            result.push(char::from(byte.to_ascii_lowercase()));
+            separator = false;
+        }
+    }
+    Some(result)
+}
 pub(crate) fn valid(kind: &str, value: &str) -> bool {
     if !bounded(value) {
         return false;
@@ -23,6 +48,7 @@ pub(crate) fn valid(kind: &str, value: &str) -> bool {
                     .bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"-_".contains(&b))
         }
+        "pip" => normalize_pip_id(value).as_deref() == Some(value),
         "uv" => {
             ends_alphanumeric(value)
                 && value
@@ -58,6 +84,34 @@ pub(crate) fn valid(kind: &str, value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pip_names_are_bare_and_canonicalize_every_separator_run() {
+        assert_eq!(
+            normalize_pip_id("PyWavelets").as_deref(),
+            Some("pywavelets")
+        );
+        assert_eq!(
+            normalize_pip_id("friendly-._..Bard").as_deref(),
+            Some("friendly-bard")
+        );
+        assert!(valid("pip", "opencv-python"));
+        assert!(!valid("pip", "OpenCV_Python"));
+        for name in [
+            "",
+            "../pkg",
+            "name==1",
+            "name[extra]",
+            "-x",
+            "foo ",
+            "foo\n",
+            "https://example.com",
+            "éclair",
+            "pkg;exit",
+            "foo-",
+        ] {
+            assert!(normalize_pip_id(name).is_none(), "{name}");
+        }
+    }
     #[test]
     fn exact_identifiers_accept_known_packages_and_reject_arguments_and_urls() {
         for (kind, id) in [

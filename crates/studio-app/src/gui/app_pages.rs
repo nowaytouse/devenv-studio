@@ -496,6 +496,18 @@ impl Studio {
 
     pub(super) fn help_page(&self, ui: &mut egui::Ui) {
         ui.heading(tx("帮助", "Help"));
+        settings_section(
+            ui,
+            tx(
+                "开发环境备份与配置",
+                "Developer environment backup and configuration",
+            ),
+            |ui| {
+                ui.label(tx("在环境备份页明确采集当前 Mac 或 Windows，再保存本地清单。完整、未找到与失败分别记录；清单不包含项目、凭据、配置文件或虚拟环境。", "Explicitly capture this Mac or Windows machine on the backup page, then save a local inventory. Complete, unavailable and failed are distinct. Projects, credentials, settings and virtual environments are not included."));
+                ui.label(tx("Mac 环境配置从基础工具或备份中逐项选择 Homebrew formula/cask，审核并导出 Brewfile，或在已准备 Homebrew 的 Mac 上确认配置。依赖可能改变，取消不保证安装器已停止，没有自动回滚。", "Mac configuration selects Homebrew formulae/casks from starter tools or a backup. Review and export a Brewfile, or confirm local configuration after preparing Homebrew. Dependencies can change, installers may continue after cancellation, and no automatic rollback is available."));
+                ui.label(tx("Windows 备份在迁移页按可信身份映射；筛选和分页保留勾选。Windows 配置使用原有方案和提供程序，WinGet 导出仅含所选 WinGet 软件；其他工具继续使用应用档案。", "Windows backups map trusted identities on the review page; filtering and paging preserve checks. Windows configuration uses the existing workspace and providers. WinGet export contains only selected WinGet applications; other tools remain in app profiles."));
+            },
+        );
         settings_section(ui, tx("开始使用", "Get started"), |ui| {
             for (zh, en) in [
                 (
@@ -519,9 +531,9 @@ impl Studio {
             }
         });
         settings_section(ui, tx("组合与迁移", "Recipes and migration"), |ui| {
-            ui.label(tx("方案工作区可预览日常、Rust、Python、Web 和 WSL 组合，再明确加入当前选择。组合会一起列出系统设置、软件、开发工具与扩展，仍可逐项修改。", "Review daily, Rust, Python, Web and WSL recipes in the workspace, then explicitly add them to your selection. Each recipe combines settings, software, developer tools and extensions; every item remains editable."));
+            ui.label(tx("方案工作区可预览日常、Rust、Python工具、Python数据与交互、Web 和 WSL 组合，再明确加入当前选择。组合会一起列出系统设置、软件、开发工具与扩展，仍可逐项修改。", "Review everyday, Rust, Python tools, Python data, Web and WSL recipes in the workspace, then explicitly add them to your selection. Each recipe combines settings, software, developer tools and extensions; every item remains editable."));
             ui.label(tx("迁移与映射先分析旧 SetupProfile 或 Mac 清单，再勾选要合并的项目。分析不会自动选择或执行；未支持内容会保留说明。更换路径或目标后须重新分析。", "Migration first analyzes a legacy SetupProfile or Mac inventory, then lets you select items to merge. Analysis never selects or executes automatically; unsupported content stays in the report. Reanalyze after changing the path or target."));
-            ui.label(tx("开发环境页会检查 Cargo、uv、NPM 和 VS Code 提供程序。安装所需软件后才执行开发工具；uv 需要已有 Python，NPM 使用用户前缀并禁用生命周期脚本。", "Developer Environment checks Cargo, uv, NPM and VS Code providers. Software prerequisites run before developer tools; uv needs an existing Python interpreter, while NPM uses the user prefix with lifecycle scripts disabled."));
+            ui.label(tx("开发环境页可按 Cargo、uv、Pip、NPM 和 VS Code 筛选。Pip 核对标准 CPython、用户目录和包身份；uv 需要已有 Python，NPM 使用用户前缀并禁用生命周期脚本。", "Filter developer tasks by Cargo, uv, Pip, NPM and VS Code. Pip validates standard CPython, user directories and package identity; uv needs an existing Python interpreter, while NPM uses the user prefix with lifecycle scripts disabled."));
         });
         settings_section(
             ui,

@@ -8,16 +8,21 @@ use std::{
 };
 use studio_core::Target;
 
+pub mod backup;
 mod developer_ids;
 #[cfg(any(windows, test))]
 mod engine;
+pub mod environment;
 mod history;
 #[cfg(any(windows, test))]
+mod pip;
+#[cfg(any(windows, target_os = "macos", test))]
 mod process;
 mod storage;
 #[cfg(windows)]
 mod windows;
 
+pub use developer_ids::normalize_pip_id;
 pub use history::{HistoryEvidence, HistoryRecord, HistoryTask, history};
 pub use storage::{NotificationState, StorageStatus};
 
@@ -180,7 +185,7 @@ pub fn catalog() -> Result<Catalog> {
                     "Invalid feature task"
                 );
             }
-            "cargo" | "uv" | "vscode" | "npm" => {
+            "cargo" | "uv" | "vscode" | "npm" | "pip" => {
                 let id = task
                     .package_id
                     .as_deref()
@@ -254,7 +259,7 @@ pub fn build_plan(target: Target, selected: &BTreeSet<String>) -> Result<Deploym
 fn task_order(kind: &str) -> u8 {
     match kind {
         "package" => 0,
-        "cargo" | "uv" | "vscode" | "npm" => 1,
+        "cargo" | "uv" | "vscode" | "npm" | "pip" => 1,
         "feature" => 2,
         _ => 3,
     }
@@ -289,7 +294,7 @@ pub fn provider_capabilities() -> Vec<ProviderCapability> {
     }
     #[cfg(not(windows))]
     {
-        ["winget","cargo","uv","vscode","npm"].into_iter().map(|provider|ProviderCapability{provider:provider.into(),available:false,detail:"Windows deployment provider discovery is unavailable in preview. No local developer tools or Windows installations were inspected.".into()}).collect()
+        ["winget","cargo","uv","vscode","npm","pip"].into_iter().map(|provider|ProviderCapability{provider:provider.into(),available:false,detail:"Windows deployment provider discovery is unavailable in preview. No local developer tools or Windows installations were inspected.".into()}).collect()
     }
 }
 /// Reads filesystem notification policy only; never scans, optimizes or changes a volume.
@@ -406,7 +411,7 @@ mod tests {
             }
             assert!(matches!(
                 task.kind.as_str(),
-                "package" | "feature" | "maintenance" | "cargo" | "uv" | "vscode" | "npm"
+                "package" | "feature" | "maintenance" | "cargo" | "uv" | "vscode" | "npm" | "pip"
             ));
         }
     }
@@ -445,7 +450,12 @@ mod tests {
         let original = catalog
             .tasks
             .iter()
-            .find(|task| matches!(task.kind.as_str(), "cargo" | "uv" | "vscode" | "npm"))
+            .find(|task| {
+                matches!(
+                    task.kind.as_str(),
+                    "cargo" | "uv" | "vscode" | "npm" | "pip"
+                )
+            })
             .unwrap();
         let mut plan =
             build_plan(original.targets[0], &BTreeSet::from([original.id.clone()])).unwrap();

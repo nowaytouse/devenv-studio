@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "captured_at": "1792713600",
+  "platform": "windows",
+  "providers": [
+    {"kind":"cargo","status":"complete","packages":[{"name":"ripgrep","version":"15.0.0"}],"detail":"Collected installed package identities and versions."},
+    {"kind":"uv","status":"complete","packages":[{"name":"ruff","version":"0.14.0"}],"detail":"Collected installed package identities and versions."},
+    {"kind":"npm","status":"complete","packages":[{"name":"typescript","version":"5.9.0"}],"detail":"Collected installed package identities and versions."},
+    {"kind":"pip","status":"complete","packages":[{"name":"numpy","version":"2.3.4"}],"detail":"Collected installed package identities and versions."},
+    {"kind":"vscode","status":"complete","packages":[{"name":"ms-python.python","version":"2026.1.0"}],"detail":"Collected installed package identities and versions."}
+  ],
+  "warnings": [
+    "Inventory only: tool binaries, credentials, configuration, source code and virtual environments are not included.",
+    "Only supported standard installations are inspected; unavailable does not prove uninstalled.",
+    "Pip captures distributions visible to one selected registered standard CPython interpreter; other interpreters, virtual environments and editable projects are not backed up."
+  ]
+}

@@ -11,9 +11,12 @@ pub(super) struct HybridState {
     pub report_target: Option<Target>,
     pub report_path: Option<String>,
     pub selected_rows: BTreeSet<usize>,
+    pub review_page: usize,
+    pub review_filter: String,
     pub error: Option<String>,
     pub recipe: Option<String>,
     pub visible_tasks: usize,
+    pub developer_filter: String,
     pub providers: Vec<studio_deployment::ProviderCapability>,
 }
 impl Default for HybridState {
@@ -24,11 +27,40 @@ impl Default for HybridState {
             report_target: None,
             report_path: None,
             selected_rows: BTreeSet::new(),
+            review_page: 0,
+            review_filter: String::new(),
             error: None,
             recipe: None,
             visible_tasks: 60,
+            developer_filter: String::new(),
             providers: studio_deployment::provider_capabilities(),
         }
+    }
+}
+
+impl HybridState {
+    pub(super) fn reset_review(&mut self) {
+        self.selected_rows.clear();
+        self.review_page = 0;
+        self.review_filter.clear();
+    }
+
+    pub(super) fn checked_requests(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+        let mut settings = BTreeSet::new();
+        let mut tasks = BTreeSet::new();
+        if let Some(report) = &self.report {
+            for item in self
+                .selected_rows
+                .iter()
+                .filter_map(|index| report.items.get(*index))
+            {
+                if item.status == "mapped" {
+                    settings.extend(item.settings.iter().cloned());
+                    tasks.extend(item.deployment.iter().cloned());
+                }
+            }
+        }
+        (settings, tasks)
     }
 }
 
@@ -158,7 +190,7 @@ impl Studio {
                 .clicked()
             {
                 self.hybrid.report = None;
-                self.hybrid.selected_rows.clear();
+                self.hybrid.reset_review();
                 self.hybrid.error = None;
                 self.hybrid.report_target = None;
                 self.hybrid.report_path = None;
@@ -220,60 +252,119 @@ impl Studio {
                     self.hybrid.selected_rows.clear();
                 }
             });
-            let mut added_settings = BTreeSet::new();
-            let mut added_tasks = BTreeSet::new();
-            for (index, item) in report.items.iter().enumerate() {
+            let previous_filter = self.hybrid.review_filter.clone();
+            ui.horizontal_wrapped(|ui| {
+                for (value, label) in [
+                    ("", tx("全部", "All")),
+                    ("mapped", tx("已映射", "Mapped")),
+                    ("other", tx("其余说明", "Other")),
+                ] {
+                    ui.selectable_value(&mut self.hybrid.review_filter, value.to_owned(), label);
+                }
+            });
+            if previous_filter != self.hybrid.review_filter {
+                self.hybrid.review_page = 0;
+            }
+            let indices: Vec<_> = report
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| match self.hybrid.review_filter.as_str() {
+                    "mapped" => item.status == "mapped",
+                    "other" => item.status != "mapped",
+                    _ => true,
+                })
+                .map(|(index, _)| index)
+                .collect();
+            let pages = indices.len().div_ceil(20).max(1);
+            self.hybrid.review_page = self.hybrid.review_page.min(pages - 1);
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        self.hybrid.review_page > 0,
+                        egui::Button::new(tx("上一页", "Previous")),
+                    )
+                    .clicked()
+                {
+                    self.hybrid.review_page -= 1;
+                }
+                ui.label(lf!(
+                    "第 {} / {} 页 · {} 项",
+                    "Page {} / {} · {} items",
+                    self.hybrid.review_page + 1,
+                    pages,
+                    indices.len()
+                ));
+                if ui
+                    .add_enabled(
+                        self.hybrid.review_page + 1 < pages,
+                        egui::Button::new(tx("下一页", "Next")),
+                    )
+                    .clicked()
+                {
+                    self.hybrid.review_page += 1;
+                }
+            });
+            for &index in indices.iter().skip(self.hybrid.review_page * 20).take(20) {
+                let item = &report.items[index];
                 let title = self.migration_title(item);
                 let mut selected = self.hybrid.selected_rows.contains(&index);
-                ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .add_enabled(
-                            item.status == "mapped",
-                            egui::Checkbox::new(&mut selected, title),
-                        )
-                        .changed()
-                    {
-                        if selected {
-                            self.hybrid.selected_rows.insert(index);
-                        } else {
-                            self.hybrid.selected_rows.remove(&index);
-                        }
-                    }
-                    let status = match item.status.as_str() {
-                        "mapped" => tx("已映射", "Mapped"),
-                        "manual" if item.origin == "profile_version" => {
-                            tx("格式已识别", "Format identified")
-                        }
-                        "manual" if matches!(item.requested.as_str(), "false" | "(empty list)") => {
-                            tx("无需变更", "No change requested")
-                        }
-                        "manual" => tx("需手动处理", "Manual"),
-                        _ => tx("尚未迁移", "Unsupported"),
-                    };
-                    ui.label(
-                        RichText::new(format!("{status} · {}", item.origin))
-                            .size(11.0)
-                            .color(if item.status == "mapped" {
-                                palette().accent
-                            } else {
-                                palette().muted
-                            }),
-                    );
-                });
-                ui.label(
-                    RichText::new(crate::migration_locale::detail(
-                        &item.detail,
-                        self.preferences.language,
-                    ))
-                    .size(12.0)
-                    .color(palette().muted),
+                ui.scope_builder(
+                    egui::UiBuilder::new().scope_id(egui::Id::unique(("migration-row", index))),
+                    |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            if ui
+                                .add_enabled(
+                                    item.status == "mapped",
+                                    egui::Checkbox::new(&mut selected, title),
+                                )
+                                .changed()
+                            {
+                                if selected {
+                                    self.hybrid.selected_rows.insert(index);
+                                } else {
+                                    self.hybrid.selected_rows.remove(&index);
+                                }
+                            }
+                            let status = match item.status.as_str() {
+                                "mapped" => tx("已映射", "Mapped"),
+                                "manual" if item.origin == "profile_version" => {
+                                    tx("格式已识别", "Format identified")
+                                }
+                                "manual"
+                                    if matches!(
+                                        item.requested.as_str(),
+                                        "false" | "(empty list)"
+                                    ) =>
+                                {
+                                    tx("无需变更", "No change requested")
+                                }
+                                "manual" => tx("需手动处理", "Manual"),
+                                _ => tx("尚未迁移", "Unsupported"),
+                            };
+                            ui.label(
+                                RichText::new(format!("{status} · {}", item.origin))
+                                    .size(11.0)
+                                    .color(if item.status == "mapped" {
+                                        palette().accent
+                                    } else {
+                                        palette().muted
+                                    }),
+                            );
+                        });
+                        ui.label(
+                            RichText::new(crate::migration_locale::detail(
+                                &item.detail,
+                                self.preferences.language,
+                            ))
+                            .size(12.0)
+                            .color(palette().muted),
+                        );
+                        ui.separator();
+                    },
                 );
-                if selected {
-                    added_settings.extend(item.settings.iter().cloned());
-                    added_tasks.extend(item.deployment.iter().cloned());
-                }
-                ui.separator();
             }
+            let (added_settings, added_tasks) = self.hybrid.checked_requests();
             let target_matches = self.migration_current();
             if !target_matches {
                 ui.colored_label(
@@ -380,10 +471,40 @@ impl Studio {
                 self.hybrid.providers = studio_deployment::provider_capabilities();
             }
         });
-        ui.label(RichText::new(tx("NPM 使用当前用户的 %APPDATA%\\npm，禁用生命周期脚本，不修改 PATH、镜像或项目依赖。安装后核对包身份；工具可运行性需另行验证。", "NPM uses the current user’s %APPDATA%\\npm, disables lifecycle scripts and leaves PATH, mirrors and project dependencies unchanged. Readback checks package identity; verify tool functionality separately.")).size(12.0).color(palette().muted));
+        ui.horizontal_wrapped(|ui| {
+            for (kind, label) in [
+                ("", tx("全部", "All")),
+                ("cargo", "Cargo"),
+                ("uv", "uv"),
+                ("pip", "Pip"),
+                ("npm", "NPM"),
+                ("vscode", "VS Code"),
+            ] {
+                if ui
+                    .selectable_label(self.hybrid.developer_filter == kind, label)
+                    .clicked()
+                {
+                    self.hybrid.developer_filter = kind.into();
+                    self.hybrid.visible_tasks = 60;
+                }
+            }
+        });
+        match self.hybrid.developer_filter.as_str() {
+            "npm" => {
+                ui.label(RichText::new(tx("NPM 使用当前用户的 %APPDATA%\\npm，禁用生命周期脚本，不修改 PATH、镜像或项目依赖。安装后核对包身份；工具可运行性需另行验证。", "NPM uses the current user’s %APPDATA%\\npm, disables lifecycle scripts and leaves PATH, mirrors and project dependencies unchanged. Readback checks package identity; verify tool functionality separately.")).size(12.0).color(palette().muted));
+            }
+            "pip" => {
+                ui.label(RichText::new(tx("Pip 使用已安装的标准 CPython，安装到当前用户范围，只接受兼容 wheel。已安装的所选包会跳过；依赖可能随安装调整。不会修改项目、虚拟环境、镜像或 PATH。", "Pip uses an installed standard CPython and user installs with compatible wheels only. Selected packages already visible are skipped; dependencies may change during installation. Projects, virtual environments, mirrors and PATH are not modified.")).size(12.0).color(palette().muted));
+            }
+            _ => {
+                ui.label(RichText::new(tx("按提供程序筛选工具；找到程序路径后，检查和执行时还会验证运行条件。", "Filter tools by provider. Located paths are checked again for runtime prerequisites during inspection and execution.")).size(12.0).color(palette().muted));
+            }
+        }
         ui.horizontal_wrapped(|ui| {
             for provider in &self.hybrid.providers {
-                let state = if provider.available {
+                let state = if provider.available && provider.provider == "pip" {
+                    tx("候选待预检", "Candidate; preflight required")
+                } else if provider.available {
                     tx("已找到", "Located")
                 } else if cfg!(windows) {
                     tx("未找到", "Unavailable")
@@ -413,6 +534,6 @@ impl Studio {
                 ui.label(&provider.detail);
             }
         });
-        ui.label(RichText::new(tx("可在软件部署中选择 Rust MSVC、uv、Node.js LTS 和 VS Code，再勾选对应开发工具。Rust 链接器、SDK 及兼容的 Python 运行时仍需自行准备。", "Select Rust MSVC, uv, Node.js LTS and VS Code in Software, then choose developer tasks. Prepare the Rust linker, SDK and compatible Python runtime as required.")).size(12.0).color(palette().muted));
+        ui.label(RichText::new(tx("可在软件部署中明确选择 Rust MSVC、uv、Node.js LTS、Python 和 VS Code，再勾选对应工具。Pip 还需已有可用的 pip；Rust 链接器、SDK 等前提需按工具链准备。", "Explicitly select Rust MSVC, uv, Node.js LTS, Python and VS Code in Software, then choose tools. Pip also requires a working pip installation; prepare the Rust linker, SDK and other toolchain prerequisites as required.")).size(12.0).color(palette().muted));
     }
 }

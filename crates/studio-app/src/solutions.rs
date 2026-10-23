@@ -68,6 +68,27 @@ pub const RECIPES: &[Recipe] = &[
         ],
     },
     Recipe {
+        id: "python-data",
+        title: ["Python 数据与交互环境", "Python data & notebooks"],
+        description: [
+            "明确选择 Python 3.14、Git、VS Code，以及 Pip 的 NumPy、Pandas、IPython、JupyterLab、Rich 和 pytest。使用当前用户范围，需要兼容 wheel；项目仍应管理自己的依赖。",
+            "Explicitly select Python 3.14, Git, VS Code, and NumPy, Pandas, IPython, JupyterLab, Rich and pytest via Pip. User installs require compatible wheels; projects keep their own dependency management.",
+        ],
+        settings: &["explorer-extensions"],
+        packages: &[
+            ("package", "Git.Git"),
+            ("package", "Microsoft.VisualStudioCode"),
+            ("package", "Python.Python.3.14"),
+            ("pip", "numpy"),
+            ("pip", "pandas"),
+            ("pip", "ipython"),
+            ("pip", "jupyterlab"),
+            ("pip", "rich"),
+            ("pip", "pytest"),
+            ("vscode", "ms-python.python"),
+        ],
+    },
+    Recipe {
         id: "web",
         title: ["Web 开发起点", "Web development"],
         description: [

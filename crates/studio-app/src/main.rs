@@ -1,3 +1,4 @@
+mod backup_migration;
 mod catalog_locale;
 mod gui;
 mod migration;
@@ -14,6 +15,8 @@ const HELP: &str = concat!("LTSC Studio ", env!("CARGO_PKG_VERSION"), "\nNative 
 List reviewed settings and presets: ltsc-studio catalog
 List software/features/maintenance: ltsc-studio tasks
 List reviewed AC power choices: ltsc-studio power
+Inspect developer provider candidates: ltsc-studio providers
+Back up native macOS or Windows developer inventory: ltsc-studio backup --output /absolute/path/environment-backup.json
 Read delete-notification policy only: ltsc-studio storage-status
 Add opt-in AC choices to a plan: ltsc-studio plan --target win11-ltsc-2024 --power <choice-id>
 Build mixed plan: ltsc-studio plan --target win11-ltsc-2024 --select explorer-extensions --tasks software-git-git
@@ -206,6 +209,42 @@ fn execute(args: &[String]) -> Result<()> {
                     choice.id, choice.group, choice.value, choice.title[0]
                 );
             }
+        }
+        "backup" if args.len() == 3 && args[1] == "--output" => {
+            let path = PathBuf::from(&args[2]);
+            anyhow::ensure!(path.is_absolute(), "Backup output must be an absolute path");
+            anyhow::ensure!(!path.try_exists()?, "Backup output already exists");
+            let snapshot = studio_deployment::backup::collect(std::sync::Arc::new(
+                std::sync::atomic::AtomicBool::new(false),
+            ))?;
+            studio_deployment::backup::save(&snapshot, &path)?;
+            let complete = snapshot
+                .providers
+                .iter()
+                .filter(|p| p.status == "complete")
+                .count();
+            let failed = snapshot
+                .providers
+                .iter()
+                .filter(|p| p.status == "failed")
+                .count();
+            println!(
+                "Saved local inventory to {}: {complete} complete providers, {failed} failed. Inspect provider states before migration.",
+                path.display()
+            );
+        }
+        "providers" if args.len() == 1 => {
+            let providers: Vec<_> = studio_deployment::provider_capabilities()
+                .into_iter()
+                .map(|provider| {
+                    serde_json::json!({
+                        "provider": provider.provider,
+                        "available": provider.available,
+                        "detail": provider.detail,
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&providers)?);
         }
         "storage-status" if args.len() == 1 => {
             let status = studio_deployment::storage_status(std::sync::Arc::new(

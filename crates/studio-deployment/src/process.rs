@@ -30,6 +30,7 @@ pub(crate) struct Output {
     pub cancelled: bool,
     pub timed_out: bool,
 }
+#[cfg(any(windows, test))]
 impl Output {
     pub fn diagnostic(&self) -> String {
         format!(
@@ -52,6 +53,53 @@ fn configure_npm(command: &mut Command) {
 fn npm_environment_override(name: &str) -> bool {
     let name = name.to_ascii_uppercase();
     name.starts_with("NPM_CONFIG_") || matches!(name.as_str(), "NODE_OPTIONS" | "NODE_PATH")
+}
+#[cfg(any(windows, test))]
+fn configure_pip(command: &mut Command) -> Result<()> {
+    crate::pip::check_environment()?;
+    for (name, _) in std::env::vars_os() {
+        let upper = name.to_string_lossy().to_ascii_uppercase();
+        if upper.starts_with("PIP_") || upper.starts_with("PYTHON") {
+            command.env_remove(name);
+        }
+    }
+    let null = if cfg!(windows) { "nul" } else { "/dev/null" };
+    command.env("PIP_CONFIG_FILE", null).env("NETRC", null);
+    Ok(())
+}
+#[cfg(target_os = "macos")]
+fn configure_macos_inventory(command: &mut Command) {
+    // Inventory must not inherit auto-update, runtime injection or alternate store overrides.
+    for (name, _) in std::env::vars_os() {
+        let upper = name.to_string_lossy().to_ascii_uppercase();
+        if ["HOMEBREW_", "CARGO_", "RUSTUP_", "UV_", "DYLD_", "VSCODE_"]
+            .iter()
+            .any(|prefix| upper.starts_with(prefix))
+            || matches!(
+                upper.as_str(),
+                "RUBYOPT"
+                    | "RUBYLIB"
+                    | "BASH_ENV"
+                    | "ENV"
+                    | "NODE_OPTIONS"
+                    | "NODE_PATH"
+                    | "XDG_CONFIG_HOME"
+                    | "XDG_DATA_HOME"
+            )
+        {
+            command.env_remove(name);
+        }
+    }
+    command
+        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+        .env("HOMEBREW_NO_ANALYTICS", "1")
+        .env("HOMEBREW_NO_INSTALL_CLEANUP", "1")
+        .env("HOMEBREW_NO_ENV_HINTS", "1")
+        .env("HOMEBREW_NO_INSTALL_FROM_API", "1")
+        .env("UV_OFFLINE", "1")
+        .env("RUSTUP_AUTO_INSTALL", "0")
+        .env("LC_ALL", "C")
+        .env("LANG", "C");
 }
 fn capture(mut reader: impl Read) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
@@ -98,6 +146,31 @@ pub(crate) fn run_bounded(
 ) -> Result<Output> {
     run_configured(invocation, cancel, timeout, |_| {})
 }
+#[cfg(any(windows, test))]
+pub(crate) fn run_inventory(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+) -> Result<Output> {
+    run_configured(invocation, cancel, timeout, configure_inventory)
+}
+#[cfg(any(windows, test))]
+fn configure_inventory(command: &mut Command) {
+    for (name, _) in std::env::vars_os() {
+        let upper = name.to_string_lossy().to_ascii_uppercase();
+        if ["CARGO_", "RUSTUP_", "UV_", "VSCODE_"]
+            .iter()
+            .any(|prefix| upper.starts_with(prefix))
+            || matches!(upper.as_str(), "NODE_OPTIONS" | "NODE_PATH")
+        {
+            command.env_remove(name);
+        }
+    }
+    command
+        .env("RUSTUP_AUTO_INSTALL", "0")
+        .env("UV_OFFLINE", "1")
+        .env("UV_PYTHON_DOWNLOADS", "never");
+}
 fn run_configured(
     invocation: &Invocation,
     cancel: &Arc<AtomicBool>,
@@ -125,11 +198,11 @@ fn run_configured(
         .stderr(Stdio::piped());
     if invocation.vscode_node {
         ensure!(
-            invocation
-                .program
-                .file_name()
-                .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("Code.exe")),
-            "VS Code node environment is restricted to Code.exe"
+            invocation.program.file_name().is_some_and(|name| {
+                name.to_string_lossy().eq_ignore_ascii_case("Code.exe")
+                    || (cfg!(target_os = "macos") && name == "Electron")
+            }),
+            "VS Code node environment is restricted to the supported Code executable"
         );
         command
             .env("ELECTRON_RUN_AS_NODE", "1")
@@ -139,14 +212,20 @@ fn run_configured(
     if invocation.npm_node {
         ensure!(
             !invocation.vscode_node
-                && invocation
-                    .program
-                    .file_name()
-                    .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("node.exe")),
-            "npm environment is restricted to node.exe"
+                && invocation.program.file_name().is_some_and(|name| {
+                    name.to_string_lossy().eq_ignore_ascii_case("node.exe")
+                        || (cfg!(target_os = "macos") && name == "node")
+                }),
+            "npm environment is restricted to the supported Node executable"
         );
         configure_npm(&mut command);
     }
+    #[cfg(any(windows, test))]
+    if crate::pip::is_invocation(invocation) {
+        configure_pip(&mut command)?;
+    }
+    #[cfg(target_os = "macos")]
+    configure_macos_inventory(&mut command);
     if let Some(parent) = invocation.program.parent() {
         command.current_dir(parent);
     }
@@ -393,6 +472,78 @@ mod tests {
         for name in ["PATH", "APPDATA", "USERPROFILE", "NODE_ENV"] {
             assert!(!npm_environment_override(name));
         }
+    }
+    #[test]
+    fn pip_child_uses_exact_null_config_without_changing_parent_environment() {
+        let parent = std::env::var_os("PIP_CONFIG_FILE");
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        configure_pip(&mut command).unwrap();
+        let variables: std::collections::BTreeMap<_, _> = command.get_envs().collect();
+        let expected = if cfg!(windows) { "nul" } else { "/dev/null" };
+        assert_eq!(
+            variables[std::ffi::OsStr::new("PIP_CONFIG_FILE")],
+            Some(std::ffi::OsStr::new(expected))
+        );
+        assert_eq!(
+            variables[std::ffi::OsStr::new("NETRC")],
+            Some(std::ffi::OsStr::new(expected))
+        );
+        assert_eq!(std::env::var_os("PIP_CONFIG_FILE"), parent);
+    }
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_inventory_disables_bootstrap_network_and_updates_without_changing_parent() {
+        let prior = std::env::var_os("RUSTUP_AUTO_INSTALL");
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        configure_macos_inventory(&mut command);
+        let variables: std::collections::BTreeMap<_, _> = command.get_envs().collect();
+        for (name, value) in [
+            ("HOMEBREW_NO_AUTO_UPDATE", "1"),
+            ("HOMEBREW_NO_ANALYTICS", "1"),
+            ("HOMEBREW_NO_INSTALL_CLEANUP", "1"),
+            ("HOMEBREW_NO_INSTALL_FROM_API", "1"),
+            ("RUSTUP_AUTO_INSTALL", "0"),
+            ("UV_OFFLINE", "1"),
+            ("LC_ALL", "C"),
+        ] {
+            assert_eq!(
+                variables[std::ffi::OsStr::new(name)],
+                Some(std::ffi::OsStr::new(value))
+            );
+        }
+        assert_eq!(std::env::var_os("RUSTUP_AUTO_INSTALL"), prior);
+    }
+    #[test]
+    fn inventory_disables_runtime_bootstrap_and_network_without_mutating_parent() {
+        let mut command = Command::new("unused");
+        configure_inventory(&mut command);
+        let env: std::collections::BTreeMap<_, _> = command.get_envs().collect();
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("RUSTUP_AUTO_INSTALL")),
+            Some(&Some(std::ffi::OsStr::new("0")))
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("UV_OFFLINE")),
+            Some(&Some(std::ffi::OsStr::new("1")))
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("UV_PYTHON_DOWNLOADS")),
+            Some(&Some(std::ffi::OsStr::new("never")))
+        );
+        let invocation = Invocation {
+            program: "relative.exe".into(),
+            args: vec![],
+            vscode_node: false,
+            npm_node: false,
+        };
+        assert!(
+            run_inventory(
+                &invocation,
+                &Arc::new(AtomicBool::new(false)),
+                Duration::from_secs(1)
+            )
+            .is_err()
+        );
     }
     #[test]
     fn utf16_dism_output_is_decoded() {

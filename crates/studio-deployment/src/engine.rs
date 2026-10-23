@@ -20,6 +20,7 @@ pub(crate) struct Tools {
     pub defrag: Option<PathBuf>,
     pub system_volume: Option<String>,
     pub developer: fn(&str) -> Result<DeveloperTool>,
+    pub pip: fn() -> Result<crate::pip::Layout>,
 }
 pub(crate) struct DeveloperTool {
     pub program: PathBuf,
@@ -396,6 +397,15 @@ fn installed_npm(wanted: &str, stdout: &str, prefix: &str) -> Result<bool> {
     }
     Ok(list.dependencies.contains_key(wanted))
 }
+pub(crate) fn npm_inventory(stdout: &str, prefix: &str) -> Result<Vec<(String, String)>> {
+    installed_npm("", stdout, prefix)?;
+    let list: NpmList = serde_json::from_str(stdout)?;
+    Ok(list
+        .dependencies
+        .into_iter()
+        .map(|(name, package)| (name, package.version))
+        .collect())
+}
 fn normalize_python(value: &str) -> String {
     let mut normalized = String::new();
     for c in value.chars() {
@@ -447,6 +457,10 @@ pub(crate) fn detect(
     runner: &mut impl Runner,
     cancel: &Arc<AtomicBool>,
 ) -> Result<Detection> {
+    if task.kind == "pip" {
+        let prepared = crate::pip::prepare((tools.pip)()?, runner, cancel)?;
+        return crate::pip::detect(&prepared, task, runner, cancel);
+    }
     if task.kind == "maintenance" {
         return Ok(Detection {
             id: task.id.clone(),
@@ -569,7 +583,16 @@ pub(crate) fn run_plan(
             });
         }
         let result = (|| -> Result<(bool, String)> {
-            let before = detect(task, tools, runner, cancel)?;
+            let pip = if task.kind == "pip" {
+                Some(crate::pip::prepare((tools.pip)()?, runner, cancel)?)
+            } else {
+                None
+            };
+            let before = if let Some(prepared) = &pip {
+                crate::pip::detect(prepared, task, runner, cancel)?
+            } else {
+                detect(task, tools, runner, cancel)?
+            };
             log(
                 history,
                 serde_json::json!({"event":"inspection","task_id":task.id,"state":before.state,"detail":before.detail}),
@@ -594,10 +617,14 @@ pub(crate) fn run_plan(
             if cancel.load(Ordering::Acquire) {
                 return Ok((false, "cancelled before command".into()));
             }
-            let command = invocation(tools, task, false)?;
+            let command = if let Some(prepared) = &pip {
+                crate::pip::invocation(prepared, task, false)?
+            } else {
+                invocation(tools, task, false)?
+            };
             log(
                 history,
-                serde_json::json!({"event":"intent","task_id":task.id,"program":command.program,"args":command.args,"environment":if command.vscode_node {"ELECTRON_RUN_AS_NODE=1; VSCODE_DEV and VSCODE_PORTABLE removed"}else if command.npm_node {"NPM_CONFIG_*, NODE_OPTIONS and NODE_PATH removed; user/global npmrc disabled; fixed user prefix and registry; lifecycle scripts disabled"}else{"inherited"},"warning":"No automatic rollback. OS servicing and installer descendants may continue after cancellation."}),
+                serde_json::json!({"event":"intent","task_id":task.id,"program":command.program,"args":command.args,"environment":if command.vscode_node {"ELECTRON_RUN_AS_NODE=1; VSCODE_DEV and VSCODE_PORTABLE removed"}else if command.npm_node {"NPM_CONFIG_*, NODE_OPTIONS and NODE_PATH removed; user/global npmrc disabled; fixed user prefix and registry; lifecycle scripts disabled"}else if crate::pip::is_invocation(&command) {"PIP_* and PYTHON* removed; PIP_CONFIG_FILE=nul; NETRC=nul; -E -P; user-site enabled; public PyPI wheels only; no Python/pip bootstrap or PATH changes"}else{"inherited"},"warning":"No automatic rollback. OS servicing and installer descendants may continue after cancellation."}),
             )?;
             if cancel.load(Ordering::Acquire) {
                 return Ok((false, "cancelled before command".into()));
@@ -638,9 +665,15 @@ pub(crate) fn run_plan(
                     ),
                 ));
             }
-            let after = detect(task, tools, runner, cancel).context(
-                "Post-command readback failed; installation/feature state is unverified",
-            )?;
+            let after = (|| {
+                if let Some(prepared) = &pip {
+                    crate::pip::verify(prepared, runner, cancel)?;
+                    crate::pip::detect(prepared, task, runner, cancel)
+                } else {
+                    detect(task, tools, runner, cancel)
+                }
+            })()
+            .context("Post-command readback failed; installation/feature state is unverified")?;
             log(
                 history,
                 serde_json::json!({"event":"verification","task_id":task.id,"state":after.state,"detail":after.detail}),
@@ -761,6 +794,7 @@ mod tests {
             defrag: Some("/trusted/defrag.exe".into()),
             system_volume: Some(r"\\?\Volume{928842df-5a01-11de-a85c-806e6f6e6963}\".into()),
             developer: fake_developer,
+            pip: || Ok(crate::pip::tests::layout()),
         }
     }
     fn fake_developer(kind: &str) -> Result<DeveloperTool> {
@@ -1442,6 +1476,238 @@ mod tests {
         .unwrap();
         assert_eq!((outcome.completed, outcome.failed), (0, 1));
         assert_eq!(fake.calls.len(), 1);
+    }
+    fn pip_plan() -> DeploymentPlan {
+        let mut result = plan("package");
+        result.tasks = vec![developer_task("pip", "numpy")];
+        result
+    }
+    fn pip_probe() -> Result<Output> {
+        output(0, &crate::pip::tests::identity().to_string())
+    }
+    #[test]
+    fn pip_binds_one_interpreter_and_requires_scope_and_identity_readback() {
+        use std::sync::atomic::AtomicUsize;
+        static RESOLVED: AtomicUsize = AtomicUsize::new(0);
+        fn selected() -> Result<crate::pip::Layout> {
+            RESOLVED.fetch_add(1, Ordering::Relaxed);
+            Ok(crate::pip::tests::layout())
+        }
+        let mut tools = tools();
+        tools.pip = selected;
+        RESOLVED.store(0, Ordering::Relaxed);
+        let mut fake = Fake {
+            outputs: VecDeque::from([
+                pip_probe(),
+                output(0, "[]"),
+                output(0, "installed"),
+                pip_probe(),
+                output(0, r#"[{"name":"NumPy","version":"2.4"}]"#),
+            ]),
+            calls: vec![],
+            cancel: None,
+        };
+        let mut history = Log::default();
+        let result = run_plan(
+            &pip_plan(),
+            &tools,
+            &mut fake,
+            &mut history,
+            &Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+        assert_eq!((result.completed, result.failed), (1, 0));
+        assert_eq!(RESOLVED.load(Ordering::Relaxed), 1);
+        assert_eq!(fake.calls.len(), 5);
+        assert!(
+            fake.calls
+                .iter()
+                .all(|call| call.program == crate::pip::tests::layout().program)
+        );
+        let install = &fake.calls[2];
+        assert_eq!(
+            install.args,
+            [
+                "-E",
+                "-P",
+                "-m",
+                "pip",
+                "--isolated",
+                "--disable-pip-version-check",
+                "--no-input",
+                "install",
+                "--user",
+                "--only-binary=:all:",
+                "--index-url=https://pypi.org/simple",
+                "--progress-bar=off",
+                "--",
+                "numpy"
+            ]
+        );
+        assert!(history.values.iter().any(|event| {
+            event["event"] == "inspection"
+                && event["detail"].as_str().unwrap().contains(
+                    &serde_json::to_string(&crate::pip::tests::layout().user_site).unwrap(),
+                )
+        }));
+        let mut changed = crate::pip::tests::identity();
+        changed["version"] = serde_json::json!([3, 14, 3]);
+        for after in [
+            output(0, "[]"),
+            output(0, "malformed"),
+            output(
+                0,
+                r#"[{"name":"numpy","version":"1"},{"name":"NumPy","version":"2"}]"#,
+            ),
+        ] {
+            let mut fake = Fake {
+                outputs: VecDeque::from([
+                    pip_probe(),
+                    output(0, "[]"),
+                    output(0, "ok"),
+                    pip_probe(),
+                    after,
+                ]),
+                calls: vec![],
+                cancel: None,
+            };
+            let result = run_plan(
+                &pip_plan(),
+                &tools,
+                &mut fake,
+                &mut Log::default(),
+                &Arc::new(AtomicBool::new(false)),
+                None,
+            )
+            .unwrap();
+            assert_eq!((result.completed, result.failed), (0, 1));
+        }
+        let mut fake = Fake {
+            outputs: VecDeque::from([
+                pip_probe(),
+                output(0, "[]"),
+                output(0, "ok"),
+                output(0, &changed.to_string()),
+            ]),
+            calls: vec![],
+            cancel: None,
+        };
+        let result = run_plan(
+            &pip_plan(),
+            &tools,
+            &mut fake,
+            &mut Log::default(),
+            &Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+        assert_eq!((result.completed, result.failed), (0, 1));
+        assert_eq!(fake.calls.len(), 4);
+    }
+    #[test]
+    fn pip_never_installs_on_existing_global_editable_invalid_preflight_or_inspection() {
+        for listing in [
+            r#"[{"name":"numpy","version":"2.4"}]"#,
+            r#"[{"name":"numpy","version":"2.4","editable_project_location":"/project"}]"#,
+            "broken",
+        ] {
+            let mut fake = Fake {
+                outputs: VecDeque::from([pip_probe(), output(0, listing)]),
+                calls: vec![],
+                cancel: None,
+            };
+            let result = run_plan(
+                &pip_plan(),
+                &tools(),
+                &mut fake,
+                &mut Log::default(),
+                &Arc::new(AtomicBool::new(false)),
+                None,
+            )
+            .unwrap();
+            assert_eq!(
+                result.completed,
+                usize::from(!listing.contains("editable") && listing != "broken")
+            );
+            assert_eq!(fake.calls.len(), 2);
+        }
+        for probe in [
+            output(0, "{}"),
+            output(5, "denied"),
+            Err(anyhow::anyhow!("truncated pipe capture")),
+        ] {
+            let mut fake = Fake {
+                outputs: VecDeque::from([probe]),
+                calls: vec![],
+                cancel: None,
+            };
+            let result = run_plan(
+                &pip_plan(),
+                &tools(),
+                &mut fake,
+                &mut Log::default(),
+                &Arc::new(AtomicBool::new(false)),
+                None,
+            )
+            .unwrap();
+            assert_eq!((result.completed, result.failed), (0, 1));
+            assert_eq!(fake.calls.len(), 1);
+        }
+        let mut fake = Fake {
+            outputs: VecDeque::from([pip_probe(), output(0, "[]")]),
+            calls: vec![],
+            cancel: None,
+        };
+        let result = run_plan(
+            &pip_plan(),
+            &tools(),
+            &mut fake,
+            &mut Log {
+                fail: Some(1),
+                ..Default::default()
+            },
+            &Arc::new(AtomicBool::new(false)),
+            None,
+        );
+        assert!(result.is_err());
+        assert_eq!(fake.calls.len(), 2);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let mut fake = Fake {
+            outputs: VecDeque::from([pip_probe(), output(0, "[]")]),
+            calls: vec![],
+            cancel: Some(cancelled.clone()),
+        };
+        let result = run_plan(
+            &pip_plan(),
+            &tools(),
+            &mut fake,
+            &mut Log::default(),
+            &cancelled,
+            None,
+        )
+        .unwrap();
+        assert!(result.cancelled);
+        assert_eq!(result.completed, 0);
+        assert_eq!(fake.calls.len(), 2);
+        let mut missing = tools();
+        missing.pip = || anyhow::bail!("Python prerequisite unavailable");
+        let mut fake = Fake {
+            outputs: VecDeque::new(),
+            calls: vec![],
+            cancel: None,
+        };
+        let result = run_plan(
+            &pip_plan(),
+            &missing,
+            &mut fake,
+            &mut Log::default(),
+            &Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+        assert_eq!((result.completed, result.failed), (0, 1));
+        assert!(fake.calls.is_empty());
     }
     #[test]
     fn providers_are_resolved_after_selected_prerequisite_tasks() {

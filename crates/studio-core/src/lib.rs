@@ -483,7 +483,12 @@ pub fn export_document(value: &impl Serialize, path: &Path) -> Result<()> {
 /// A filesystem without hard-link support fails without overwriting the destination.
 fn create_json(value: &impl Serialize, path: &Path) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(value)?;
-    if bytes.len() as u64 > MAX_INPUT_BYTES {
+    export_bytes(&bytes, path)
+}
+
+/// Publish a generated text artifact using the same no-overwrite export contract.
+pub fn export_bytes(bytes: &[u8], path: &Path) -> Result<()> {
+    if bytes.len() as u64 >= MAX_INPUT_BYTES {
         bail!("Export exceeds 1 MiB limit");
     }
     let parent = path
@@ -497,7 +502,7 @@ fn create_json(value: &impl Serialize, path: &Path) -> Result<()> {
     ));
     let mut file = File::create_new(&temporary).context("Create export staging file")?;
     let result = (|| -> Result<()> {
-        file.write_all(&bytes)?;
+        file.write_all(bytes)?;
         file.write_all(b"\n")?;
         file.sync_all().context("Flush export before publication")?;
         fs::hard_link(&temporary, path).with_context(|| {
@@ -706,6 +711,23 @@ mod tests {
         p.actions[0].changes[0].value ^= 1;
         assert!(validate_plan(&p).is_err());
     }
+    #[test]
+    fn raw_export_bound_includes_the_trailing_newline() {
+        let dir = std::env::temp_dir().join(format!(
+            "ltsc-core-bound-{}-{}",
+            std::process::id(),
+            EXPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("Brewfile");
+        assert!(export_bytes(&vec![b'x'; MAX_INPUT_BYTES as usize], &path).is_err());
+        assert!(!path.exists());
+        export_bytes(&vec![b'x'; MAX_INPUT_BYTES as usize - 1], &path).unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().len(), MAX_INPUT_BYTES);
+        assert!(export_bytes(b"replace", &path).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn export_never_overwrites_and_profile_roundtrips() {
         let dir = std::env::temp_dir().join(format!(

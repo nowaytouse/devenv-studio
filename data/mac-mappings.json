@@ -4,6 +4,83 @@
   "mappings": [
     {
       "source_kind": "formula",
+      "source": "asciidoc",
+      "kind": "pip",
+      "package_id": "asciidoc",
+      "evidence": [
+        "https://pypi.org/project/asciidoc/",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/assets/parity_rules.json#L5"
+      ],
+      "detail": "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph. Legacy AsciiDoc.py processor; current AsciiDoc syntax and complete DocBook/PDF toolchains are not reproduced."
+    },
+    {
+      "source_kind": "formula",
+      "source": "buku",
+      "kind": "pip",
+      "package_id": "buku",
+      "evidence": [
+        "https://pypi.org/project/buku/",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/assets/parity_rules.json#L8"
+      ],
+      "detail": "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph. Project configuration and runtime data are not migrated."
+    },
+    {
+      "source_kind": "formula",
+      "source": "docutils",
+      "kind": "pip",
+      "package_id": "docutils",
+      "evidence": [
+        "https://pypi.org/project/docutils/",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/assets/parity_rules.json#L14"
+      ],
+      "detail": "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph. External document toolchains are not installed."
+    },
+    {
+      "source_kind": "formula",
+      "source": "opencv",
+      "kind": "pip",
+      "package_id": "opencv-python",
+      "evidence": [
+        "https://pypi.org/project/opencv-python/",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/assets/parity_rules.json#L41"
+      ],
+      "detail": "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph. Python bindings only; no C++ SDK, native tools, optional modules or matching build flags."
+    },
+    {
+      "source_kind": "formula",
+      "source": "python-setuptools",
+      "kind": "pip",
+      "package_id": "setuptools",
+      "evidence": [
+        "https://pypi.org/project/setuptools/",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/assets/parity_rules.json#L51"
+      ],
+      "detail": "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph. User-site setuptools package only; the interpreter and bundled pip are not replaced."
+    },
+    {
+      "source_kind": "formula",
+      "source": "pyupgrade",
+      "kind": "pip",
+      "package_id": "pyupgrade",
+      "evidence": [
+        "https://pypi.org/project/pyupgrade/",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/assets/parity_rules.json#L52"
+      ],
+      "detail": "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph. Project configuration and runtime data are not migrated."
+    },
+    {
+      "source_kind": "formula",
+      "source": "sphinx-doc",
+      "kind": "pip",
+      "package_id": "sphinx",
+      "evidence": [
+        "https://pypi.org/project/sphinx/",
+        "https://github.com/nowaytouse/LTSC_Tools_Backup/blob/a8523abbe08147b4d5de8746f26d99d056057ab0/src/assets/parity_rules.json#L61"
+      ],
+      "detail": "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph. External document toolchains are not installed."
+    },
+    {
+      "source_kind": "formula",
       "source": "git",
       "kind": "package",
       "package_id": "Git.Git",

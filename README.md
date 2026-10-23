@@ -1,8 +1,14 @@
 # LTSC Studio
 
-用 Rust 构建的 Windows LTSC 配置工作台。自己选择配置，先看清变更，再应用；macOS 与 Linux 可以使用同一个原生界面预览和保存方案。
+用 Rust 构建的 macOS 与 Windows 开发环境备份、配置工作台。两端采集本机工具与版本，保存、载入和审核清单；Mac 使用 Homebrew Bundle 配置所选 formula/cask，Windows 使用 WinGet、Cargo、uv、Pip、NPM 和 VS Code 的可信任务。Windows LTSC 系统设置继续作为独立区域，Linux 可载入、预览和导出。
 
-当前为 0.7.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、26 个开发工具/扩展、7 个 Windows 可选功能、4 个系统维护任务、4 个存储分析/优化任务，以及五组16个插电电源选项。所有选择默认关闭。
+当前为 0.8.0：将多个上游的配置和软件选择整合为同一套 Rust 清单、配置档案、计划与执行流程。系统设置提供 58 个选项，覆盖 40 组独立设置；另有 234 个 WinGet 软件包、63 个开发工具/Python包/扩展、7 个 Windows 可选功能、4 个系统维护任务、4 个存储分析/优化任务，以及五组16个插电电源选项。所有选择默认关闭。
+
+## 双平台开发环境
+
+环境备份页在macOS采集Homebrew formula/cask、Cargo、uv、NPM全局包、VS Code扩展；Windows采集Cargo、uv、NPM、一个已注册标准CPython可见的Pip分发和VS Code扩展。采集使用本地有界命令，不安装、更新或引导工具。每类来源显示完整、未找到或失败；失败和取消保留上次结果，未找到不等于软件已卸载。Windows软件全集、所有Python环境和项目依赖不在备份范围内。
+
+采集后可搜索、保存新JSON备份、重新载入，再进入环境配置：Mac选择基础工具或备份中的Homebrew项目，审核生成的Brewfile，导出或明确在本机配置；Windows从备份审核同提供程序的可信任务，也可选择现有混合组合和软件目录。迁移初始不勾选。只有完整采集的来源参与映射；包版本保留为观测信息，不被偷换成Windows版本锁定。备份仅包含工具清单和版本，不复制二进制、项目、密钥、配置文件或虚拟环境，也不是一键精确还原。文件保留在本地，不上传GitHub。Mac执行前需保存并审核清单，使用私有生成的Brewfile，先Bundle install --no-upgrade，再独立check；依赖仍可能改变，没有自动回滚。原生Mac配置目前覆盖formula/cask，其他独立工具提供程序仍待接入。可单独导出选中Windows软件的原生WinGet JSON，跨工具档案继续保留其他提供程序。完整范围见[环境备份说明](docs/MAC_BACKUP.md)与[成熟项目接入契约](docs/ENVIRONMENT_SOURCES.md)。
 
 ## 配置覆盖
 
@@ -12,7 +18,7 @@
 | 任务栏与开始菜单 | 搜索隐藏/图标/标签/搜索框、居左/居中对齐、任务视图、时钟秒数、右键结束任务、Windows 10 按钮合并方式、开始菜单推荐与启动追踪 |
 | 外观与隐私 | 系统/应用深浅色、桌面此电脑、广告 ID、诊断个性化、反馈提示、欢迎与设置建议、设备设置完成提示；另有设备诊断数据策略、消费者体验、在线语音、活动发布/上传、Snap Assist、自动播放、窗口摇动和展开当前文件夹 |
 | 软件部署 | 7-Zip、Firefox、Chrome、Git、VS Code、PowerToys、Terminal、PowerShell、Node.js LTS、LibreOffice、Everything、VLC 等 234 个明确 WinGet 包 |
-| 开发环境 | 8个Cargo工具、4个uv工具、6个NPM工具、8个VS Code扩展；通过现有执行器检查、安装并回查 |
+| 开发环境 | 8个Cargo工具、4个uv工具、37个Pip包、6个NPM工具、8个VS Code扩展；按提供程序筛选，经同一执行器检查、安装并回查 |
 | Windows 功能 | .NET 3.5、WSL 系统组件、虚拟机平台、Hyper-V、Windows 沙盒、打印为 PDF、工作文件夹 |
 | 电源与节能 | 当前活动方案的插电显示器、睡眠、磁盘空闲、USB和PCIe节能参数；独立原值记录、回查与冲突保护恢复 |
 | 存储与磁盘 | Windows系统卷/所有卷的分析与按介质优化；独立NTFS/ReFS删除通知策略检查，不修改通知策略 |
@@ -24,15 +30,21 @@
 
 ## 混合方案与迁移
 
-应用从方案工作区开始，提供日常桌面、Rust开发、Python工具、Web开发和WSL组件准备五种混合方案。每个组合同时列出设置、软件、工具或扩展；检查后明确加入当前选择，仍可逐项修改，再保存为同一份v3档案或导出完整方案。加入组合不会执行系统变更。
+应用从方案工作区开始，提供日常桌面、Rust开发、Python工具、Python数据与交互、Web开发和WSL组件准备六种混合方案。每个组合同时列出设置、软件、工具或扩展；检查后明确加入当前选择，仍可逐项修改，再保存为同一份v3档案或导出完整方案。加入组合不会执行系统变更。
 
 迁移页面可读取旧工具的SetupProfile 2.2.0或schema 1 Mac清单JSON，也可拖入文件。报告逐项区分已映射、需手动处理和未支持；初始不勾选，由用户决定哪些映射加入当前方案。只接受当前可信目录内的精确任务，保留其他选择并校验互斥设置。未迁移的私密字段不回显其值，原文件保持不变。Mac功能映射不保证相同版本、构建选项或二进制。
 
-开发环境提供Cargo、uv、NPM和Microsoft VS Code四个实际执行适配器。计划先执行明确选中的WinGet软件，再执行开发任务，最后处理功能与维护；开发提供程序按任务重新查找，避免软件安装后仍沿用缺失状态。提供程序来自固定安装位置，不执行导入档案里的命令。Rust链接器/SDK、兼容Python和网络源需已准备好，uv不会自动下载Python。旧SetupProfile及Mac清单中的NPM包仅在当前目录有完全相同ID时映射；Scoop、Pip、Cursor配置和其余系统调优仍保留未迁移说明。
+开发环境提供Cargo、uv、Pip、NPM和Microsoft VS Code五个实际执行适配器。计划先执行明确选中的WinGet软件，再执行开发任务，最后处理功能与维护；开发提供程序按任务重新查找，避免软件安装后仍沿用缺失状态。提供程序来自固定安装位置，不执行导入档案里的命令。Rust链接器/SDK、兼容Python和网络源需已准备好，uv不会自动下载Python。旧SetupProfile及Mac清单中的NPM包仅在当前目录有完全相同ID时映射；Pip按规范化发行包名匹配，37项中包含旧固定清单全部26项；Scoop、Cursor配置和其余系统调优仍保留未迁移说明。
 
 目录来自固定WinUtil版本的全部234个有效WinGet包标识，排除了两个msstore来源项。软件实际版本、操作系统兼容性、硬件、许可和安装条件由执行时的来源与安装器检查；目录可选不等于已在LTSC设备验收。每次执行/检查最多128个部署任务，较大选择可保存/导出后拆分操作。
 
 NPM仅使用官方Node.js安装中的node.exe与随附npm-cli.js，以固定的当前用户`%APPDATA%\npm`为前缀。检查和安装使用相同前缀与官方registry，不读取用户npm配置，不修改PATH、镜像或项目依赖，并禁用生命周期脚本。已安装包保留；结果核对精确包身份和版本，不能替代命令运行验收。目录中的全局工具适合独立使用，项目应继续锁定自己的依赖。较大的档案可以完整保存/导出；超过128个部署任务时，界面提示拆分并禁止启动执行。
+
+## Pip 与 Python 数据环境
+
+Pip任务使用已安装、注册的64位标准CPython 3.11–3.14，明确显示解释器候选路径，检查和安装前再核对运行时、用户目录与包身份。支持旧版26个固定Pip项目以及IPython、JupyterLab、pytest、Black、isort、mypy、Rich、Requests、HTTPX、Pydantic、NumPy和Pandas等共37项。原有Python工具组合保持不变；新增数据与交互组合明确选择Python 3.14、Git、VS Code及6个Pip项目，检查后才加入工作区。
+
+安装使用当前用户范围、固定PyPI来源和兼容wheel，不自动升级、强制覆盖、构建源码或引导Python/pip。已安装且在该解释器中可见的所选发行包会跳过；结果核对同一解释器可见的精确包身份，不能替代导入或工具运行验收。依赖仍可能随安装调整，没有通用回滚，也不代替项目自己的虚拟环境和依赖锁定。Pip配置、项目、已激活环境和PATH不被改写；自定义Python路径/用户目录或虚拟环境会明确拒绝。详见[Pip运行范围与验证](docs/PIP.md)。
 
 ## 电源与节能
 
@@ -67,12 +79,14 @@ NPM仅使用官方Node.js安装中的node.exe与随附npm-cli.js，以固定的�
 - 软件安装和系统任务另存持久执行历史，写入前记意图、结束后检查结果；执行历史不冒充卸载或系统修复回滚。
 - 后台任务支持协作式取消，保留已执行部分的恢复信息。
 
-macOS/Linux 是实际可交互的预览模式，不能修改 Windows，也不会把预览结果显示为系统检测结果。Windows 端按真实版本和版本编号检查兼容性；当前只开放 19044 与 26100 的 LTSC 客户端，不将普通家庭版、专业版或服务器当作已支持目标。
+macOS与Windows均有本机开发清单采集入口，Mac可明确执行Homebrew Bundle配置；Windows配置部分在macOS/Linux仍为交互预览，不能修改Windows，也不会把预览结果显示为Windows系统检测结果。Windows 端按真实版本和版本编号检查兼容性；当前只开放 19044 与 26100 的 LTSC 客户端，不将普通家庭版、专业版或服务器当作已支持目标。
 
 ## 多项目如何融合
 
 | 来源 | 本项目吸收的能力 | 整合方式 |
 | --- | --- | --- |
+| [Homebrew Bundle](https://github.com/Homebrew/brew) | Mac工具声明与配置 | 生成受限Brewfile，原生安装与独立检查；不执行任意导入脚本 |
+| [WinGet](https://github.com/microsoft/winget-cli) | Windows软件身份、安装及原生清单交换 | 可信任务执行与选中软件的packages schema2.0导出 |
 | [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) | SetupProfile 迁移、Mac 清单映射、Cargo/uv/VS Code 工作流，以及选择与恢复设计 | 逐项映射到受信任任务，加入同一份混合档案；旧仓库独立保留 |
 | [WinUtil](https://github.com/ChrisTitusTech/winutil) | 固定版本的 234 个 WinGet 软件标识，以及拆分审查的隐私和桌面偏好 | 软件与配置进入同一份清单，由原生 Rust 引擎执行 |
 | [Sophia Script](https://github.com/farag2/Sophia-Script-for-Windows) | 隐私、Explorer 和 Windows 版本适配参考 | 精确来源随配置记录，保留 MIT 声明 |
@@ -80,7 +94,7 @@ macOS/Linux 是实际可交互的预览模式，不能修改 Windows，也不会
 
 程序不在线下载执行这些项目的脚本。它们的大型预设被拆解为可单独审查的配置；初版清单和许可证固定在仓库中。具体来源见 [来源与集成范围](docs/INTEGRATIONS.md) 和 [第三方声明](THIRD_PARTY_NOTICES.md)。
 
-## 在 macOS 预览
+## 在 macOS 使用
 
 需要 Rust 1.95 或更新版本；仓库默认使用 stable。GUI 使用 eframe/egui，业务与界面均为 Rust。
 
@@ -96,6 +110,10 @@ cargo run -p ltsc-studio
 cargo run -p ltsc-studio -- catalog
 cargo run -p ltsc-studio -- tasks
 cargo run -p ltsc-studio -- power
+cargo run -p ltsc-studio -- providers
+cargo run -p ltsc-studio -- backup --output /absolute/path/mac-backup.json
+cargo run -p ltsc-studio -- migrate --target win11-ltsc-2024 --input examples/mac-development-backup.json
+cargo run -p ltsc-studio -- plan --target win11-ltsc-2024 --recipe python-data
 cargo run -p ltsc-studio -- storage-status
 cargo run -p ltsc-studio -- plan --profile examples/storage-workspace.json
 cargo run -p ltsc-studio -- plan --profile examples/power-workspace.json

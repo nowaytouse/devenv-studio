@@ -313,11 +313,11 @@ fn regular_directory_if_present(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => ensure!(
             metadata.is_dir() && metadata.file_attributes() & 0x400 == 0,
-            "npm directory must not be a reparse point or file: {}",
+            "Provider directory must not be a reparse point or file: {}",
             path.display()
         ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error).context("Inspect fixed npm directory"),
+        Err(error) => return Err(error).context("Inspect fixed provider directory"),
     }
     Ok(())
 }
@@ -352,7 +352,110 @@ fn winget_uv(root: &Path) -> Result<Option<PathBuf>> {
     ensure!(installed_file(&target)?, "WinGet uv executable is missing");
     Ok(Some(target))
 }
-fn developer_tool(kind: &str) -> Result<DeveloperTool> {
+pub(crate) fn pip_layout() -> Result<crate::pip::Layout> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    crate::pip::check_environment()?;
+    let user_python = local_app_data()?.join("Programs/Python");
+    let system_python = program_files()?;
+    let user_base = roaming_app_data()?.join("Python");
+    for minor in (11..=14).rev() {
+        let tag = format!(r"SOFTWARE\Python\PythonCore\3.{minor}");
+        for (hive, expected) in [
+            (
+                HKEY_CURRENT_USER,
+                user_python.join(format!("Python3{minor}")),
+            ),
+            (
+                HKEY_LOCAL_MACHINE,
+                system_python.join(format!("Python3{minor}")),
+            ),
+        ] {
+            let key = match RegKey::predef(hive)
+                .open_subkey_with_flags(&tag, KEY_READ | KEY_WOW64_64KEY)
+            {
+                Ok(key) => key,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error).context("Read registered CPython installation"),
+            };
+            // HKCU shadows the same HKLM tag even when its registration is unusable.
+            let version: String = key
+                .get_value("SysVersion")
+                .context("Read CPython SysVersion")?;
+            let architecture: String = key
+                .get_value("SysArchitecture")
+                .context("Read CPython SysArchitecture")?;
+            ensure!(
+                version == format!("3.{minor}") && architecture == "64bit",
+                "Registered PythonCore candidate is not supported stable 64-bit CPython"
+            );
+            let install = key
+                .open_subkey_with_flags("InstallPath", KEY_READ | KEY_WOW64_64KEY)
+                .context("Read CPython InstallPath")?;
+            let root = PathBuf::from(
+                install
+                    .get_value::<String, _>("")
+                    .context("Read CPython install root")?,
+            );
+            ensure!(
+                root.is_absolute()
+                    && root
+                        .to_string_lossy()
+                        .trim_end_matches(['\\', '/'])
+                        .eq_ignore_ascii_case(&expected.to_string_lossy()),
+                "CPython registration points outside its supported standard install location"
+            );
+            match install.get_value::<String, _>("ExecutableArguments") {
+                Ok(value) => ensure!(
+                    value.is_empty(),
+                    "Custom Python executable arguments are not supported"
+                ),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error).context("Read CPython executable arguments"),
+            }
+            let layout = crate::pip::Layout::new(expected, minor, user_base.clone())?;
+            match install.get_value::<String, _>("ExecutablePath") {
+                Ok(value) => ensure!(
+                    value.eq_ignore_ascii_case(&layout.program.to_string_lossy()),
+                    "Registered Python executable differs from its standard root"
+                ),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error).context("Read registered CPython executable"),
+            }
+            for path in [
+                &layout.root,
+                &layout.root.join("Lib"),
+                &layout.root.join("Lib/site-packages"),
+                &layout.root.join("Lib/site-packages/pip"),
+                &layout.user_base,
+                &layout.user_base.join(format!("Python3{minor}")),
+                &layout.user_site,
+                &layout.scripts,
+            ] {
+                regular_directory_if_present(path)?;
+            }
+            ensure!(
+                installed_file(&layout.program)?
+                    && installed_file(&layout.root.join("Lib/site-packages/pip/__init__.py"))?,
+                "Selected standard CPython/pip is missing; install or repair it manually. No bootstrap was attempted"
+            );
+            for name in [
+                "pyvenv.cfg".into(),
+                "python._pth".into(),
+                format!("python3{minor}._pth"),
+            ] {
+                ensure!(
+                    !layout.root.join(name).try_exists()?,
+                    "Embedded, free-threaded and virtual-environment Python layouts are not supported"
+                );
+            }
+            return Ok(layout);
+        }
+    }
+    Err(crate::backup::MissingProvider).context(
+        "Pip requires registered standard 64-bit CPython 3.11–3.14 with bundled pip. WindowsApps, portable and custom/version-manager installations are not searched; no Python/pip bootstrap was attempted"
+    )
+}
+pub(crate) fn developer_tool(kind: &str) -> Result<DeveloperTool> {
     let profile = user_profile()?;
     let missing = || match kind {
         "cargo" => {
@@ -372,7 +475,9 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
         "cargo" => {
             let root = profile.join(".cargo");
             let program = root.join("bin/cargo.exe");
-            ensure!(installed_file(&program)?, "{}", missing());
+            if !installed_file(&program)? {
+                return Err(crate::backup::MissingProvider).context(missing());
+            }
             Ok(DeveloperTool {
                 program,
                 cargo_root: Some(root),
@@ -411,7 +516,7 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                     });
                 }
             }
-            anyhow::bail!("{}", missing())
+            Err(crate::backup::MissingProvider).context(missing())
         }
         "npm" => {
             let root = program_files()?.join("nodejs");
@@ -425,11 +530,9 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
             }
             let program = root.join("node.exe");
             let cli = root.join("node_modules/npm/bin/npm-cli.js");
-            ensure!(
-                installed_file(&program)? && installed_file(&cli)?,
-                "{}",
-                missing()
-            );
+            if !installed_file(&program)? || !installed_file(&cli)? {
+                return Err(crate::backup::MissingProvider).context(missing());
+            }
             let prefix = roaming_app_data()?.join("npm");
             regular_directory_if_present(&prefix)?;
             regular_directory_if_present(&prefix.join("node_modules"))?;
@@ -459,7 +562,7 @@ fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                     });
                 }
             }
-            anyhow::bail!("{}", missing())
+            Err(crate::backup::MissingProvider).context(missing())
         }
         _ => anyhow::bail!("Unknown developer provider {kind}"),
     }
@@ -499,6 +602,15 @@ pub(super) fn provider_capabilities() -> Vec<ProviderCapability> {
             detail,
         });
     }
+    let (available, detail) = match pip_layout() {
+        Ok(layout) => (true, layout.detail()),
+        Err(error) => (false, format!("{error:#}")),
+    };
+    capabilities.push(ProviderCapability {
+        provider: "pip".into(),
+        available,
+        detail,
+    });
     capabilities
 }
 fn tools(plan: &DeploymentPlan) -> Result<Tools> {
@@ -547,6 +659,7 @@ fn tools(plan: &DeploymentPlan) -> Result<Tools> {
         defrag,
         system_volume,
         developer: developer_tool,
+        pip: pip_layout,
     })
 }
 fn host(target: studio_core::Target) -> Result<()> {

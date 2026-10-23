@@ -3,6 +3,51 @@
 use crate::prefs::Language;
 
 const DETAIL_PHRASES: &[(&str, &str)] = &[
+    ("Captured Windows version: ", "备份中的 Windows 版本："),
+    (
+        ". Only reviewed catalog identities can be selected. Versions are evidence, not installation pins; unknown tools require manual review.",
+        "。仅可选择经过审核的目录身份。版本是观测记录，不锁定安装版本；未知工具需手动审核。",
+    ),
+    (
+        "This provider was not completely captured. Installed state is unknown; no installation or removal is inferred.",
+        "该来源未完整采集，已安装状态未知，不据此推断安装或卸载。",
+    ),
+    (
+        "Reviewed fixed legacy Homebrew-to-Pip provider mapping. This selects only the named Python distribution, not a macOS binary or the complete Homebrew dependency graph.",
+        "经过审核的固定旧版 Homebrew 到 Pip 提供方映射。只选择指定 Python 发行包，不复制 macOS 二进制文件或完整 Homebrew 依赖图。",
+    ),
+    (
+        " Legacy AsciiDoc.py processor; current AsciiDoc syntax and complete DocBook/PDF toolchains are not reproduced.",
+        " 这是旧版 AsciiDoc.py 处理器，不复刻当前 AsciiDoc 语法或完整 DocBook/PDF 工具链。",
+    ),
+    (
+        " Project configuration and runtime data are not migrated.",
+        " 不迁移项目配置或运行数据。",
+    ),
+    (
+        " External document toolchains are not installed.",
+        " 不安装外部文档工具链。",
+    ),
+    (
+        " Python bindings only; no C++ SDK, native tools, optional modules or matching build flags.",
+        " 仅提供 Python 绑定，不提供 C++ SDK、原生工具、可选模块或一致构建参数。",
+    ),
+    (
+        " User-site setuptools package only; the interpreter and bundled pip are not replaced.",
+        " 仅为当前用户安装 setuptools 包，不替换解释器或随附 pip。",
+    ),
+    (
+        " Requires registered official 64-bit standard Windows CPython 3.11–3.14 in a supported standard location with bundled pip. Uses compatible wheels only for current-user installation from PyPI; pip resolves dependencies. No project, virtual environment, requirement, PATH or source configuration is imported, and Python/pip are not bootstrapped.",
+        " 需要在受支持标准位置注册的官方 Windows 64 位标准 CPython 3.11–3.14 及随附 pip。从 PyPI 为当前用户仅安装兼容 wheel，依赖由 pip 解析。不导入项目、虚拟环境、依赖文件、PATH 或来源配置，也不自动安装 Python/pip。",
+    ),
+    (
+        "Exact PEP 503-normalized Pip distribution ID exists in the trusted catalog. This is a review suggestion only; installed state, version and configuration have not been migrated.",
+        "可信目录中存在经过 PEP 503 标准化后完全匹配的 Pip 发行包 ID。这只是审核建议；不会迁移已安装状态、版本或配置。",
+    ),
+    (
+        "Only bare Pip distribution names can be mapped. Requirement specifiers, extras, URLs, paths and custom options are withheld and left for manual review; no installation or alternative provider was selected.",
+        "只映射裸 Pip 发行包名称。版本约束、可选扩展、URL、路径和自定义选项已隐藏并留待手动审核；未选择安装或替代提供方。",
+    ),
     (
         "Matches the legacy defrag /C /O /U operation: Windows chooses optimization for all volumes, potentially including removable volumes, not only fixed drives. This is a review suggestion; no analysis or TRIM-notification policy change is selected. Optimization has no rollback.",
         "精确对应旧版 defrag /C /O /U：由 Windows 为所有卷选择适当优化，可能包括可移动卷，并非只处理固定磁盘。这只是审核建议，未选择额外分析或 TRIM 通知策略更改；优化无法回滚。",
@@ -214,6 +259,32 @@ mod tests {
             "PRIVATE_PACKAGE_ID",
             super::requested("PRIVATE_PACKAGE_ID", Language::ZhCn)
         );
+    }
+
+    #[test]
+    fn pip_migration_details_have_chinese_explanations_without_private_requirements() {
+        let mut profile: serde_json::Value =
+            serde_json::from_slice(include_bytes!("../../../examples/migration-profile.json"))
+                .unwrap();
+        profile["packages"]["pip_packages"] =
+            serde_json::json!(["REQUESTS", "unknown-pip", "requests[extra]"]);
+        let report = crate::migration::analyze(
+            &serde_json::to_vec(&profile).unwrap(),
+            Target::Win11Ltsc2024,
+        )
+        .unwrap();
+        let items: Vec<_> = report
+            .items
+            .iter()
+            .filter(|item| item.origin == "packages.pip_packages")
+            .collect();
+        assert_eq!(items.len(), 3);
+        for item in items {
+            let translated = super::detail(&item.detail, Language::ZhCn);
+            assert!(contains_cjk(&translated), "{}", item.detail);
+            assert!(!translated.contains("requests[extra]"));
+            assert_eq!(super::detail(&item.detail, Language::EnUs), item.detail);
+        }
     }
 
     #[test]
