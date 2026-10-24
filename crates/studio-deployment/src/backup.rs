@@ -40,7 +40,7 @@ const INVALID: &str = "Command output was invalid; package list was not captured
 const CAPTURE_FAILED: &str = "Command could not be started or fully captured.";
 const OMITTED: &str =
     "Some entries were omitted because their identities or versions are unsupported.";
-const MAX_PACKAGES: usize = 10_000;
+pub(crate) const MAX_PACKAGES: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -136,7 +136,7 @@ pub(crate) fn parse_cargo_output(text: &str) -> Result<Vec<Package>> {
     Ok(packages)
 }
 
-fn valid_name(kind: &str, value: &str) -> bool {
+pub(crate) fn valid_name(kind: &str, value: &str) -> bool {
     if matches!(kind, "brew_formula" | "brew_cask") {
         !value.is_empty()
             && value.len() <= 128
@@ -165,6 +165,22 @@ pub(crate) fn valid_version(value: &str) -> bool {
             || value.strip_prefix("HEAD-").is_some_and(|commit| {
                 !commit.is_empty() && commit.bytes().all(|b| b.is_ascii_hexdigit())
             }))
+}
+
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn npm_cli_paths() -> Option<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)>
+{
+    capture::npm_cli_paths()
+}
+
+#[cfg(any(windows, target_os = "macos", test))]
+pub(crate) fn parse_npm_inventory(
+    text: &str,
+    root: &std::path::Path,
+) -> anyhow::Result<Vec<Package>> {
+    let (packages, omitted) = capture::parse_packages("npm", text, Some(root))?;
+    ensure!(!omitted, "Incomplete npm package listing");
+    Ok(packages)
 }
 pub fn validate(snapshot: &Snapshot) -> Result<()> {
     ensure!(

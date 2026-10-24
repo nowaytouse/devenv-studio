@@ -24,6 +24,7 @@ mod environment;
 mod hybrid;
 mod mise_tools;
 mod network;
+mod npm_tools;
 mod power;
 mod python_tools;
 mod rust_toolchains;
@@ -204,6 +205,7 @@ enum WorkerResult {
     PythonToolsInventory(Vec<studio_deployment::backup::Package>),
     CargoTools(studio_deployment::cargo_tools::Report),
     VSCodeTools(studio_deployment::vscode_tools::Report),
+    NpmTools(studio_deployment::npm_tools::Report),
     MiseRuntime(studio_deployment::mise_tools::Report),
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
     Inspection {
@@ -466,6 +468,14 @@ impl Studio {
                         error: !report.verified,
                     };
                     self.backup.vscode_tools.report = Some(report);
+                    notice
+                }
+                Ok(WorkerResult::NpmTools(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.npm_tools.report = Some(report);
                     notice
                 }
                 Ok(WorkerResult::MiseRuntime(report)) => {

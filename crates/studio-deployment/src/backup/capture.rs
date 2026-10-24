@@ -93,6 +93,18 @@ pub(super) fn vscode_cli_paths(home: &Path) -> Option<(PathBuf, PathBuf)> {
 }
 
 #[cfg(any(target_os = "macos", test))]
+pub(crate) fn npm_cli_paths() -> Option<(PathBuf, PathBuf, PathBuf)> {
+    ["/opt/homebrew", "/usr/local"]
+        .into_iter()
+        .find_map(|prefix| {
+            let prefix = PathBuf::from(prefix);
+            let node = prefix.join("bin/node");
+            let cli = prefix.join("lib/node_modules/npm/bin/npm-cli.js");
+            (node.is_file() && cli.is_file()).then_some((node, cli, prefix))
+        })
+}
+
+#[cfg(any(target_os = "macos", test))]
 fn requests(home: &Path) -> Vec<Request> {
     let brew = first([
         "/opt/homebrew/bin/brew".into(),
@@ -101,38 +113,30 @@ fn requests(home: &Path) -> Vec<Request> {
     .filter(|path| brew_runtime_ready(path));
     let cargo = first([home.join(".cargo/bin/cargo")]);
     let uv = uv_program(home);
-    let npm = ["/opt/homebrew", "/usr/local"]
-        .into_iter()
-        .find_map(|prefix| {
-            let prefix = PathBuf::from(prefix);
-            let node = prefix.join("bin/node");
-            let cli = prefix.join("lib/node_modules/npm/bin/npm-cli.js");
-            if !node.is_file() || !cli.is_file() {
-                return None;
-            }
-            let mut result = invocation(node, &[]);
-            result.npm_node = true;
-            result.args = vec![
-                cli.to_string_lossy().into_owned(),
-                "ls".into(),
-                "--global".into(),
-                "--json".into(),
-                "--depth=0".into(),
-                "--long".into(),
-                "--ignore-scripts".into(),
-                "--offline".into(),
-                "--no-progress".into(),
-                "--color=false".into(),
-                "--no-update-notifier".into(),
-                "--no-audit".into(),
-                "--no-fund".into(),
-                "--userconfig=/dev/null".into(),
-                // npm rejects two sources with the same path; /dev is not user writable.
-                "--globalconfig=/dev/null.ltsc-global".into(),
-                format!("--prefix={}", prefix.display()),
-            ];
-            Some(result)
-        });
+    let npm = npm_cli_paths().map(|(node, cli, prefix)| {
+        let mut result = invocation(node, &[]);
+        result.npm_node = true;
+        result.args = vec![
+            cli.to_string_lossy().into_owned(),
+            "ls".into(),
+            "--global".into(),
+            "--json".into(),
+            "--depth=0".into(),
+            "--long".into(),
+            "--ignore-scripts".into(),
+            "--offline".into(),
+            "--no-progress".into(),
+            "--color=false".into(),
+            "--no-update-notifier".into(),
+            "--no-audit".into(),
+            "--no-fund".into(),
+            "--userconfig=/dev/null".into(),
+            // npm rejects two sources with the same path; /dev is not user writable.
+            "--globalconfig=/dev/null.ltsc-global".into(),
+            format!("--prefix={}", prefix.display()),
+        ];
+        result
+    });
     let vscode = vscode_cli_paths(home).map(|(electron, cli)| {
         let mut result = invocation(electron, &[]);
         result.vscode_node = true;

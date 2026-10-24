@@ -17,6 +17,7 @@ pub mod environment;
 mod history;
 pub mod mise_tools;
 pub mod network;
+pub mod npm_tools;
 #[cfg(any(windows, test))]
 mod pip;
 #[cfg(any(windows, target_os = "macos", test))]
