@@ -1,5 +1,12 @@
 # 验证记录
 
+## Unreleased — Git 全局配置档案与兼容锁文件更新，2026-10-24
+
+- Git 配置档案支持九项白名单、严格导入/导出、本机值快照比对、逐项选择应用及执行后回读记录；focused backend 7 项与 GUI 1 项回归此前通过。完成最终双语结果提示及测试辅助断言调整后，未重跑测试套件。
+- `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings` 与 `cargo build --workspace --locked` 通过；`git diff --check` 通过。
+- `cargo outdated --workspace --depth 0` 报告直接依赖均为最新；深度 3 仅显示需跨 API 大版本迁移的 Windows 绑定家族。安全审计扫描 432 项依赖，无漏洞公告，另有 3 条 Linux D-Bus/辅助功能依赖未维护提示；详情及两项锁文件升级记录见 `DEPENDENCY_REVIEW.md`。
+- 版本保持 0.10.0 / Unreleased；未增加依赖或修改 Cargo.toml，Cargo.lock 仅更新 smallvec 与 uuid。主机仅安装 `aarch64-apple-darwin` Rust target；未做 Windows 目标编译、Windows 设备验收或 CI 检查。
+
 ## Unreleased — Windows Scoop 清单与精确版本重部署，2026-10-24
 
 - 工作区格式检查、构建、严格 Clippy 通过；324 项测试通过，2 项子进程辅助测试按设计忽略。

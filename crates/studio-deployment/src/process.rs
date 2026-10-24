@@ -465,6 +465,35 @@ pub(crate) fn run_git_tools(
             .env("GIT_ALLOW_PROTOCOL", "https");
     })
 }
+
+pub(crate) fn run_git_config(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+    timeout: Duration,
+) -> Result<Output> {
+    ensure!(
+        invocation.program.file_name().is_some_and(|name| {
+            name.to_string_lossy().eq_ignore_ascii_case("git")
+                || name.to_string_lossy().eq_ignore_ascii_case("git.exe")
+        }),
+        "Git configuration is restricted to the supported Git executable"
+    );
+    run_configured(invocation, cancel, timeout, |command| {
+        for (name, _) in std::env::vars_os() {
+            if should_remove_git_environment(&name) {
+                command.env_remove(name);
+            }
+        }
+        command
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_TERMINAL_PROMPT", "0");
+    })
+}
+
+fn should_remove_git_environment(name: &std::ffi::OsStr) -> bool {
+    let upper = name.to_string_lossy().to_ascii_uppercase();
+    upper.starts_with("GIT_") && upper != "GIT_CONFIG_GLOBAL"
+}
 #[cfg(any(windows, target_os = "macos", test))]
 fn configure_python_tools(command: &mut Command) {
     for (name, _) in std::env::vars_os() {
@@ -1207,5 +1236,23 @@ mod tests {
             ),
             "State : Enabled"
         );
+    }
+
+    #[test]
+    fn git_config_runner_keeps_only_the_active_global_file_override() {
+        assert!(!should_remove_git_environment(std::ffi::OsStr::new(
+            "GIT_CONFIG_GLOBAL"
+        )));
+        for removed in [
+            "GIT_CONFIG_COUNT",
+            "GIT_CONFIG_KEY_0",
+            "GIT_CONFIG_VALUE_0",
+            "GIT_CONFIG_PARAMETERS",
+            "GIT_DIR",
+            "GIT_TRACE",
+        ] {
+            assert!(should_remove_git_environment(std::ffi::OsStr::new(removed)));
+        }
+        assert!(!should_remove_git_environment(std::ffi::OsStr::new("PATH")));
     }
 }

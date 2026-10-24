@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增跨 macOS／Windows 的 Git 全局配置档案：读取白名单设置，导入档案后逐项对比并选择性应用；写入前检查本机值未被外部修改，应用后回读并保存前后值和结果记录。白名单为 user.name、user.email、init.defaultBranch、core.autocrlf/eol/longpaths、pull.rebase、fetch.prune、push.default；不迁移凭据、代理、别名、include、SSH 或脚本，也不自动回滚。
+
 - macOS 新增 VS Code 扩展重部署：只接受已保存完整 Mac 清单内逐项选择的扩展，支持精确版本或 Marketplace 当前版本；复用稳定版应用内置 CLI，执行后从默认配置文件回读，保存请求、前后清单和结果证据。扩展具有与 VS Code 相同的权限，可能留下部分变更且不自动回滚；不覆盖设置、账号或其他配置，不应用本程序网络方案。
 - macOS 新增 NPM 全局包重部署：仅从完整已保存清单逐项选择包，支持记录版本或输入 latest、beta、next、nightly 等 dist-tag；沿用本机 Homebrew npm、应用内网络源/代理，执行前后清单和结果持久化并回读确认。禁用 npm 安装脚本，不导入 npmrc/认证信息，也不自动回滚；所选包依赖不做锁定。
 

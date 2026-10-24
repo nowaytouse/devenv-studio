@@ -14,6 +14,7 @@ mod developer_ids;
 #[cfg(any(windows, test))]
 mod engine;
 pub mod environment;
+pub mod git_config;
 mod history;
 pub mod mise_tools;
 pub mod network;

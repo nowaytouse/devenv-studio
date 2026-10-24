@@ -21,6 +21,7 @@ mod backup;
 mod cargo_tools;
 mod compatibility;
 mod environment;
+mod git_config;
 mod hybrid;
 mod mise_tools;
 mod network;
@@ -115,6 +116,9 @@ enum FileOperation {
     NetworkSave,
     NetworkLoad,
     NetworkExportConfig,
+    SaveGitProfile,
+    LoadGitProfile,
+    SaveGitReport,
 }
 
 impl FileOperation {
@@ -161,6 +165,9 @@ impl FileOperation {
             }
             Self::ExportMiseRuntimeLock => tx("导出运行时 mise.lock", "Export runtime mise.lock"),
             Self::SaveMiseRuntimeReport => tx("保存 mise 运行时结果", "Save mise runtime report"),
+            Self::SaveGitProfile => tx("保存 Git 配置档案", "Save Git profile"),
+            Self::LoadGitProfile => tx("载入 Git 配置档案", "Load Git profile"),
+            Self::SaveGitReport => tx("保存 Git 配置结果", "Save Git configuration result"),
             Self::NetworkSave => tx("保存网络方案", "Save network profile"),
             Self::NetworkLoad => tx("载入网络方案", "Load network profile"),
             Self::NetworkExportConfig => {
@@ -210,6 +217,9 @@ enum WorkerResult {
     ScoopTools(studio_deployment::scoop_tools::Report),
     MiseRuntime(studio_deployment::mise_tools::Report),
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
+    GitConfigCapture(studio_deployment::git_config::Profile),
+    GitConfigRefresh(studio_deployment::git_config::Profile),
+    GitConfigApply(studio_deployment::git_config::ApplyReport),
     Inspection {
         settings: Vec<studio_platform::SettingState>,
         power: Vec<studio_platform::SettingState>,
@@ -375,7 +385,9 @@ impl Studio {
                     Ok(WorkerResult::Backup(_)
                         | WorkerResult::RustInventory(_)
                         | WorkerResult::PythonToolsInventory(_)
-                        | WorkerResult::MiseRuntimeInventory(_))
+                        | WorkerResult::MiseRuntimeInventory(_)
+                        | WorkerResult::GitConfigCapture(_)
+                        | WorkerResult::GitConfigRefresh(_))
                 )
             {
                 result = Err(tx(
@@ -560,6 +572,45 @@ impl Studio {
                     ),
                     error: report.cancelled || report.failed > 0,
                 },
+                Ok(WorkerResult::GitConfigCapture(profile)) => {
+                    let count = profile.settings.len();
+                    self.backup.git_config.profile = Some(profile.clone());
+                    self.backup.git_config.current = Some(profile);
+                    self.backup.git_config.selected.clear();
+                    self.backup.git_config.confirmed = false;
+                    self.backup.git_config.report = None;
+                    Notice {
+                        text: lf!(
+                            "已读取 {count} 项受支持的 Git 设置；未修改配置。",
+                            "Read {count} supported Git settings; configuration was not changed.",
+                            count = count
+                        ),
+                        error: false,
+                    }
+                }
+                Ok(WorkerResult::GitConfigRefresh(profile)) => {
+                    let count = profile.settings.len();
+                    self.backup.git_config.current = Some(profile);
+                    self.backup.git_config.confirmed = false;
+                    self.backup.git_config.report = None;
+                    Notice {
+                        text: lf!(
+                            "已刷新 {count} 项 Git 当前值；未修改配置。",
+                            "Refreshed {count} current Git values; configuration was not changed.",
+                            count = count
+                        ),
+                        error: false,
+                    }
+                }
+                Ok(WorkerResult::GitConfigApply(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified || report.cancelled,
+                    };
+                    self.backup.git_config.report = Some(report);
+                    self.backup.git_config.confirmed = false;
+                    notice
+                }
                 Ok(WorkerResult::Inspection {
                     settings,
                     power,
@@ -2039,7 +2090,7 @@ impl Studio {
                 match &mut dialog {
                     Dialog::File { operation, path, error } => {
                         ui.heading(operation.title());
-                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::LoadVscodeRequest | FileOperation::NetworkLoad) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
+                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::LoadVscodeRequest | FileOperation::NetworkLoad | FileOperation::LoadGitProfile) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
                         ui.add_space(12.0);
                         ui.add(egui::TextEdit::singleline(path).desired_width(f32::INFINITY).hint_text(t("完整文件路径，例如 /Users/you/Desktop/lt-sc.json")));
                         if let Some(error) = error.as_ref() { ui.colored_label(palette().danger, error); }
@@ -2234,6 +2285,14 @@ impl Studio {
         }
         if matches!(
             operation,
+            FileOperation::SaveGitProfile
+                | FileOperation::LoadGitProfile
+                | FileOperation::SaveGitReport
+        ) {
+            return self.git_config_file_operation(operation, &path);
+        }
+        if matches!(
+            operation,
             FileOperation::SaveCompatibilityRequest | FileOperation::LoadCompatibilityRequest
         ) {
             if self.worker.is_some() {
@@ -2256,6 +2315,11 @@ impl Studio {
             | FileOperation::NetworkLoad
             | FileOperation::NetworkExportConfig => {
                 Err("Network operation was not dispatched".into())
+            }
+            FileOperation::SaveGitProfile
+            | FileOperation::LoadGitProfile
+            | FileOperation::SaveGitReport => {
+                Err("Git configuration operation was not dispatched".into())
             }
             FileOperation::SaveRustRequest
             | FileOperation::LoadRustRequest

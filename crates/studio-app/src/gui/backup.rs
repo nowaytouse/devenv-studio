@@ -17,6 +17,7 @@ pub(super) struct BackupUiState {
     pub npm_tools: super::npm_tools::UiState,
     pub mise_tools: super::mise_tools::UiState,
     pub scoop_tools: super::scoop_tools::UiState,
+    pub git_config: super::git_config::UiState,
     pub bundle_report: Option<studio_deployment::environment::BundleReport>,
 }
 

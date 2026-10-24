@@ -121,6 +121,8 @@ impl Studio {
                 });
         });
         ui.add_space(16.0);
+        self.git_config_page(ui);
+        ui.add_space(16.0);
         surface_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.heading(tx("Rust 工具链", "Rust toolchains"));
