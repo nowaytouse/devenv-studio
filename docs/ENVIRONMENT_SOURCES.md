@@ -6,6 +6,7 @@
 | --- | --- | --- | --- |
 | [Homebrew/brew](https://github.com/Homebrew/brew/tree/9811f64e2cccd62fd8a981c1fed5248b9705fea4) | 9811f64e2cccd62fd8a981c1fed5248b9705fea4 | BSD-2-Clause | formula/cask 清单采集、Brewfile、Bundle 补齐；所选身份的滚动更新与 formula HEAD 原生安装及回读 |
 | [microsoft/winget-cli](https://github.com/microsoft/winget-cli/tree/bc1e9ff8b982798ab346b61416b76ae738038e57) | bc1e9ff8b982798ab346b61416b76ae738038e57 | MIT | 现有 Windows 可信软件部署；将已审核方案导出原生 packages schema 2.0 清单 |
+| [ScoopInstaller/Scoop](https://github.com/ScoopInstaller/Scoop/tree/v0.6.0) | v0.6.0 | Unlicense OR MIT | Windows 用户级清单采集、官方 bucket 过滤、已登记来源下逐项 app@version 重部署；不导入配置或自动添加来源 |
 | [rust-lang/rustup](https://github.com/rust-lang/rustup/tree/5c8ff3f907c37688d20d9e7038a2f826042cd763) | 5c8ff3f907c37688d20d9e7038a2f826042cd763 | MIT OR Apache-2.0 | 可移植 Rust 渠道清单、严格请求、原生重部署与指定渠道 rustc 回读；输出 rust-toolchain.toml |
 | [astral-sh/uv](https://github.com/astral-sh/uv/tree/e96aa6932bb860f3b950ddb46d1646d45e09315d) | e96aa6932bb860f3b950ddb46d1646d45e09315d (`0.13.5`) | MIT OR Apache-2.0 | 跨平台 uv tool inventory、逐项 PyPI 请求、精确/滚动重部署与包版本回读；不捆绑 uv |
 | [pypa/pipx](https://github.com/pypa/pipx/tree/9a49f1957fad930860189421f2cd29d5a5604fd4) | 9a49f1957fad930860189421f2cd29d5a5604fd4 | MIT | 作为 uv 的同类方案评估；不保留第二个 Python 工具安装后端或自动导入流程 |
@@ -19,7 +20,7 @@
 - [Homebrew Bundle 官方文档](https://docs.brew.sh/Brew-Bundle-and-Brewfile)与[命令文档](https://docs.brew.sh/Manpage#bundle-subcommand)：仅从有效身份生成 brew/cask 行，不解析或执行用户提供的任意 Ruby Brewfile。默认补齐另建私有临时清单，先 install --no-upgrade，再 check --no-upgrade。滚动与 formula HEAD 使用单独审核的原生安装策略和回读，详见 [REDEPLOYMENT.md](REDEPLOYMENT.md)。不会 cleanup、uninstall、zap、force 或从导入文件加载配置钩子。安装工具本身及其依赖仍会运行发布者代码。Homebrew 与本地运行时必须已可用。
 - --no-upgrade 只阻止常规主动升级；安装所需依赖仍可能升级或变更。观测版本不是锁文件，不保证二进制、项目构建、Shell 或 CLI 可用性。取消或失败后需要重新检查环境，没有自动回滚。
 - [WinGet import 官方文档](https://learn.microsoft.com/windows/package-manager/winget/import)：输出固定官方 winget SourceDetails 和 PackageIdentifier，不带 Version、InitialOverrideArguments、InitialCustomSwitches、认证或任意来源。导出仅含所选 WinGet 应用；Cargo/uv/Pip/NPM/扩展仍在应用档案中。执行继续走逐项可信适配器，不盲目运行导入文件。
-- Windows 清单采集不调用安装、升级、winget 来源刷新或网络搜索。Pip 仅记录一个选定标准 CPython 解释器可见的分发元数据；不是所有解释器或虚拟环境备份。
+- Windows 清单采集不调用安装、升级、winget 来源刷新或网络搜索。Scoop 使用 `export` 而不导入其可选配置；只保留已登记 `main`、`extras`、`versions` 官方 bucket 中无额外状态的用户包。自定义或本地生成来源、全局安装及带附加状态的条目会被省略，并把该提供程序标记为部分。重部署要求目标机已登记所需官方 bucket，不自动新增来源；只安装用户勾选的 app@保存版本，跳过已匹配版本，执行后逐项核对。Scoop manifest 脚本及依赖可能执行或带来额外更改，失败/取消不自动回滚。Pip 仅记录一个选定标准 CPython 解释器可见的分发元数据；不是所有解释器或虚拟环境备份。
 - [rustup 官方文档](https://rust-lang.github.io/rustup/concepts/channels.html)：接受稳定、beta、nightly、版本号及日期 nightly 请求。原生 minimal 安装不更改默认工具链；安装后重新检查清单并显式调用所选渠道编译器，记录发布与提交信息。精确请求不代表整个项目或环境已锁定。
 - [uv tools 官方指南](https://docs.astral.sh/uv/guides/tools/)与[命令参考](https://docs.astral.sh/uv/reference/cli/#uv-tool-install)：只接管独立 `uv tool` 命令；用户逐项选择 PyPI 包身份、固定版本或滚动版。精确版本冲突时使用 `uv tool install --force` 重建该工具环境，可能覆盖其他包同名入口，所以执行前明确确认。清单读取沿用备份同一解析器；安装前后分别记录/核对所选身份和版本。
 - 配置执行使用显式 Python 软件源与代理快照，禁用项目/用户 uv 配置和自动 Python 下载；不会清理未选择工具。应用需要本机已有 uv 与可用 Python。uv 安装的软件包可能运行构建后端代码；没有自动回滚，也不验证项目依赖、命令运行兼容性或字节级可复现性。
@@ -39,4 +40,4 @@ Cargo registry 镜像适用于 registry 源和依赖；Git HEAD 保持固定 Git
 
 ## 尚未覆盖
 
-原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。VS Code 扩展已可从完整 Mac 清单逐项重部署；NPM 仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。备份不复制项目、配置文件、二进制、缓存、密钥或虚拟环境；Windows 软件全集与 WinGet 安装清单采集未实现。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。
+原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。VS Code 扩展已可从完整 Mac 清单逐项重部署；NPM 仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。备份不复制项目、配置文件、二进制、缓存、密钥或虚拟环境；Windows 软件全集与完整 WinGet 安装清单采集未实现；Scoop 仅采集官方 bucket 用户级包。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。

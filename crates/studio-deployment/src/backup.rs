@@ -11,11 +11,13 @@ use std::{
 
 #[cfg(any(windows, target_os = "macos", test))]
 mod capture;
+pub(crate) mod scoop;
 #[cfg(any(windows, test))]
 mod windows_capture;
 
 pub const PROVIDERS: [&str; 6] = ["brew_formula", "brew_cask", "cargo", "uv", "npm", "vscode"];
-pub const WINDOWS_PROVIDERS: [&str; 5] = ["cargo", "uv", "npm", "pip", "vscode"];
+const WINDOWS_PROVIDERS_V1: [&str; 5] = ["cargo", "uv", "npm", "pip", "vscode"];
+pub const WINDOWS_PROVIDERS: [&str; 6] = ["cargo", "uv", "npm", "pip", "vscode", "scoop"];
 
 pub fn provider_kinds(platform: &str) -> Result<&'static [&'static str]> {
     match platform {
@@ -137,7 +139,9 @@ pub(crate) fn parse_cargo_output(text: &str) -> Result<Vec<Package>> {
 }
 
 pub(crate) fn valid_name(kind: &str, value: &str) -> bool {
-    if matches!(kind, "brew_formula" | "brew_cask") {
+    if kind == "scoop" {
+        scoop::valid_name(value)
+    } else if matches!(kind, "brew_formula" | "brew_cask") {
         !value.is_empty()
             && value.len() <= 128
             && value.as_bytes()[0].is_ascii_alphanumeric()
@@ -183,11 +187,12 @@ pub(crate) fn parse_npm_inventory(
     Ok(packages)
 }
 pub fn validate(snapshot: &Snapshot) -> Result<()> {
-    ensure!(
-        snapshot.schema_version == 1,
-        "Unsupported developer backup schema"
-    );
-    let expected_providers = provider_kinds(&snapshot.platform)?;
+    let expected_providers = match (snapshot.platform.as_str(), snapshot.schema_version) {
+        ("macos", 1) => &PROVIDERS[..],
+        ("windows", 1) => &WINDOWS_PROVIDERS_V1[..],
+        ("windows", 2) => &WINDOWS_PROVIDERS[..],
+        _ => anyhow::bail!("Unsupported developer backup schema or platform"),
+    };
     ensure!(
         !snapshot.captured_at.is_empty()
             && snapshot.captured_at.len() <= 20
@@ -209,6 +214,7 @@ pub fn validate(snapshot: &Snapshot) -> Result<()> {
         );
         let details: &[&str] = match provider.status.as_str() {
             "complete" => &[COMPLETE],
+            "partial" if provider.kind == "scoop" => &[OMITTED],
             "unavailable" => &[UNAVAILABLE, BREW_UNAVAILABLE],
             "failed" => &[FAILED, TIMED_OUT, INVALID, CAPTURE_FAILED, OMITTED],
             _ => anyhow::bail!("Invalid backup provider status"),
@@ -223,16 +229,22 @@ pub fn validate(snapshot: &Snapshot) -> Result<()> {
                 || provider.packages.is_empty(),
             "Incomplete provider cannot claim a complete package list"
         );
+        ensure!(
+            provider.status != "partial" || !provider.packages.is_empty(),
+            "Partial provider must include at least one retained package"
+        );
         count = count
             .checked_add(provider.packages.len())
             .context("Package count overflow")?;
         ensure!(count <= MAX_PACKAGES, "Backup exceeds package count limit");
         let mut packages = BTreeSet::new();
         for package in &provider.packages {
-            ensure!(
-                valid_name(&provider.kind, &package.name) && valid_version(&package.version),
-                "Invalid backup package identity or version"
-            );
+            let valid = if provider.kind == "scoop" {
+                scoop::valid_identity(&package.name, &package.version)
+            } else {
+                valid_name(&provider.kind, &package.name) && valid_version(&package.version)
+            };
+            ensure!(valid, "Invalid backup package identity or version");
             ensure!(
                 packages.insert(identity_key(&provider.kind, &package.name)),
                 "Duplicate backup package identity"
@@ -373,6 +385,7 @@ mod tests {
     #[test]
     fn platform_provider_contracts_preserve_macos_and_reject_cross_platform_lists() {
         let mut windows = sample();
+        windows.schema_version = 2;
         windows.platform = "windows".into();
         windows.providers = WINDOWS_PROVIDERS
             .iter()
@@ -390,6 +403,44 @@ mod tests {
             parse(&serde_json::to_vec(&windows).unwrap()).unwrap(),
             windows
         );
+
+        let mut legacy_windows = sample();
+        legacy_windows.platform = "windows".into();
+        legacy_windows.providers = WINDOWS_PROVIDERS_V1
+            .iter()
+            .map(|kind| ProviderSnapshot {
+                kind: (*kind).into(),
+                status: "unavailable".into(),
+                packages: vec![],
+                detail: UNAVAILABLE.into(),
+            })
+            .collect();
+        assert!(validate(&legacy_windows).is_ok());
+
+        let mut partial = windows.clone();
+        {
+            let scoop = partial
+                .providers
+                .iter_mut()
+                .find(|provider| provider.kind == "scoop")
+                .unwrap();
+            scoop.status = "partial".into();
+            scoop.detail = OMITTED.into();
+            scoop.packages = vec![Package {
+                name: "main/7zip".into(),
+                version: "nightly".into(),
+            }];
+        }
+        assert!(validate(&partial).is_ok());
+        let mut invalid_partial = partial.clone();
+        invalid_partial.providers[0].status = "partial".into();
+        invalid_partial.providers[0].detail = OMITTED.into();
+        invalid_partial.providers[0].packages = vec![Package {
+            name: "ripgrep".into(),
+            version: "15.0.0".into(),
+        }];
+        assert!(validate(&invalid_partial).is_err());
+
         windows.providers[0].kind = "brew_formula".into();
         assert!(validate(&windows).is_err());
         let mut mac = sample();

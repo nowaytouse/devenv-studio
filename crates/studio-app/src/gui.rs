@@ -28,6 +28,7 @@ mod npm_tools;
 mod power;
 mod python_tools;
 mod rust_toolchains;
+mod scoop_tools;
 mod storage;
 mod theme;
 mod vscode_tools;
@@ -206,6 +207,7 @@ enum WorkerResult {
     CargoTools(studio_deployment::cargo_tools::Report),
     VSCodeTools(studio_deployment::vscode_tools::Report),
     NpmTools(studio_deployment::npm_tools::Report),
+    ScoopTools(studio_deployment::scoop_tools::Report),
     MiseRuntime(studio_deployment::mise_tools::Report),
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
     Inspection {
@@ -476,6 +478,14 @@ impl Studio {
                         error: !report.verified,
                     };
                     self.backup.npm_tools.report = Some(report);
+                    notice
+                }
+                Ok(WorkerResult::ScoopTools(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.scoop_tools.report = Some(report);
                     notice
                 }
                 Ok(WorkerResult::MiseRuntime(report)) => {

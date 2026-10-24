@@ -28,6 +28,7 @@ pub(crate) struct DeveloperTool {
     pub vscode_cli: Option<PathBuf>,
     pub npm_cli: Option<PathBuf>,
     pub npm_prefix: Option<PathBuf>,
+    pub scoop_script: Option<PathBuf>,
 }
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
@@ -814,6 +815,7 @@ mod tests {
             npm_cli: (kind == "npm")
                 .then(|| PathBuf::from("/trusted/node_modules/npm/bin/npm-cli.js")),
             npm_prefix: (kind == "npm").then(|| PathBuf::from("/user/npm")),
+            scoop_script: None,
         })
     }
     fn plan(kind: &str) -> DeploymentPlan {

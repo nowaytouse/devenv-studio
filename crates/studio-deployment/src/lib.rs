@@ -23,6 +23,7 @@ mod pip;
 #[cfg(any(windows, target_os = "macos", test))]
 mod process;
 pub mod python_tools;
+pub mod scoop_tools;
 mod storage;
 pub mod toolchains;
 pub mod vscode_tools;

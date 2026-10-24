@@ -35,6 +35,9 @@ fn invocation(kind: &str, tool: &DeveloperTool) -> Result<Invocation> {
         tool.program.is_absolute(),
         "Provider executable must be absolute"
     );
+    if kind == "scoop" {
+        return crate::scoop_tools::export_invocation(tool);
+    }
     let args = match kind {
         "cargo" => {
             let root = tool
@@ -113,36 +116,44 @@ fn invocation(kind: &str, tool: &DeveloperTool) -> Result<Invocation> {
     })
 }
 
-fn packages(kind: &str, text: &str, tool: &DeveloperTool) -> Result<Vec<Package>> {
+fn packages(kind: &str, text: &str, tool: &DeveloperTool) -> Result<(Vec<Package>, bool)> {
     ensure!(
         text.len() <= 1024 * 1024 && !text.contains('\u{fffd}'),
         "Incomplete command capture"
     );
-    let packages = if kind == "npm" {
+    let (packages, omitted) = if kind == "scoop" {
+        let inventory = super::scoop::parse_export(text)?;
+        (inventory.packages, inventory.omitted)
+    } else if kind == "npm" {
         let prefix = tool
             .npm_prefix
             .as_ref()
             .context("Missing fixed npm prefix")?;
-        crate::engine::npm_inventory(text, &prefix.to_string_lossy())?
-            .into_iter()
-            .map(|(name, version)| Package { name, version })
-            .collect()
+        (
+            crate::engine::npm_inventory(text, &prefix.to_string_lossy())?
+                .into_iter()
+                .map(|(name, version)| Package { name, version })
+                .collect(),
+            false,
+        )
     } else {
         let (packages, omitted) = super::capture::parse_packages(kind, text, None)?;
         ensure!(!omitted, "Incomplete inventory");
-        packages
+        (packages, false)
     };
     ensure!(
         packages.len() <= MAX_PACKAGES,
         "Inventory exceeds package count limit"
     );
     for package in &packages {
-        ensure!(
-            valid_name(kind, &package.name) && valid_version(&package.version),
-            "Invalid package identity or version"
-        );
+        let valid = if kind == "scoop" {
+            super::scoop::valid_identity(&package.name, &package.version)
+        } else {
+            valid_name(kind, &package.name) && valid_version(&package.version)
+        };
+        ensure!(valid, "Invalid package identity or version");
     }
-    Ok(packages)
+    Ok((packages, omitted))
 }
 
 fn collect_with(
@@ -204,10 +215,21 @@ fn collect_with(
                             } else {
                                 match packages(kind, &output.stdout, &tool) {
                                     Err(_) => provider.detail = INVALID.into(),
-                                    Ok(packages) => {
+                                    Ok((packages, omitted)) => {
+                                        let has_packages = !packages.is_empty();
                                         provider.packages = packages;
-                                        provider.status = "complete".into();
-                                        provider.detail = COMPLETE.into();
+                                        provider.status = if omitted && has_packages {
+                                            "partial".into()
+                                        } else if omitted {
+                                            "failed".into()
+                                        } else {
+                                            "complete".into()
+                                        };
+                                        provider.detail = if omitted {
+                                            OMITTED.into()
+                                        } else {
+                                            COMPLETE.into()
+                                        };
                                     }
                                 }
                             }
@@ -230,7 +252,7 @@ fn collect_with(
         warnings.push(PARTIAL.into());
     }
     let snapshot = Snapshot {
-        schema_version: 1,
+        schema_version: 2,
         captured_at,
         platform: "windows".into(),
         providers,
@@ -287,6 +309,7 @@ mod tests {
             vscode_cli: Some(root.join("cli.js")),
             npm_cli: Some(root.join("npm-cli.js")),
             npm_prefix: Some(root.join("npm")),
+            scoop_script: (kind == "scoop").then(|| root.join("scoop.ps1")),
         })
     }
     fn missing_pip() -> Result<crate::pip::Layout> {
@@ -299,11 +322,13 @@ mod tests {
 
     #[test]
     fn windows_snapshot_and_fixed_readonly_commands_are_complete_and_private() {
+        let scoop_export = r#"{"buckets":[{"Name":"main","Source":"https://github.com/ScoopInstaller/Main"}],"apps":[{"Name":"7zip","Version":"24.09","Source":"main","Info":""}]}"#;
         let mut fake = fake(vec![
             output("ripgrep v15.0.0:\n    rg.exe\n"),
             output("ruff v0.14.0\n- ruff.exe\n"),
             output(&npm_fixture()),
             output("ms-python.python@2026.1.0\n"),
+            output(scoop_export),
         ]);
         let snapshot = collect_with(
             &mut fake,
@@ -313,18 +338,20 @@ mod tests {
             "1792720000".into(),
         )
         .unwrap();
+        assert_eq!(snapshot.schema_version, 2);
         assert_eq!(snapshot.platform, "windows");
-        assert_eq!(snapshot.providers.len(), 5);
+        assert_eq!(snapshot.providers.len(), 6);
         assert_eq!(
             snapshot
                 .providers
                 .iter()
-                .filter(|p| p.status == "complete")
+                .filter(|provider| provider.status == "complete")
                 .count(),
-            4
+            5
         );
         assert_eq!(snapshot.providers[3].status, "unavailable");
         assert_eq!(snapshot.providers[0].packages[0].name, "ripgrep");
+        assert_eq!(snapshot.providers[5].packages[0].name, "main/7zip");
         let serialized = serde_json::to_string(&snapshot).unwrap();
         assert!(!serialized.contains("studio-fixed-provider"));
         for command in fake.commands {
@@ -340,12 +367,16 @@ mod tests {
             if command.vscode_node {
                 assert!(command.args.contains(&"--show-versions".into()));
             }
+            if command.args.contains(&"export".into()) {
+                assert!(!command.args.contains(&"--config".into()));
+            }
         }
     }
 
     #[test]
     fn windows_collection_includes_only_verified_pip_metadata_and_no_probe_paths() {
         let identity = crate::pip::tests::identity().to_string();
+        let scoop_export = r#"{"buckets":[{"Name":"main","Source":"https://github.com/ScoopInstaller/Main"}],"apps":[{"Name":"7zip","Version":"24.09","Source":"main","Info":""}]}"#;
         let mut runner = fake(vec![
             output(""),
             output(""),
@@ -354,6 +385,7 @@ mod tests {
             output(r#"[{"name":"PyWavelets","version":"1.9.0"}]"#),
             output(&identity),
             output(""),
+            output(scoop_export),
         ]);
         let snapshot = collect_with(
             &mut runner,
@@ -371,7 +403,7 @@ mod tests {
         );
         assert_eq!(snapshot.providers[3].packages[0].name, "pywavelets");
         assert_eq!(snapshot.warnings.len(), 3);
-        assert_eq!(runner.commands.len(), 7);
+        assert_eq!(runner.commands.len(), 8);
         let text = serde_json::to_string(&snapshot).unwrap();
         assert!(!text.contains("Python314"));
         assert!(!text.contains("pip_origin"));
@@ -383,6 +415,7 @@ mod tests {
             output(&identity),
             output("{}"),
             output(""),
+            output(scoop_export),
         ]);
         let snapshot = collect_with(
             &mut runner,
@@ -420,7 +453,15 @@ mod tests {
         let mut invalid = serde_json::from_str::<serde_json::Value>(&npm_fixture()).unwrap();
         invalid["dependencies"]["typescript"]["link"] = true.into();
         assert!(packages("npm", &invalid.to_string(), &tool("npm").unwrap()).is_err());
-        let mut runner = fake(vec![output(""), output(""), output("{}"), output("")]);
+        let mut runner = fake(vec![
+            output(""),
+            output(""),
+            output("{}"),
+            output(""),
+            output(
+                r#"{"buckets":[{"Name":"main","Source":"https://github.com/ScoopInstaller/Main"}],"apps":[]}"#,
+            ),
+        ]);
         let snapshot = collect_with(
             &mut runner,
             tool,
@@ -436,6 +477,7 @@ mod tests {
 
     #[test]
     fn process_failures_stderr_and_timeouts_never_report_complete() {
+        let scoop_export = r#"{"buckets":[{"Name":"main","Source":"https://github.com/ScoopInstaller/Main"}],"apps":[{"Name":"7zip","Version":"24.09","Source":"main","Info":""}]}"#;
         for failure in [
             Output {
                 code: 1,
@@ -464,6 +506,7 @@ mod tests {
                 output(""),
                 output(&npm_fixture()),
                 output(""),
+                output(scoop_export),
             ]);
             let snapshot = collect_with(
                 &mut runner,

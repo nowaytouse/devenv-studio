@@ -16,6 +16,7 @@ pub(super) struct BackupUiState {
     pub vscode_tools: super::vscode_tools::UiState,
     pub npm_tools: super::npm_tools::UiState,
     pub mise_tools: super::mise_tools::UiState,
+    pub scoop_tools: super::scoop_tools::UiState,
     pub bundle_report: Option<studio_deployment::environment::BundleReport>,
 }
 
@@ -38,6 +39,11 @@ impl Studio {
             .iter()
             .filter(|p| p.status == "failed")
             .count();
+        let partial = snapshot
+            .providers
+            .iter()
+            .filter(|p| p.status == "partial")
+            .count();
         let complete = snapshot
             .providers
             .iter()
@@ -50,12 +56,14 @@ impl Studio {
         self.backup.brew_confirm = false;
         self.backup.vscode_tools.clear_selection();
         self.backup.npm_tools = super::npm_tools::UiState::default();
+        self.backup.scoop_tools = super::scoop_tools::UiState::default();
         Notice {
             text: lf!(
-                "已采集 {complete} 类来源、{packages} 个条目；失败 {failed} 类。请检查并保存本地备份。",
-                "Collected {complete} providers and {packages} entries; {failed} providers failed. Review and save a local backup.",
+                "已采集 {complete} 类来源、{packages} 个条目；部分 {partial} 类、失败 {failed} 类。请检查并保存本地备份。",
+                "Collected {complete} providers and {packages} entries; {partial} partial and {failed} failed. Review and save a local backup.",
                 complete = complete,
                 packages = packages,
+                partial = partial,
                 failed = failed
             ),
             error: failed > 0,
@@ -89,6 +97,7 @@ impl Studio {
                 self.backup.brew_confirm = false;
                 self.backup.vscode_tools.clear_selection();
                 self.backup.npm_tools = super::npm_tools::UiState::default();
+                self.backup.scoop_tools = super::scoop_tools::UiState::default();
                 Ok(lf!(
                     "已载入开发环境备份：{}",
                     "Environment backup loaded: {}",
@@ -126,8 +135,8 @@ impl Studio {
         ui.heading(tx("开发环境备份", "Developer environment backup"));
         ui.label(tx("采集本机工具与已安装版本，保存本地备份，选择 macOS 或 Windows 配置流程。", "Capture local tools and installed versions, save a backup, then choose macOS or Windows configuration."));
         ui.label(RichText::new(tx(
-            "macOS：Homebrew、Cargo、uv、NPM、VS Code；Windows：Cargo、uv、NPM、Pip、VS Code。仅记录包名与版本，不复制二进制、项目、密钥、配置或虚拟环境；采集不安装或更新。",
-            "macOS: Homebrew, Cargo, uv, NPM, VS Code. Windows: Cargo, uv, NPM, Pip, VS Code. Inventories contain identities and versions, not binaries, projects, keys, settings or virtual environments. Capture never installs or updates.",
+            "macOS：Homebrew、Cargo、uv、NPM、VS Code；Windows：Cargo、uv、NPM、Pip、VS Code、Scoop。仅记录包名与版本，不复制二进制、项目、密钥、配置或虚拟环境；采集不安装或更新。",
+            "macOS: Homebrew, Cargo, uv, NPM, VS Code. Windows: Cargo, uv, NPM, Pip, VS Code, Scoop. Inventories contain identities and versions, not binaries, projects, keys, settings or virtual environments. Capture never installs or updates.",
         )).size(12.0).color(palette().muted));
         ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
@@ -224,6 +233,7 @@ impl Studio {
         for provider in &snapshot.providers {
             let state = match provider.status.as_str() {
                 "complete" => tx("完整", "Complete"),
+                "partial" => tx("部分", "Partial"),
                 "unavailable" => tx("未找到", "Unavailable"),
                 _ => tx("失败", "Failed"),
             };
@@ -365,6 +375,7 @@ fn provider_name(kind: &str) -> &str {
         "npm" => "NPM",
         "pip" => "Pip",
         "vscode" => "VS Code",
+        "scoop" => "Scoop",
         _ => kind,
     }
 }

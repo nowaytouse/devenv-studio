@@ -1,5 +1,14 @@
 # 验证记录
 
+## Unreleased — Windows Scoop 清单与精确版本重部署，2026-10-24
+
+- 工作区格式检查、构建、严格 Clippy 通过；324 项测试通过，2 项子进程辅助测试按设计忽略。
+- 新 Windows 清单 schema 2 记录第六个提供程序 Scoop，并保留旧 schema 1 五提供程序读取兼容。采集筛选、部分清单和精确版本安装/回读由解析器与 fake runner 回归覆盖。
+- macOS debug 预览包已生成并启动，默认进入“环境配置”；未执行 Scoop。
+- `cargo audit` 扫描锁文件 432 个依赖，未报告漏洞；3 个 Linux 辅助功能依赖显示未维护提示。当前依赖选择和 Windows API 大版本迁移理由记于 `DEPENDENCY_REVIEW.md`。
+- 版本保持 0.10.0 / Unreleased；本轮未修改 Cargo.toml 或 Cargo.lock。主机只装有 `aarch64-apple-darwin` Rust target，没有 Windows 目标。
+- 未做 Windows 目标编译、真实 Windows/Scoop 执行、Windows 实机验收或 CI 检查；预览包未签名、公证。
+
 ## Unreleased — macOS Cargo CLI 工具重部署，2026-10-24
 
 - 305 项工作区测试通过，2 项子进程辅助测试按设计忽略；格式检查、工作区全目标严格 Clippy 与工作区构建通过。

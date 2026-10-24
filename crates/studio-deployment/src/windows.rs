@@ -467,6 +467,9 @@ pub(crate) fn developer_tool(kind: &str) -> Result<DeveloperTool> {
         "uv" => {
             "Install uv in the standard user-profile .local/bin or .cargo/bin, or through the explicit astral-sh.uv WinGet task (https://docs.astral.sh/uv/getting-started/installation/). Python must already be available; automatic Python downloads are disabled."
         }
+        "scoop" => {
+            "Install Scoop in the standard user-profile scoop directory or set an absolute SCOOP root. Only the installed local Scoop scripts are used; custom buckets and global installs are excluded."
+        }
         _ => {
             "Install the official stable Visual Studio Code user/system package (https://code.visualstudio.com/docs/setup/windows). A standard installation with Code.exe and resources/app/out/cli.js is required; custom, portable and Insiders installs are not searched."
         }
@@ -484,6 +487,7 @@ pub(crate) fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                 vscode_cli: None,
                 npm_cli: None,
                 npm_prefix: None,
+                scoop_script: None,
             })
         }
         "uv" => {
@@ -498,6 +502,7 @@ pub(crate) fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                         vscode_cli: None,
                         npm_cli: None,
                         npm_prefix: None,
+                        scoop_script: None,
                     });
                 }
             }
@@ -513,6 +518,7 @@ pub(crate) fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                         vscode_cli: None,
                         npm_cli: None,
                         npm_prefix: None,
+                        scoop_script: None,
                     });
                 }
             }
@@ -542,6 +548,32 @@ pub(crate) fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                 vscode_cli: None,
                 npm_cli: Some(cli),
                 npm_prefix: Some(prefix),
+                scoop_script: None,
+            })
+        }
+        "scoop" => {
+            let root = std::env::var_os("SCOOP")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| profile.join("scoop"));
+            ensure!(root.is_absolute(), "Scoop root must be absolute");
+            let apps = root.join("apps");
+            let scoop = apps.join("scoop");
+            let current = scoop.join("current");
+            let bin = current.join("bin");
+            for directory in [&root, &apps, &scoop, &current, &bin] {
+                regular_directory_if_present(directory)?;
+            }
+            let script = bin.join("scoop.ps1");
+            if !installed_file(&script)? {
+                return Err(crate::backup::MissingProvider).context(missing());
+            }
+            Ok(DeveloperTool {
+                program: system_tool("WindowsPowerShell/v1.0/powershell.exe")?,
+                cargo_root: None,
+                vscode_cli: None,
+                npm_cli: None,
+                npm_prefix: None,
+                scoop_script: Some(script),
             })
         }
         "vscode" => {
@@ -559,6 +591,7 @@ pub(crate) fn developer_tool(kind: &str) -> Result<DeveloperTool> {
                         vscode_cli: Some(cli),
                         npm_cli: None,
                         npm_prefix: None,
+                        scoop_script: None,
                     });
                 }
             }
@@ -574,7 +607,7 @@ pub(super) fn provider_capabilities() -> Vec<ProviderCapability> {
         available: winget.available,
         detail: winget.detail,
     }];
-    for provider in ["cargo", "uv", "vscode", "npm"] {
+    for provider in ["cargo", "uv", "vscode", "npm", "scoop"] {
         let (available, detail) = match developer_tool(provider) {
             Ok(tool) if provider == "npm" => match tool.npm_prefix {
                 Some(prefix) => (

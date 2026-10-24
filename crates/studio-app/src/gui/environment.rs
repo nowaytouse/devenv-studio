@@ -108,12 +108,16 @@ impl Studio {
             self.network_summary(ui);
             egui::CollapsingHeader::new(tx("Windows 清单与导出", "Windows inventory and export"))
                 .show(ui, |ui| {
-                    ui.label(tx("Windows 使用 WinGet、Cargo、uv、Pip、NPM 与 VS Code 的可信目录；在 Windows 方案中逐项选择并审核。WinGet 导出只含所选软件身份，其他提供程序仍保存在应用档案中。", "Windows uses reviewed WinGet, Cargo, uv, Pip, NPM and VS Code tasks. Select and review them in the Windows workspace. WinGet exports contain selected application identities; other providers remain in the app profile."));
+                    ui.label(tx("Windows 使用 WinGet、Cargo、uv、Pip、NPM、VS Code 与 Scoop。Scoop 清单只保留官方 bucket 的普通用户级包；WinGet 导出只含所选软件身份，其他提供程序仍保存在应用档案中。", "Windows uses reviewed WinGet, Cargo, uv, Pip, NPM, VS Code and Scoop. Scoop inventories retain user packages from official buckets only. Select and review WinGet tasks in the Windows workspace; other providers remain in the app profile."));
                     ui.horizontal_wrapped(|ui| {
                         if ui.button(tx("导出所选 WinGet 清单…", "Export selected WinGet inventory…")).clicked() {
                             self.open_file(FileOperation::ExportWinget);
                         }
                     });
+                    egui::CollapsingHeader::new(tx("Scoop 软件包", "Scoop packages"))
+                        .id_salt("scoop-package-panel")
+                        .default_open(false)
+                        .show(ui, |ui| self.scoop_tools_page(ui));
                 });
         });
         ui.add_space(16.0);
