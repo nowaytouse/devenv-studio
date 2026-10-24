@@ -24,6 +24,7 @@ mod process;
 pub mod python_tools;
 mod storage;
 pub mod toolchains;
+pub mod vscode_tools;
 #[cfg(windows)]
 mod windows;
 

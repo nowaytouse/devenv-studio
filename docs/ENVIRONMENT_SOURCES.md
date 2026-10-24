@@ -24,6 +24,7 @@
 - [uv tools 官方指南](https://docs.astral.sh/uv/guides/tools/)与[命令参考](https://docs.astral.sh/uv/reference/cli/#uv-tool-install)：只接管独立 `uv tool` 命令；用户逐项选择 PyPI 包身份、固定版本或滚动版。精确版本冲突时使用 `uv tool install --force` 重建该工具环境，可能覆盖其他包同名入口，所以执行前明确确认。清单读取沿用备份同一解析器；安装前后分别记录/核对所选身份和版本。
 - 配置执行使用显式 Python 软件源与代理快照，禁用项目/用户 uv 配置和自动 Python 下载；不会清理未选择工具。应用需要本机已有 uv 与可用 Python。uv 安装的软件包可能运行构建后端代码；没有自动回滚，也不验证项目依赖、命令运行兼容性或字节级可复现性。
 - [pipx 官方命令实现](https://github.com/pypa/pipx/blob/9a49f1957fad930860189421f2cd29d5a5604fd4/src/pipx/main.py)保留独立 Python 应用环境管理能力。本项目本轮选择 uv 作为唯一 Python CLI 执行器；pipx 不被卸载、不被启动，也不自动转换其环境。用户可在新请求中逐项录入 PyPI 名称与版本；pipx 清单解析和专用迁移报告待单独设计。
+- [Visual Studio Code CLI 官方文档](https://code.visualstudio.com/docs/configure/command-line)：复用稳定版应用内置 CLI 管理扩展，只接收完整 Mac 备份中用户逐项选中的 ID；支持 `--install-extension <id>@<version>` 精确版或不带版本的 Marketplace 当前版，并用 `--list-extensions --show-versions` 回读。`--force` 取消交互提示前由应用要求用户确认扩展权限；不复制设置/账号、不管理同步或自动更新，也不把 Marketplace 状态描述为锁定。VS Code 网络由其自身配置控制，不应用本应用网络方案。
 - [mise core tools](https://mise.jdx.dev/core-tools.html)、[CLI lock](https://mise.jdx.dev/cli/lock.html)与[Windows 支持说明](https://mise.jdx.dev/faq.html#does-mise-work-on-windows)：仅管理 Bun、Deno、.NET、Go、Java、Node、Python、Ruby、Zig；逐项选择精确版本/前缀或 latest、stable、LTS、beta、nightly 请求。渠道是否可用由各 core runtime 决定，解析失败时不会开始安装。运行前隔离配置与插件/任务/钩子，在私有临时清单中生成 macOS arm64/x64 与 Windows x64 锁文件，随后按 locked 安装并回读实际版本。安装写入标准 per-user mise 数据目录，不更改 Shell activation、全局或项目配置；导出的已解析 mise.toml 与 mise.lock 配套。锁文件只提供各 core 后端可提供的 URL/校验信息，不锁项目依赖或完整构建输入。Rust 继续走 rustup；任意 Git URL、提交与分支仍由来源专属工作流处理。
 - [twpayne/chezmoi](https://github.com/twpayne/chezmoi/tree/da3406f7aa2a114322334578639812684016d352) 继续作为设计参考；不导入 dotfiles、模板、秘密或钩子。
 
@@ -37,4 +38,4 @@ Cargo registry 镜像适用于 registry 源和依赖；Git HEAD 保持固定 Git
 
 ## 尚未覆盖
 
-原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。NPM 与 VS Code 扩展仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。备份不复制项目、配置文件、二进制、缓存、密钥或虚拟环境；Windows 软件全集与 WinGet 安装清单采集未实现。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。
+原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。VS Code 扩展已可从完整 Mac 清单逐项重部署；NPM 仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。备份不复制项目、配置文件、二进制、缓存、密钥或虚拟环境；Windows 软件全集与 WinGet 安装清单采集未实现。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。

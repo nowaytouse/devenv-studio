@@ -139,6 +139,18 @@ impl Studio {
             ui.add_space(6.0);
             self.cargo_tools_page(ui);
         });
+        ui.add_space(12.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("VS Code 扩展", "VS Code extensions"));
+            egui::CollapsingHeader::new(tx(
+                "从 Mac 清单恢复扩展",
+                "Restore extensions from a Mac inventory",
+            ))
+            .id_salt("vscode-extension-panel")
+            .default_open(false)
+            .show(ui, |ui| self.vscode_tools_page(ui));
+        });
         ui.add_space(8.0);
         surface_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -303,7 +315,7 @@ impl Studio {
             .show(ui, |ui| {
                 ui.label(tx("补齐模式保留已有包；滚动模式允许更新所选包；HEAD 模式只接受定义了开发源码的 formula，并独立回查 HEAD 已安装。稳定版链接冲突会停止，不强制切换。以上均不保证 PATH 激活或固定 Git 提交。", "Missing-only preserves installed entries; rolling permits selected package upgrades; HEAD accepts formulae with a development source and independently checks the installed HEAD channel. Stable-link conflicts stop without forced switching. PATH activation and fixed Git commits are not guaranteed."));
                 ui.label(tx("版本仅作备份记录。通过原生 Bundle 安装并独立检查已安装状态。需要已安装且可用的 Homebrew；--no-upgrade 不保证依赖完全不升级。", "Versions remain backup evidence. Native Bundle installs tools and independently checks their presence. A working Homebrew installation is required; --no-upgrade cannot guarantee unchanged dependencies."));
-                ui.label(tx("不执行清理、卸载或导入文件中的任意 Ruby / Shell / 钩子；取消后子安装器可能仍在运行。Cargo 与 uv 已有独立 Mac 重部署面板；NPM 与 VS Code 扩展 Mac 独立安装仍未接入。", "No cleanup, uninstall, or arbitrary Ruby, shell or hooks from imported files are run. Descendant installers may continue after cancellation. Native Mac configuration of Cargo/uv/NPM/extensions is not yet integrated."));
+                ui.label(tx("不执行清理、卸载或导入文件中的任意 Ruby / Shell / 钩子；取消后子安装器可能仍在运行。Cargo 与 uv 已有独立 Mac 重部署面板；Cargo、uv 与 VS Code 扩展已有独立 Mac 重部署面板；NPM 仍仅作清单来源。", "No cleanup, uninstall, or arbitrary Ruby, shell or hooks from imported files are run. Descendant installers may continue after cancellation. Native Mac configuration of Cargo/uv/NPM/extensions is not yet integrated."));
             });
         ui.add_space(8.0);
         ui.label(tx("执行前需要保存并审核 Mac 清单。载入的清单可以来自另一台 Mac，不能代表本机当前状态。现有备份不被覆盖。", "Save and review a Mac inventory before applying. Loaded backups may come from another Mac and do not prove this machine's current state. Existing backups are preserved."));

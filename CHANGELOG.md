@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS 新增 VS Code 扩展重部署：只接受已保存完整 Mac 清单内逐项选择的扩展，支持精确版本或 Marketplace 当前版本；复用稳定版应用内置 CLI，执行后从默认配置文件回读，保存请求、前后清单和结果证据。扩展具有与 VS Code 相同的权限，可能留下部分变更且不自动回滚；不覆盖设置、账号或其他配置，不应用本程序网络方案。
+
 - macOS 新增固定来源的 Cargo CLI 工具重部署：提供 8 个审核过的上游项目，支持 crates.io 精确版、滚动版和 Git HEAD 固定提交；部署前后回读清单，并保存请求、解析提交与结果证据；Cargo/Git 子进程在隔离工作目录执行。Git HEAD 的安装提交只能证明请求已固定，Cargo 清单无法验证二进制指纹；构建脚本仍以当前用户权限运行。
 
 - 新增 macOS／Windows 的 mise 核心运行时采集与重部署：逐项选择 Bun、Deno、.NET、Go、Java、Node、Python、Ruby、Zig，支持精确版本、前缀及由上游支持情况决定的 latest、LTS、beta、nightly。生成跨平台 mise.lock，按锁安装并独立回读。

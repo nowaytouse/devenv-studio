@@ -40,6 +40,14 @@ Rust 请求独立保存为严格验证的 JSON。接受 `stable`、`beta`、`nig
 
 Cargo registry 镜像适用于 registry 源和依赖；Git HEAD 保持固定 GitHub HTTPS 地址，仅使用本应用网络方案中的代理设置。Windows 继续使用现有逐项审核的 Cargo 任务。
 
+## VS Code extensions：macOS
+
+只从完整且已保存的 Mac 清单中选择扩展；请求载入不会恢复执行确认，新增备份会清除旧选择。执行复用与备份采集相同的稳定版 Visual Studio Code 应用内置 Electron / `cli.js`，仅使用 `/Applications` 或 `~/Applications` 下的标准应用包，并安装到默认用户配置文件。该面板不切换 VS Code profile，不导入设置、账号或同步状态。
+
+保留备份版本会请求官方 CLI 支持的 `publisher.extension@version` 精确版；清空版本表示当前 Marketplace 版本。应用安装前展示扩展 ID、目标版本和权限风险，并要求再次确认，然后运行 `--install-extension … --force`；`--force` 避免无人值守时等待 CLI 提示。完成后从相同默认配置文件运行 `--list-extensions --show-versions`，精确版必须匹配请求版本，滚动版必须能读回扩展身份。前后清单、请求、结果及失败状态写入私有运行证据；失败时尽力重新读取部分变更。
+
+扩展代码运行时享有 VS Code 相同的权限。Marketplace 当前版会变化，精确版本也可能在未来不可用；扩展可能自动更新，失败或取消可能留下已安装部分，本流程没有通用回滚。应用自己的代理与软件源方案不控制 VS Code Marketplace 网络；按 VS Code 自身代理设置访问。NPM Mac 重部署仍待接入。
+
 ## mise core：macOS 与 Windows 开发运行时
 
 mise 清单读取使用 mise --no-config ls --installed --json --backend core，只记录运行时身份、已安装版本和清理候选状态，不保存安装路径。用户可选择全部显示的已安装版本（或逐项勾选）并保存为 JSON 重部署备份。界面逐项支持九种经本项目核对的 core runtime：Bun、Deno、.NET、Go、Java、Node.js、Python、Ruby、Zig。请求可用 JSON 保存/载入；精确版本、前缀以及 latest、stable、lts、beta、nightly 先由 mise core 解析为具体版本。特定 runtime 不支持的渠道会在锁定/安装前以错误停止。任意 Git URL、HEAD 提交与分支不适用于所有 core runtime，不伪装成通用能力；Rust 继续由 rustup 面板管理。

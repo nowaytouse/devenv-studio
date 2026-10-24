@@ -100,6 +100,13 @@ impl std::fmt::Display for MissingProvider {
 #[cfg(any(windows, test))]
 impl std::error::Error for MissingProvider {}
 
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn vscode_cli_paths(
+    home: &std::path::Path,
+) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+    capture::vscode_cli_paths(home)
+}
+
 pub fn collect(cancel: Arc<AtomicBool>) -> Result<Snapshot> {
     #[cfg(target_os = "macos")]
     {

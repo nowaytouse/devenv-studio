@@ -29,6 +29,7 @@ mod python_tools;
 mod rust_toolchains;
 mod storage;
 mod theme;
+mod vscode_tools;
 
 use theme::palette;
 
@@ -101,6 +102,9 @@ enum FileOperation {
     SaveCargoRequest,
     LoadCargoRequest,
     SaveCargoReport,
+    SaveVscodeRequest,
+    LoadVscodeRequest,
+    SaveVscodeReport,
     SaveMiseRuntimeRequest,
     LoadMiseRuntimeRequest,
     ExportMiseRuntimeManifest,
@@ -141,6 +145,13 @@ impl FileOperation {
             Self::SaveCargoRequest => tx("保存 Cargo 工具请求", "Save Cargo tools request"),
             Self::LoadCargoRequest => tx("载入 Cargo 工具请求", "Load Cargo tools request"),
             Self::SaveCargoReport => tx("保存 Cargo 重部署结果", "Save Cargo deployment result"),
+            Self::SaveVscodeRequest => {
+                tx("保存 VS Code 扩展请求", "Save VS Code extensions request")
+            }
+            Self::LoadVscodeRequest => {
+                tx("载入 VS Code 扩展请求", "Load VS Code extensions request")
+            }
+            Self::SaveVscodeReport => tx("保存 VS Code 扩展结果", "Save VS Code extensions result"),
             Self::SaveMiseRuntimeRequest => tx("保存 mise 运行时请求", "Save mise runtime request"),
             Self::LoadMiseRuntimeRequest => tx("载入 mise 运行时请求", "Load mise runtime request"),
             Self::ExportMiseRuntimeManifest => {
@@ -192,6 +203,7 @@ enum WorkerResult {
     PythonTools(studio_deployment::python_tools::Report),
     PythonToolsInventory(Vec<studio_deployment::backup::Package>),
     CargoTools(studio_deployment::cargo_tools::Report),
+    VSCodeTools(studio_deployment::vscode_tools::Report),
     MiseRuntime(studio_deployment::mise_tools::Report),
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
     Inspection {
@@ -446,6 +458,14 @@ impl Studio {
                         error: !report.verified,
                     };
                     self.backup.cargo_tools.report = Some(report);
+                    notice
+                }
+                Ok(WorkerResult::VSCodeTools(report)) => {
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified,
+                    };
+                    self.backup.vscode_tools.report = Some(report);
                     notice
                 }
                 Ok(WorkerResult::MiseRuntime(report)) => {
@@ -1999,7 +2019,7 @@ impl Studio {
                 match &mut dialog {
                     Dialog::File { operation, path, error } => {
                         ui.heading(operation.title());
-                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::NetworkLoad) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
+                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::LoadVscodeRequest | FileOperation::NetworkLoad) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
                         ui.add_space(12.0);
                         ui.add(egui::TextEdit::singleline(path).desired_width(f32::INFINITY).hint_text(t("完整文件路径，例如 /Users/you/Desktop/lt-sc.json")));
                         if let Some(error) = error.as_ref() { ui.colored_label(palette().danger, error); }
@@ -2160,6 +2180,14 @@ impl Studio {
         }
         if matches!(
             operation,
+            FileOperation::SaveVscodeRequest
+                | FileOperation::LoadVscodeRequest
+                | FileOperation::SaveVscodeReport
+        ) {
+            return self.vscode_tools_file_operation(operation, &path);
+        }
+        if matches!(
+            operation,
             FileOperation::SavePythonRequest
                 | FileOperation::LoadPythonRequest
                 | FileOperation::SavePythonReport
@@ -2223,6 +2251,11 @@ impl Studio {
             | FileOperation::LoadCargoRequest
             | FileOperation::SaveCargoReport => {
                 Err("Cargo tools operation was not dispatched".into())
+            }
+            FileOperation::SaveVscodeRequest
+            | FileOperation::LoadVscodeRequest
+            | FileOperation::SaveVscodeReport => {
+                Err("VS Code extensions operation was not dispatched".into())
             }
             FileOperation::SaveMiseRuntimeRequest
             | FileOperation::LoadMiseRuntimeRequest

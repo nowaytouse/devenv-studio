@@ -13,6 +13,7 @@ pub(super) struct BackupUiState {
     pub rust: rust_toolchains::RustUiState,
     pub python_tools: super::python_tools::UiState,
     pub cargo_tools: super::cargo_tools::UiState,
+    pub vscode_tools: super::vscode_tools::UiState,
     pub mise_tools: super::mise_tools::UiState,
     pub bundle_report: Option<studio_deployment::environment::BundleReport>,
 }
@@ -46,6 +47,7 @@ impl Studio {
         self.backup.path = None;
         self.backup.brew_selected.clear();
         self.backup.brew_confirm = false;
+        self.backup.vscode_tools.clear_selection();
         Notice {
             text: lf!(
                 "已采集 {complete} 类来源、{packages} 个条目；失败 {failed} 类。请检查并保存本地备份。",
@@ -83,6 +85,7 @@ impl Studio {
                 self.backup.path = Some(path.clone());
                 self.backup.brew_selected.clear();
                 self.backup.brew_confirm = false;
+                self.backup.vscode_tools.clear_selection();
                 Ok(lf!(
                     "已载入开发环境备份：{}",
                     "Environment backup loaded: {}",

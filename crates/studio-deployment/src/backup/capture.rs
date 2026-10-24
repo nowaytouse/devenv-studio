@@ -79,6 +79,20 @@ pub(super) fn uv_program(home: &Path) -> Option<PathBuf> {
     ])
 }
 #[cfg(any(target_os = "macos", test))]
+pub(super) fn vscode_cli_paths(home: &Path) -> Option<(PathBuf, PathBuf)> {
+    [
+        PathBuf::from("/Applications/Visual Studio Code.app"),
+        home.join("Applications/Visual Studio Code.app"),
+    ]
+    .into_iter()
+    .find_map(|app| {
+        let electron = app.join("Contents/MacOS/Electron");
+        let cli = app.join("Contents/Resources/app/out/cli.js");
+        (electron.is_file() && cli.is_file()).then_some((electron, cli))
+    })
+}
+
+#[cfg(any(target_os = "macos", test))]
 fn requests(home: &Path) -> Vec<Request> {
     let brew = first([
         "/opt/homebrew/bin/brew".into(),
@@ -119,17 +133,7 @@ fn requests(home: &Path) -> Vec<Request> {
             ];
             Some(result)
         });
-    let vscode = [
-        PathBuf::from("/Applications/Visual Studio Code.app"),
-        home.join("Applications/Visual Studio Code.app"),
-    ]
-    .into_iter()
-    .find_map(|app| {
-        let electron = app.join("Contents/MacOS/Electron");
-        let cli = app.join("Contents/Resources/app/out/cli.js");
-        if !electron.is_file() || !cli.is_file() {
-            return None;
-        }
+    let vscode = vscode_cli_paths(home).map(|(electron, cli)| {
         let mut result = invocation(electron, &[]);
         result.vscode_node = true;
         result.args = vec![
@@ -137,7 +141,7 @@ fn requests(home: &Path) -> Vec<Request> {
             "--list-extensions".into(),
             "--show-versions".into(),
         ];
-        Some(result)
+        result
     });
     vec![
         Request {
