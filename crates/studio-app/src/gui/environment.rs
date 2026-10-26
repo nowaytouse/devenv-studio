@@ -126,7 +126,7 @@ impl Studio {
             ui.add_space(8.0);
             ui.horizontal_wrapped(|ui| {
                 if primary(ui, tx("备份 / 载入环境", "Back up / load environment"), true).clicked() {
-                    self.page = Page::Backup;
+                    self.navigate_to(Page::Backup);
                 }
                 if cfg!(target_os = "macos")
                     && ui
@@ -136,7 +136,7 @@ impl Studio {
                     self.select_mac_starter_tools();
                 }
                 if ui.button(tx("选择 Windows 常见方案", "Choose a Windows recipe")).clicked() {
-                    self.page = Page::Recipes;
+                    self.navigate_to(Page::Recipes);
                 }
             });
             ui.add_space(8.0);
@@ -453,6 +453,7 @@ mod tests {
             deployment_states: BTreeMap::new(),
             last_event: None,
             page: Page::Environment,
+            navigation_groups: DEFAULT_NAVIGATION_GROUPS,
             category: String::new(),
             query: String::new(),
             dialog: None,

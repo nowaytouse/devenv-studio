@@ -82,6 +82,27 @@ enum Page {
     About,
 }
 
+const DEFAULT_NAVIGATION_GROUPS: [bool; 3] = [true, cfg!(target_os = "windows"), false];
+impl Page {
+    fn navigation_group(self) -> Option<usize> {
+        match self {
+            Self::Environment | Self::Backup | Self::Network => Some(0),
+            Self::Recipes
+            | Self::Developer
+            | Self::Migration
+            | Self::Compatibility
+            | Self::Workbench
+            | Self::Power
+            | Self::Storage
+            | Self::Software
+            | Self::Features
+            | Self::Maintenance => Some(1),
+            Self::Plan | Self::Recovery | Self::Status => Some(2),
+            Self::Sources | Self::Settings | Self::Help | Self::About => None,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum FileOperation {
     Export,
@@ -268,6 +289,7 @@ struct Studio {
     deployment_states: BTreeMap<String, (String, String)>,
     last_event: Option<String>,
     page: Page,
+    navigation_groups: [bool; 3],
     category: String,
     query: String,
     dialog: Option<Dialog>,
@@ -311,6 +333,7 @@ impl Studio {
             deployment_states: BTreeMap::new(),
             last_event: None,
             page: Page::Environment,
+            navigation_groups: DEFAULT_NAVIGATION_GROUPS,
             category: String::new(),
             query: String::new(),
             dialog: None,
@@ -755,7 +778,7 @@ impl Studio {
                 .button(tx("开发网络方案…", "Developer network profile…"))
                 .clicked()
             {
-                self.page = Page::Network;
+                self.navigate_to(Page::Network);
             }
             match &self.network.active {
                 Ok(profile) => {
@@ -931,6 +954,9 @@ impl Studio {
 
     fn navigate_to(&mut self, page: Page) {
         self.page = page;
+        if let Some(index) = page.navigation_group() {
+            self.navigation_groups[index] = true;
+        }
         self.query.clear();
         self.hybrid.visible_tasks = 60;
     }
@@ -1011,7 +1037,7 @@ impl Studio {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 4.0;
-                        for (group, pages) in [
+                        for (index, (group, pages)) in [
                             (
                                 tx("跨平台环境", "Environments"),
                                 vec![
@@ -1046,22 +1072,44 @@ impl Studio {
                                     (Page::Status, tx("状态", "Status")),
                                 ],
                             ),
-                        ] {
-                            ui.label(RichText::new(group).size(11.0).color(palette().muted));
-                            ui.add_space(4.0);
-                            for (page, title) in pages {
-                                if navigation_button(
-                                    ui,
-                                    title,
-                                    self.page == page,
-                                    ui.available_width(),
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        {
+                            let expanded = self.navigation_groups[index];
+                            let arrow = if expanded { "▾" } else { "▸" };
+                            if ui
+                                .add_sized(
+                                    [ui.available_width(), 28.0],
+                                    egui::Button::new(
+                                        RichText::new(format!("{arrow} {group}"))
+                                            .size(12.0)
+                                            .strong()
+                                            .color(palette().ink),
+                                    )
+                                    .frame(false),
                                 )
+                                .on_hover_text(tx("展开或收起此组页面", "Show or hide these pages"))
                                 .clicked()
-                                {
-                                    self.navigate_to(page);
+                            {
+                                self.navigation_groups[index] = !expanded;
+                            }
+                            if self.navigation_groups[index] {
+                                ui.add_space(2.0);
+                                for (page, title) in pages {
+                                    if navigation_button(
+                                        ui,
+                                        title,
+                                        self.page == page,
+                                        ui.available_width(),
+                                    )
+                                    .clicked()
+                                    {
+                                        self.navigate_to(page);
+                                    }
                                 }
                             }
-                            ui.add_space(12.0);
+                            ui.add_space(8.0);
                         }
                     });
             });
@@ -1121,7 +1169,7 @@ impl Studio {
                     )
                     .clicked()
                     {
-                        self.page = Page::Plan;
+                        self.navigate_to(Page::Plan);
                     }
                     if ui
                         .add_enabled(
@@ -1189,11 +1237,11 @@ impl Studio {
                 );
                 if self.page != Page::Help
                     && ui
-                        .small_button(tx("❓ 帮助", "❓ Help"))
+                        .small_button(tx("? 帮助", "? Help"))
                         .on_hover_text(tx("打开分步使用指南", "Open the step-by-step guide"))
                         .clicked()
                 {
-                    self.page = Page::Help;
+                    self.navigate_to(Page::Help);
                 }
             });
         });
@@ -2997,6 +3045,7 @@ mod tests {
             deployment_states: BTreeMap::new(),
             last_event: None,
             page: Page::Recipes,
+            navigation_groups: [true, true, true],
             category: String::new(),
             query: String::new(),
             dialog: None,
@@ -3478,6 +3527,30 @@ mod tests {
     }
 
     #[test]
+    fn navigation_starts_compact_and_opens_destination_sections() {
+        assert_eq!(
+            DEFAULT_NAVIGATION_GROUPS,
+            [true, cfg!(target_os = "windows"), false]
+        );
+        let mut app = preview();
+        app.navigation_groups = DEFAULT_NAVIGATION_GROUPS;
+
+        app.navigation_groups[1] = false;
+        app.navigate_to(Page::Recipes);
+        assert!(app.page == Page::Recipes);
+        assert!(app.navigation_groups[1]);
+
+        app.navigation_groups[1] = false;
+        app.navigate_to(Page::Plan);
+        assert!(app.navigation_groups[2]);
+        assert!(!app.navigation_groups[1]);
+
+        app.navigation_groups[0] = false;
+        app.navigate_to(Page::Network);
+        assert!(app.navigation_groups[0]);
+    }
+
+    #[test]
     fn every_page_renders_bilingually_at_minimum_size_without_enabling_preview_mutation() {
         let pages = [
             Page::Compatibility,
@@ -3547,7 +3620,10 @@ mod tests {
                     app.power_selected.clone(),
                 );
                 for page in pages {
-                    app.page = page;
+                    app.navigate_to(page);
+                    if let Some(group) = page.navigation_group() {
+                        assert!(app.navigation_groups[group]);
+                    }
                     let context = egui::Context::default();
                     i18n::set_language(language);
                     theme::apply(&context, &app.preferences);

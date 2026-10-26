@@ -75,20 +75,20 @@ impl Studio {
                 .button(tx("导入旧档案 / Mac 清单", "Import legacy / Mac inventory"))
                 .clicked()
             {
-                self.page = Page::Migration;
+                self.navigate_to(Page::Migration);
             }
             if ui
                 .button(tx("浏览开发环境任务", "Browse developer tasks"))
                 .clicked()
             {
-                self.page = Page::Developer;
+                self.navigate_to(Page::Developer);
                 self.query.clear();
             }
             if ui
                 .button(tx("查看当前完整方案", "Review current workspace"))
                 .clicked()
             {
-                self.page = Page::Plan;
+                self.navigate_to(Page::Plan);
             }
         });
         ui.add_space(14.0);
@@ -469,7 +469,7 @@ impl Studio {
                 self.deployment_states.clear();
                 self.hybrid.error = None;
                 self.notice = Some(Notice { text: tx("已加入方案；请在此处核对具体变更后再确认执行。", "Added to the workspace. Review the exact changes here before confirming execution.").into(), error: false });
-                self.page = Page::Plan;
+                self.navigate_to(Page::Plan);
             }
             Err(error) => self.hybrid.error = Some(format!("{error:#}")),
         }

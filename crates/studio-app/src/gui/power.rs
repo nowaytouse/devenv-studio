@@ -139,7 +139,7 @@ impl Studio {
                 .button(tx("检查完整工作方案", "Review complete workspace"))
                 .clicked()
             {
-                self.page = Page::Plan;
+                self.navigate_to(Page::Plan);
             }
             if ui
                 .add_enabled(

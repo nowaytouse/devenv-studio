@@ -128,7 +128,7 @@ impl Studio {
         self.hybrid.report = Some(report);
         self.hybrid.reset_review();
         self.hybrid.error = None;
-        self.page = Page::Migration;
+        self.navigate_to(Page::Migration);
         Ok(())
     }
 
@@ -186,7 +186,7 @@ impl Studio {
             .button(tx("进入环境配置", "Configure environment"))
             .clicked()
         {
-            self.page = Page::Environment;
+            self.navigate_to(Page::Environment);
         }
         if !cfg!(any(target_os = "macos", windows)) {
             ui.label(tx(

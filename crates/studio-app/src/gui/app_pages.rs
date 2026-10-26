@@ -82,7 +82,7 @@ impl Studio {
                     let selected = self.preferences.accent == value;
                     let swatch =
                         theme::Palette::for_theme(ui.ctx().theme() == egui::Theme::Dark, value);
-                    let label = format!("{}{}", tx(zh, en), if selected { " ✓" } else { "" });
+                    let label = tx(zh, en);
                     if ui
                         .add(
                             egui::Button::new((
@@ -523,8 +523,8 @@ impl Studio {
     pub(super) fn help_page(&self, ui: &mut egui::Ui) {
         ui.heading(tx("帮助", "Help"));
         ui.label(tx(
-            "随时点击右上角 ❓ 帮助返回本页。macOS 可从基础工具开始，Windows 可选用途方案；都只预选项目，不会立即执行。最终操作前请在变更方案页核对并确认。",
-            "Click the ❓ Help button in the upper-right corner to return here from any page. On macOS, start with the starter tools; on Windows, choose a recipe. Both prepare choices only. Review and confirm exact changes on the Change plan page.",
+            "左侧导航分组可点击展开或收起；macOS 默认优先显示跨平台环境，Windows 配置和执行记录可随时展开。右上角 ? 帮助会返回本页。预选或加入方案都不会立即执行，最后请到变更方案复核并分别确认。",
+            "Click a left navigation heading to show or hide its pages. On macOS, cross-platform pages start open; Windows configuration and execution history can be opened when needed. The upper-right ? Help returns here. Presets only prepare choices; review the change plan and confirm each action before anything runs.",
         ));
         settings_section(
             ui,
