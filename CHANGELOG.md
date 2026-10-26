@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增跨 macOS／Windows 的 VS Code 稳定版默认用户设置白名单档案：支持 JSONC 注释保留、逐项对比与选择性合并，并提供严格校验、冲突检查、回读和仅含白名单值的历史记录；工作区/命名配置档/Insiders/Cursor、扩展、凭据与代理不迁移。
+
 - 新增跨 macOS／Windows 的 Git 全局配置档案：读取白名单设置，导入档案后逐项对比并选择性应用；写入前检查本机值未被外部修改，应用后回读并保存前后值和结果记录。白名单为 user.name、user.email、init.defaultBranch、core.autocrlf/eol/longpaths、pull.rebase、fetch.prune、push.default；不迁移凭据、代理、别名、include、SSH 或脚本，也不自动回滚。
 
 - macOS 新增 VS Code 扩展重部署：只接受已保存完整 Mac 清单内逐项选择的扩展，支持精确版本或 Marketplace 当前版本；复用稳定版应用内置 CLI，执行后从默认配置文件回读，保存请求、前后清单和结果证据。扩展具有与 VS Code 相同的权限，可能留下部分变更且不自动回滚；不覆盖设置、账号或其他配置，不应用本程序网络方案。

@@ -27,6 +27,7 @@ pub mod python_tools;
 pub mod scoop_tools;
 mod storage;
 pub mod toolchains;
+pub mod vscode_settings;
 pub mod vscode_tools;
 #[cfg(windows)]
 mod windows;

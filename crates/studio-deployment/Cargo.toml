@@ -9,6 +9,7 @@ license.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+jsonc-parser = { version = "0.34.0", default-features = false, features = ["cst", "serde"] }
 studio-core.workspace = true
 studio-platform.workspace = true
 

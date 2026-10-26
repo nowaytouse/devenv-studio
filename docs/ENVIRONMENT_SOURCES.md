@@ -12,8 +12,9 @@
 | [pypa/pipx](https://github.com/pypa/pipx/tree/9a49f1957fad930860189421f2cd29d5a5604fd4) | 9a49f1957fad930860189421f2cd29d5a5604fd4 | MIT | 作为 uv 的同类方案评估；不保留第二个 Python 工具安装后端或自动导入流程 |
 | [jdx/mise](https://github.com/jdx/mise/tree/d2e9ff8b10a98571740042aa2d2321df1b4b1817) | d2e9ff8b10a98571740042aa2d2321df1b4b1817 | MIT | 使用受审查的 core runtime 清单、渠道解析、跨平台 mise.lock、--locked 安装与回读；不导入 mise 配置、任务、插件或钩子；Rust 保留专用 rustup 流程 |
 | [twpayne/chezmoi](https://github.com/twpayne/chezmoi/tree/da3406f7aa2a114322334578639812684016d352) | da3406f7aa2a114322334578639812684016d352 | MIT | 设计参考：先检查变化再应用；尚未导入 dotfiles、模板、秘密或钩子 |
+| [dprint/jsonc-parser](https://github.com/dprint/jsonc-parser/tree/0.34.0) | 0.34.0 | MIT | VS Code 用户设置档案使用 JSONC CST 保留注释并选择性合并；关闭默认功能，只启用 `cst` 与 `serde` |
 
-来源核对日期：2026-10-24。Homebrew Bundle 已位于 Homebrew/brew；不依赖已归档旧 homebrew-bundle 仓库，不重新分发上述项目的源代码或二进制。rustup 与 uv 的许可证通过固定提交中的项目元数据和上游许可证核对；pipx 作为替代方案核对 MIT 许可证。表中许可证是上游自身许可证；本项目许可证保持独立。此前 WinUtil、Sophia Script、Win11Debloat 目录来源与旧 LTSC 工具映射继续保留，参见 INTEGRATIONS.md 与 THIRD_PARTY_NOTICES.md。
+来源核对日期：2026-10-26。Homebrew Bundle 已位于 Homebrew/brew；不依赖已归档旧 homebrew-bundle 仓库，不重新分发上述项目的源代码或二进制。rustup 与 uv 的许可证通过固定提交中的项目元数据和上游许可证核对；pipx 作为替代方案核对 MIT 许可证。表中许可证是上游自身许可证；本项目许可证保持独立。此前 WinUtil、Sophia Script、Win11Debloat 目录来源与旧 LTSC 工具映射继续保留，参见 INTEGRATIONS.md 与 THIRD_PARTY_NOTICES.md。
 
 ## 接入契约
 
@@ -34,6 +35,12 @@
 
 Git profile 只读写固定白名单：`user.name`、`user.email`、`init.defaultBranch`、`core.autocrlf`、`core.eol`、`core.longpaths`、`pull.rebase`、`fetch.prune` 与 `push.default`。读值使用 Git global scope 并停用 include；档案导入有大小、结构和值域限制，拒绝符号链接和覆盖已有导出文件。执行前重新读取并比较本机值，只应用用户勾选且仍与审查快照一致的项目，之后回读实际值并保存前后记录。凭据、代理地址、alias、include、SSH 和脚本均排除；这不是 dotfiles 复制或凭据迁移。Git 命令语义遵循[官方 git-config 文档](https://git-scm.com/docs/git-config)。
 
+## VS Code 用户设置：JSONC 白名单档案合并
+
+仅处理 Microsoft VS Code 稳定版默认用户配置：macOS `$HOME/Library/Application Support/Code/User/settings.json`、Windows `%APPDATA%\\Code\\User\\settings.json`、Linux `$XDG_CONFIG_HOME/Code/User/settings.json`（未设置时为 `~/.config/Code/User/settings.json`）。这是全局用户设置；工作区设置会覆盖用户设置，但不纳入迁移。路径和作用域遵循 [VS Code 官方设置文档](https://code.visualstudio.com/docs/configure/settings)。
+
+档案只含 21 个经过类型和值域校验的通用设置。输入支持 VS Code 的 JSONC 注释与尾逗号，配置合并使用 [jsonc-parser 0.34.0](https://docs.rs/crate/jsonc-parser/0.34.0) 的 CST，仅修改用户勾选项并保留注释、其他设置与并发的未选项改动。应用前核对审核快照和所选值，原子替换后回读；操作历史只保存所选白名单值。应用前应关闭 VS Code，以减少编辑器同时写入的冲突。配置档案不复制扩展、账号、令牌、代理、语言专属覆盖或其他设置；不支持 Insiders、Cursor、命名 Profile 和工作区设置，也不执行自动回滚。
+
 ## Cargo CLI tools：macOS 固定来源重部署
 
 来源仅限八个已审核的 Cargo 包：ripgrep（[BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep)）、fd-find（[sharkdp/fd](https://github.com/sharkdp/fd)）、bat（[sharkdp/bat](https://github.com/sharkdp/bat)）、eza（[eza-community/eza](https://github.com/eza-community/eza)）、zoxide（[ajeetdsouza/zoxide](https://github.com/ajeetdsouza/zoxide)）、starship（[starship/starship](https://github.com/starship/starship)）、just（[casey/just](https://github.com/casey/just)）和 git-delta（[dandavison/delta](https://github.com/dandavison/delta)）。不接受用户提供的 crate 名、Git URL、分支或提交。
@@ -44,4 +51,4 @@ Cargo registry 镜像适用于 registry 源和依赖；Git HEAD 保持固定 Git
 
 ## 尚未覆盖
 
-原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。VS Code 扩展已可从完整 Mac 清单逐项重部署；NPM 仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。软件清单备份不复制项目、通用配置文件、二进制、缓存、密钥或虚拟环境；Git 全局配置仅通过上方独立的白名单档案迁移；Windows 软件全集与完整 WinGet 安装清单采集未实现；Scoop 仅采集官方 bucket 用户级包。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。
+原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。VS Code 扩展已可从完整 Mac 清单逐项重部署；NPM 仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。软件清单备份不复制项目、通用配置文件、二进制、缓存、密钥或虚拟环境；Git 与 VS Code 稳定版默认用户设置仅通过上方独立的白名单档案迁移；Cursor/Insiders/命名档案/工作区设置、Shell 配置、虚拟环境和其他通用配置文件尚未接入；Windows 软件全集与完整 WinGet 安装清单采集未实现；Scoop 仅采集官方 bucket 用户级包。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。

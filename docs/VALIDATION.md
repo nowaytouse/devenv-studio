@@ -1,5 +1,14 @@
 # 验证记录
 
+## Unreleased — VS Code JSONC 用户设置档案，2026-10-26
+
+- 完整工作区 339 项测试通过，2 项子进程辅助测试按设计忽略；`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`cargo build --workspace --locked` 与 `git diff --check` 通过。
+- 稳定版 VS Code 用户 `settings.json` 新增 21 项白名单档案：支持只读采集、导入/导出、逐项选择、对照当前值及 JSONC 保留式合并；保留注释、未选项与其他设置，应用前核对快照，写入后回读并记录。默认零选择；应用前需关闭 VS Code，且不提供自动回滚。
+- macOS 预览已启动并目视检查：设置卡片与 VS Code 扩展工具同组，零选择、应用按钮禁用，未读写本机设置。预览：`dist/DevEnv Studio 0.10.0-preview-20261026T123406145456Z.app`。
+- `jsonc-parser 0.34.0` 为本次核验时最新版本，关闭默认功能，仅启用 `cst` 与 `serde`。`cargo outdated --workspace --depth 3 --aggressive` 未发现 Windows 绑定家族之外的兼容升级；其 Windows-rs 0.100.0 家族与现用 0.62.2 API 不兼容，保留配套的 `windows 0.62.2` / `windows-collections 0.3.2`。`cargo audit` 扫描 433 个锁定依赖，无 RustSec 漏洞公告，另有 3 项 Linux D-Bus/辅助功能链路未维护提示。
+- 最新 `roxmltree 0.21.2` 含深层 XML 的栈溢出修复；该版本源代码仍有大量属性的二次复杂度扫描，尚未包含上游合并的属性上限修复。GitHub 上游报告的影响/修复版本未知，RustSec 审计未覆盖该报告；未改用未发布的 Git 依赖，后续需跟进 crates.io 发布与 `fontique` 输入边界，详见 `DEPENDENCY_REVIEW.md`。
+- 版本保持 0.10.0 / Unreleased。当前仅安装 `aarch64-apple-darwin` Rust target；未做 Windows 目标编译、Windows 设备验收、CI 检查、签名/公证或真实 VS Code 配置写入。
+
 ## Unreleased — Git 全局配置档案与兼容锁文件更新，2026-10-24
 
 - Git 配置档案支持九项白名单、严格导入/导出、本机值快照比对、逐项选择应用及执行后回读记录；focused backend 7 项与 GUI 1 项回归此前通过。完成最终双语结果提示及测试辅助断言调整后，未重跑测试套件。

@@ -108,6 +108,8 @@ enum FileOperation {
     SaveVscodeRequest,
     LoadVscodeRequest,
     SaveVscodeReport,
+    SaveVscodeSettingsProfile,
+    LoadVscodeSettingsProfile,
     SaveMiseRuntimeRequest,
     LoadMiseRuntimeRequest,
     ExportMiseRuntimeManifest,
@@ -158,6 +160,12 @@ impl FileOperation {
                 tx("载入 VS Code 扩展请求", "Load VS Code extensions request")
             }
             Self::SaveVscodeReport => tx("保存 VS Code 扩展结果", "Save VS Code extensions result"),
+            Self::SaveVscodeSettingsProfile => {
+                tx("保存 VS Code 设置档案", "Save VS Code settings profile")
+            }
+            Self::LoadVscodeSettingsProfile => {
+                tx("载入 VS Code 设置档案", "Load VS Code settings profile")
+            }
             Self::SaveMiseRuntimeRequest => tx("保存 mise 运行时请求", "Save mise runtime request"),
             Self::LoadMiseRuntimeRequest => tx("载入 mise 运行时请求", "Load mise runtime request"),
             Self::ExportMiseRuntimeManifest => {
@@ -213,6 +221,8 @@ enum WorkerResult {
     PythonToolsInventory(Vec<studio_deployment::backup::Package>),
     CargoTools(studio_deployment::cargo_tools::Report),
     VSCodeTools(studio_deployment::vscode_tools::Report),
+    VSCodeSettingsCapture(studio_deployment::vscode_settings::SettingsSnapshot),
+    VSCodeSettingsApply(studio_deployment::vscode_settings::SettingsApplyOutcome),
     NpmTools(studio_deployment::npm_tools::Report),
     ScoopTools(studio_deployment::scoop_tools::Report),
     MiseRuntime(studio_deployment::mise_tools::Report),
@@ -387,7 +397,8 @@ impl Studio {
                         | WorkerResult::PythonToolsInventory(_)
                         | WorkerResult::MiseRuntimeInventory(_)
                         | WorkerResult::GitConfigCapture(_)
-                        | WorkerResult::GitConfigRefresh(_))
+                        | WorkerResult::GitConfigRefresh(_)
+                        | WorkerResult::VSCodeSettingsCapture(_))
                 )
             {
                 result = Err(tx(
@@ -474,6 +485,40 @@ impl Studio {
                         error: !report.verified,
                     };
                     self.backup.cargo_tools.report = Some(report);
+                    notice
+                }
+                Ok(WorkerResult::VSCodeSettingsCapture(snapshot)) => {
+                    let count = snapshot.settings.len();
+                    let state = &mut self.backup.vscode_tools.settings;
+                    if state.profile.is_none() {
+                        let profile =
+                            studio_deployment::vscode_settings::profile_from_snapshot(&snapshot);
+                        state.selected.clear();
+                        state.profile = Some(profile);
+                    }
+                    state.snapshot = Some(snapshot);
+                    state.confirmed = false;
+                    state.report = None;
+                    Notice {
+                        text: lf!(
+                            "已读取 {count} 项 VS Code 白名单设置；未修改配置。",
+                            "Read {count} allowlisted VS Code settings; configuration was not changed.",
+                            count = count
+                        ),
+                        error: false,
+                    }
+                }
+                Ok(WorkerResult::VSCodeSettingsApply(outcome)) => {
+                    let report = outcome.report;
+                    let notice = Notice {
+                        text: report.detail.clone(),
+                        error: !report.verified || !report.history_complete || report.cancelled,
+                    };
+                    if let Some(after) = outcome.after {
+                        self.backup.vscode_tools.settings.snapshot = Some(after);
+                    }
+                    self.backup.vscode_tools.settings.report = Some(report);
+                    self.backup.vscode_tools.settings.confirmed = false;
                     notice
                 }
                 Ok(WorkerResult::VSCodeTools(report)) => {
@@ -2090,7 +2135,7 @@ impl Studio {
                 match &mut dialog {
                     Dialog::File { operation, path, error } => {
                         ui.heading(operation.title());
-                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::LoadVscodeRequest | FileOperation::NetworkLoad | FileOperation::LoadGitProfile) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
+                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::LoadVscodeRequest | FileOperation::LoadVscodeSettingsProfile | FileOperation::NetworkLoad | FileOperation::LoadGitProfile) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
                         ui.add_space(12.0);
                         ui.add(egui::TextEdit::singleline(path).desired_width(f32::INFINITY).hint_text(t("完整文件路径，例如 /Users/you/Desktop/lt-sc.json")));
                         if let Some(error) = error.as_ref() { ui.colored_label(palette().danger, error); }
@@ -2254,6 +2299,8 @@ impl Studio {
             FileOperation::SaveVscodeRequest
                 | FileOperation::LoadVscodeRequest
                 | FileOperation::SaveVscodeReport
+                | FileOperation::SaveVscodeSettingsProfile
+                | FileOperation::LoadVscodeSettingsProfile
         ) {
             return self.vscode_tools_file_operation(operation, &path);
         }
@@ -2338,7 +2385,9 @@ impl Studio {
             }
             FileOperation::SaveVscodeRequest
             | FileOperation::LoadVscodeRequest
-            | FileOperation::SaveVscodeReport => {
+            | FileOperation::SaveVscodeReport
+            | FileOperation::SaveVscodeSettingsProfile
+            | FileOperation::LoadVscodeSettingsProfile => {
                 Err("VS Code extensions operation was not dispatched".into())
             }
             FileOperation::SaveMiseRuntimeRequest

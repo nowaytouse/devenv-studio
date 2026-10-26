@@ -12,59 +12,7 @@ use std::time::{Duration, Instant};
 const MAX_CAPTURE_BYTES: usize = 512 * 1024;
 
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-    let name = path.file_name().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "destination has no file name",
-        )
-    })?;
-    for _ in 0..16 {
-        let mut temporary_name = name.to_os_string();
-        temporary_name.push(format!(
-            ".{}-{}.tmp",
-            std::process::id(),
-            SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        ));
-        let temporary = path.with_file_name(temporary_name);
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let mut file = match options.open(&temporary) {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error),
-        };
-        let result = (|| {
-            file.write_all(bytes)?;
-            file.sync_all()?;
-            drop(file);
-            std::fs::rename(&temporary, path)
-        })();
-        if let Err(error) = result {
-            if let Err(cleanup) = std::fs::remove_file(&temporary)
-                && cleanup.kind() != std::io::ErrorKind::NotFound
-            {
-                return Err(std::io::Error::new(
-                    error.kind(),
-                    format!(
-                        "{error}; could not remove {}: {cleanup}",
-                        temporary.display()
-                    ),
-                ));
-            }
-            return Err(error);
-        }
-        return Ok(());
-    }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::AlreadyExists,
-        "could not reserve a staging file after 16 attempts",
-    ))
+    studio_core::write_atomic(path, bytes)
 }
 
 #[derive(Debug, Clone, Default)]
