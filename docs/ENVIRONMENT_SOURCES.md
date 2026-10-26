@@ -35,11 +35,11 @@
 
 Git profile 只读写固定白名单：`user.name`、`user.email`、`init.defaultBranch`、`core.autocrlf`、`core.eol`、`core.longpaths`、`pull.rebase`、`fetch.prune` 与 `push.default`。读值使用 Git global scope 并停用 include；档案导入有大小、结构和值域限制，拒绝符号链接和覆盖已有导出文件。执行前重新读取并比较本机值，只应用用户勾选且仍与审查快照一致的项目，之后回读实际值并保存前后记录。凭据、代理地址、alias、include、SSH 和脚本均排除；这不是 dotfiles 复制或凭据迁移。Git 命令语义遵循[官方 git-config 文档](https://git-scm.com/docs/git-config)。
 
-## VS Code 用户设置：JSONC 白名单档案合并
+## 跨编辑器用户设置：JSONC 白名单档案合并
 
-仅处理 Microsoft VS Code 稳定版默认用户配置：macOS `$HOME/Library/Application Support/Code/User/settings.json`、Windows `%APPDATA%\\Code\\User\\settings.json`、Linux `$XDG_CONFIG_HOME/Code/User/settings.json`（未设置时为 `~/.config/Code/User/settings.json`）。这是全局用户设置；工作区设置会覆盖用户设置，但不纳入迁移。路径和作用域遵循 [VS Code 官方设置文档](https://code.visualstudio.com/docs/configure/settings)。
+选择 VS Code 稳定版（`Code`）、VS Code Insiders（`Code - Insiders`）或 Cursor（`Cursor`）的默认用户配置：macOS `$HOME/Library/Application Support/<product>/User/settings.json`、Windows `%APPDATA%\\<product>\\User\\settings.json`、Linux `$XDG_CONFIG_HOME/<product>/User/settings.json`（默认 `~/.config/<product>/User/settings.json`）。仅处理默认用户设置，不处理命名配置档或工作区设置。VS Code 路径遵循[官方设置文档](https://code.visualstudio.com/docs/configure/settings)与[配置档说明](https://code.visualstudio.com/docs/configure/profiles)；Cursor 路径参照[官方论坛的配置位置说明](https://forum.cursor.com/t/how-to-undo-import-vs-code-extensions-and-settings/175066)。
 
-档案只含 21 个经过类型和值域校验的通用设置。输入支持 VS Code 的 JSONC 注释与尾逗号，配置合并使用 [jsonc-parser 0.34.0](https://docs.rs/crate/jsonc-parser/0.34.0) 的 CST，仅修改用户勾选项并保留注释、其他设置与并发的未选项改动。应用前核对审核快照和所选值，原子替换后回读；操作历史只保存所选白名单值。应用前应关闭 VS Code，以减少编辑器同时写入的冲突。配置档案不复制扩展、账号、令牌、代理、语言专属覆盖或其他设置；不支持 Insiders、Cursor、命名 Profile 和工作区设置，也不执行自动回滚。
+档案只含 21 个经过类型和值域校验的通用设置。JSONC 输入保留注释与尾逗号；合并使用 [jsonc-parser 0.34.0](https://docs.rs/crate/jsonc-parser/0.34.0) CST，仅修改用户勾选项，保留其他设置和并发的未选项改动。应用前核对审核快照和所选值，原子替换后回读；历史只保存已选白名单值。应用前请关闭所选编辑器，降低同时写入的冲突。档案不复制扩展、账号、令牌、代理、语言专属覆盖或其他设置；命名配置档和工作区仍不支持，也不执行自动回滚。
 
 ## Cargo CLI tools：macOS 固定来源重部署
 
@@ -51,4 +51,4 @@ Cargo registry 镜像适用于 registry 源和依赖；Git HEAD 保持固定 Git
 
 ## 尚未覆盖
 
-原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。VS Code 扩展已可从完整 Mac 清单逐项重部署；NPM 仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。软件清单备份不复制项目、通用配置文件、二进制、缓存、密钥或虚拟环境；Git 与 VS Code 稳定版默认用户设置仅通过上方独立的白名单档案迁移；Cursor/Insiders/命名档案/工作区设置、Shell 配置、虚拟环境和其他通用配置文件尚未接入；Windows 软件全集与完整 WinGet 安装清单采集未实现；Scoop 仅采集官方 bucket 用户级包。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。
+原生 Mac 配置已接入 Homebrew formula/cask、rustup、uv 工具及受审核 Cargo CLI 工具；Cargo 只允许固定的八个上游包，crates.io 支持滚动或精确版本，Git HEAD 会先解析为提交 SHA 再安装。VS Code 扩展已可从完整 Mac 清单逐项重部署；NPM 仍可备份和映射到 Windows 可信任务，但未接入 Mac 安装。任意 Git URL、分支或提交仍不接受；Homebrew HEAD 由公式定义，Rust beta/nightly 走 rustup 官方渠道。软件清单备份不复制项目、通用配置文件、二进制、缓存、密钥或虚拟环境；Git 与三类编辑器的默认用户设置仅通过上方独立白名单档案迁移；命名档案/工作区设置、Shell 配置、虚拟环境和其他通用配置文件尚未接入；Windows 软件全集与完整 WinGet 安装清单采集未实现；Scoop 仅采集官方 bucket 用户级包。Windows 配置执行仍使用已支持的 LTSC 目标与运行时门禁，不推断所有 Windows 版本兼容。

@@ -1,5 +1,11 @@
 # Dependency review — 2026-10-23
 
+## Current compatible-version and security check — 2026-10-26
+
+`cargo outdated --workspace --depth 3 --aggressive` reported only Windows-rs support crates whose newest versions move to the 0.100.0 family or are removed; no compatible update was offered. The app uses the coordinated `windows 0.62.2` family, while current `eframe 0.37.0` and `jsonc-parser 0.34.0` are already the latest published versions at this check. No dependency or lockfile changes are needed for the current UI and editor-target work.
+
+`cargo audit` scanned 433 locked packages: no vulnerability advisory matched; three Linux D-Bus/variant crates were flagged as unmaintained. The previously identified `roxmltree` high-attribute-count complexity report remains an upstream release follow-up and is not resolved by this audit. This review is not a Windows device or runtime acceptance result.
+
 ## Unreleased legacy-engine integration
 
 Relative to `3e0741b`, the lockfile adds the internal `studio-legacy 0.10.0` crate and only three external packages: `chrono 0.4.45`, `iana-time-zone 0.1.65` and `iana-time-zone-haiku 0.1.2`. Existing external versions, sources, checksums and dependency arrays are unchanged. These additions support the retained deployment engine's timestamps; they are not a general dependency upgrade.

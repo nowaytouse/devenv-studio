@@ -1,10 +1,19 @@
 use super::*;
 use anyhow::Context;
-use studio_deployment::vscode_tools as native;
+use studio_deployment::{vscode_settings::EditorSettingsTarget, vscode_tools as native};
+
+fn editor_settings_target_label(target: EditorSettingsTarget) -> &'static str {
+    match target {
+        EditorSettingsTarget::VsCodeStable => tx("VS Code 稳定版", "VS Code Stable"),
+        EditorSettingsTarget::VsCodeInsiders => tx("VS Code Insiders", "VS Code Insiders"),
+        EditorSettingsTarget::Cursor => tx("Cursor 稳定版", "Cursor Stable"),
+    }
+}
 
 #[derive(Default)]
 pub(super) struct SettingsUiState {
     pub profile: Option<studio_deployment::vscode_settings::SettingsProfile>,
+    pub target: EditorSettingsTarget,
     pub snapshot: Option<studio_deployment::vscode_settings::SettingsSnapshot>,
     pub selected: BTreeSet<String>,
     pub confirmed: bool,
@@ -16,6 +25,17 @@ impl SettingsUiState {
         self.selected.clear();
         self.profile = Some(profile);
         self.snapshot = None;
+        self.confirmed = false;
+        self.report = None;
+    }
+
+    fn select_target(&mut self, target: EditorSettingsTarget) {
+        if self.target == target {
+            return;
+        }
+        self.target = target;
+        self.snapshot = None;
+        self.selected.clear();
         self.confirmed = false;
         self.report = None;
     }
@@ -65,8 +85,8 @@ impl Studio {
     ) -> Result<String, String> {
         if self.worker.is_some() {
             return Err(tx(
-                "请等待当前任务结束后再处理 VS Code 配置档案。",
-                "Wait for the current task before handling a VS Code profile.",
+                "请等待当前任务结束后再处理编辑器或扩展文件。",
+                "Wait for the current task before handling editor or extension files.",
             )
             .into());
         }
@@ -92,7 +112,7 @@ impl Studio {
                 .settings
                 .profile
                 .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("No VS Code settings profile to save"))
+                .ok_or_else(|| anyhow::anyhow!("No editor settings profile to save"))
                 .and_then(|profile| {
                     studio_deployment::vscode_settings::save_settings_profile(profile, path)
                 }),
@@ -105,8 +125,8 @@ impl Studio {
         };
         result.map_err(|error| format!("{error:#}"))?;
         Ok(lf!(
-            "VS Code 文件已处理：{}",
-            "VS Code file processed: {}",
+            "编辑器或扩展文件已处理：{}",
+            "Editor or extension file processed: {}",
             path.display()
         ))
     }
@@ -180,8 +200,9 @@ impl Studio {
         if self.worker.is_some() {
             return;
         }
-        self.start_worker("Reading VS Code user settings", |cancel| {
-            studio_deployment::vscode_settings::capture_settings(&cancel)
+        let target = self.backup.vscode_tools.settings.target;
+        self.start_worker("Reading editor user settings", move |cancel| {
+            studio_deployment::vscode_settings::capture_settings(target, &cancel)
                 .map(WorkerResult::VSCodeSettingsCapture)
         });
     }
@@ -200,7 +221,7 @@ impl Studio {
         let selected = state.selected.clone();
         self.backup.vscode_tools.settings.confirmed = false;
         self.backup.vscode_tools.settings.report = None;
-        self.start_worker("Applying reviewed VS Code settings", move |cancel| {
+        self.start_worker("Applying reviewed editor settings", move |cancel| {
             studio_deployment::vscode_settings::apply_settings(
                 &profile, &selected, &current, &cancel,
             )
@@ -210,8 +231,8 @@ impl Studio {
 
     fn vscode_settings_page(&mut self, ui: &mut egui::Ui) {
         let profile = self.backup.vscode_tools.settings.profile.clone();
-        let snapshot = self.backup.vscode_tools.settings.snapshot.clone();
-        let report = self.backup.vscode_tools.settings.report.clone();
+        let mut snapshot = self.backup.vscode_tools.settings.snapshot.clone();
+        let mut report = self.backup.vscode_tools.settings.report.clone();
         let idle = self.worker.is_none();
         let supported = cfg!(any(
             target_os = "macos",
@@ -220,8 +241,8 @@ impl Studio {
         ));
 
         egui::CollapsingHeader::new(tx(
-            "用户设置档案 · JSONC 保留合并",
-            "User settings profile · JSONC-preserving merge",
+            "编辑器设置 · 安全合并",
+            "Editor settings · safe merge",
         ))
         .default_open(true)
         .show(ui, |ui| {
@@ -232,9 +253,32 @@ impl Studio {
                 .inner_margin(egui::Margin::same(12))
                 .show(ui, |ui| {
                     ui.label(tx(
-                        "读取当前电脑的稳定版 VS Code 默认用户设置。只迁移下方白名单项目；应用时保留注释、其他设置与当前机器未选择的值。",
-                        "Read the stable VS Code default user settings on this computer. Only the allowlisted entries below migrate; comments, unrelated settings and unselected local values stay in place.",
+                        "选择编辑器并读取其默认用户设置。21 项通用设置可在支持的编辑器间迁移；应用时只改勾选项，并保留注释、其他设置与未选中的本机值。",
+                        "Choose an editor and read its default user settings. The 21 common settings can move between supported editors; applying changes only checked items and preserves comments, unrelated settings and unselected local values.",
                     ));
+                    let current_target = self.backup.vscode_tools.settings.target;
+                    let mut next_target = current_target;
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(tx("目标编辑器", "Editor"));
+                        ui.add_enabled_ui(idle, |ui| {
+                            egui::ComboBox::from_id_salt("editor-settings-target")
+                                .selected_text(editor_settings_target_label(current_target))
+                                .show_ui(ui, |ui| {
+                                    for target in EditorSettingsTarget::ALL {
+                                        ui.selectable_value(
+                                            &mut next_target,
+                                            target,
+                                            editor_settings_target_label(target),
+                                        );
+                                    }
+                                });
+                        });
+                    });
+                    if next_target != current_target {
+                        self.backup.vscode_tools.settings.select_target(next_target);
+                        snapshot = None;
+                        report = None;
+                    }
                     ui.horizontal_wrapped(|ui| {
                         if ui
                             .add_enabled(idle && supported, egui::Button::new(tx("读取当前设置", "Read current settings")))
@@ -371,9 +415,10 @@ impl Studio {
                         }
                     }
 
-                    ui.label(RichText::new(tx(
-                        "应用前请关闭 VS Code 并检查每项差异。只会写入选中的白名单值；不包含扩展、账户、代理、终端启动命令或密钥，操作不会自动回滚。",
-                        "Close VS Code and review each difference before applying. Only selected allowlisted values are written; extensions, accounts, proxies, terminal launch commands and secrets are excluded. Changes are not automatically rolled back.",
+                    ui.label(RichText::new(lf!(
+                        "应用前请关闭 {editor} 并检查每项差异。只会写入选中的白名单值；扩展、账户、代理、终端命令和密钥不包含在内，操作不会自动回滚。",
+                        "Close {editor} and review each difference before applying. Only selected allowlisted values are written; extensions, accounts, proxies, terminal commands and secrets are excluded. Changes are not automatically rolled back.",
+                        editor = editor_settings_target_label(self.backup.vscode_tools.settings.target)
                     )).color(palette().muted));
                     ui.checkbox(
                         &mut self.backup.vscode_tools.settings.confirmed,
@@ -425,8 +470,8 @@ impl Studio {
                     }
                     if !supported {
                         ui.label(RichText::new(tx(
-                            "此平台未启用 VS Code 设置读写。",
-                            "VS Code settings read and write are not enabled on this platform.",
+                            "此平台未启用编辑器设置读写。",
+                            "Editor settings read and write are not enabled on this platform.",
                         )).color(palette().muted));
                     }
                 });
@@ -436,14 +481,14 @@ impl Studio {
     pub(super) fn vscode_tools_page(&mut self, ui: &mut egui::Ui) {
         ui.label(
             RichText::new(tx(
-                "Visual Studio Code · 稳定版默认配置",
-                "Visual Studio Code · stable default profile",
+                "编辑器设置与 VS Code 扩展",
+                "Editor settings and VS Code extensions",
             ))
             .color(palette().muted),
         );
         ui.label(tx(
-            "在当前系统审核并迁移用户设置；扩展重部署仅在 macOS 使用已保存的扩展清单。",
-            "Review and migrate user settings on this system; extension redeployment uses the saved inventory on macOS.",
+            "设置支持 VS Code 稳定版、Insiders 与 Cursor；扩展重部署仅在 macOS 使用已保存的扩展清单。",
+            "Settings support VS Code Stable, Insiders and Cursor; extension redeployment uses the saved inventory on macOS.",
         ));
         ui.separator();
         ui.heading(tx("扩展重部署", "Extension redeployment"));
@@ -658,6 +703,37 @@ mod tests {
         assert_eq!(state.profile, Some(profile));
         assert!(state.snapshot.is_none());
         assert!(!state.confirmed);
+    }
+
+    #[test]
+    fn changing_editor_clears_review_state_and_keeps_migratable_profile() {
+        let profile = studio_deployment::vscode_settings::SettingsProfile {
+            schema_version: 1,
+            settings: BTreeMap::from([("editor.fontSize".to_owned(), serde_json::json!(16))]),
+        };
+        let mut state = SettingsUiState::default();
+        state.load_profile(profile.clone());
+        state.selected.insert("editor.fontSize".to_owned());
+        state.confirmed = true;
+        state.report = Some(studio_deployment::vscode_settings::SettingsApplyReport {
+            schema_version: 1,
+            selected: vec!["editor.fontSize".to_owned()],
+            changed: vec!["editor.fontSize".to_owned()],
+            verified: true,
+            history_complete: true,
+            cancelled: false,
+            detail: String::new(),
+            history: std::path::PathBuf::new(),
+        });
+
+        state.select_target(EditorSettingsTarget::Cursor);
+
+        assert_eq!(state.target, EditorSettingsTarget::Cursor);
+        assert_eq!(state.profile, Some(profile));
+        assert!(state.selected.is_empty());
+        assert!(!state.confirmed);
+        assert!(state.snapshot.is_none());
+        assert!(state.report.is_none());
     }
 
     #[test]

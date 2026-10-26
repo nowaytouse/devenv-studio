@@ -40,6 +40,33 @@ const ALLOWED_SETTINGS: &[&str] = &[
 ];
 static APPLY_LOCK: Mutex<()> = Mutex::new(());
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum EditorSettingsTarget {
+    #[default]
+    VsCodeStable,
+    VsCodeInsiders,
+    Cursor,
+}
+
+impl EditorSettingsTarget {
+    pub const ALL: [Self; 3] = [Self::VsCodeStable, Self::VsCodeInsiders, Self::Cursor];
+
+    fn product_directory(self) -> &'static str {
+        match self {
+            Self::VsCodeStable => "Code",
+            Self::VsCodeInsiders => "Code - Insiders",
+            Self::Cursor => "Cursor",
+        }
+    }
+}
+
+fn editor_settings_path(config_root: &Path, target: EditorSettingsTarget) -> PathBuf {
+    config_root
+        .join(target.product_directory())
+        .join("User")
+        .join("settings.json")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsProfile {
@@ -51,11 +78,11 @@ impl SettingsProfile {
     pub fn validate(&self) -> Result<()> {
         anyhow::ensure!(
             self.schema_version == SCHEMA_VERSION,
-            "Unsupported VS Code settings profile version"
+            "Unsupported Editor settings profile version"
         );
         anyhow::ensure!(
             self.settings.len() <= ALLOWED_SETTINGS.len(),
-            "VS Code settings profile has too many entries"
+            "Editor settings profile has too many entries"
         );
         for (key, value) in &self.settings {
             validate_value(key, value)?;
@@ -103,12 +130,15 @@ pub fn profile_from_snapshot(snapshot: &SettingsSnapshot) -> SettingsProfile {
     }
 }
 
-pub fn capture_settings(cancel: &Arc<AtomicBool>) -> Result<SettingsSnapshot> {
+pub fn capture_settings(
+    target: EditorSettingsTarget,
+    cancel: &Arc<AtomicBool>,
+) -> Result<SettingsSnapshot> {
     anyhow::ensure!(
         !cancel.load(Ordering::Acquire),
-        "VS Code settings capture was cancelled"
+        "Editor settings capture was cancelled"
     );
-    let path = default_settings_path()?;
+    let path = default_settings_path(target)?;
     capture_settings_at(&path, cancel)
 }
 
@@ -117,30 +147,30 @@ pub fn save_settings_profile(profile: &SettingsProfile, path: &Path) -> Result<(
     profile.validate()?;
     anyhow::ensure!(
         serde_json::to_vec(profile)?.len() <= MAX_PROFILE_BYTES,
-        "VS Code settings profile exceeds the size limit"
+        "Editor settings profile exceeds the size limit"
     );
     studio_core::export_document(profile, path)
 }
 
 pub fn load_settings_profile(path: &Path) -> Result<SettingsProfile> {
     anyhow::ensure!(path.is_absolute(), "Settings profile path must be absolute");
-    let metadata = fs::symlink_metadata(path).context("Inspect VS Code settings profile")?;
+    let metadata = fs::symlink_metadata(path).context("Inspect Editor settings profile")?;
     anyhow::ensure!(
         metadata.is_file() && !metadata.file_type().is_symlink(),
-        "VS Code settings profile must be a regular file"
+        "Editor settings profile must be a regular file"
     );
     anyhow::ensure!(
         metadata.len() <= MAX_PROFILE_BYTES as u64,
-        "VS Code settings profile exceeds the size limit"
+        "Editor settings profile exceeds the size limit"
     );
-    let bytes = fs::read(path).context("Read VS Code settings profile")?;
+    let bytes = fs::read(path).context("Read Editor settings profile")?;
     anyhow::ensure!(
         bytes.len() <= MAX_PROFILE_BYTES,
-        "VS Code settings profile exceeds the size limit"
+        "Editor settings profile exceeds the size limit"
     );
     reject_duplicate_profile_keys(&bytes)?;
     let profile: SettingsProfile =
-        serde_json::from_slice(&bytes).context("Parse VS Code settings profile")?;
+        serde_json::from_slice(&bytes).context("Parse Editor settings profile")?;
     profile.validate()?;
     Ok(profile)
 }
@@ -155,7 +185,7 @@ pub fn apply_settings(
     {
         let _guard = APPLY_LOCK
             .lock()
-            .map_err(|_| anyhow::anyhow!("VS Code settings apply lock was poisoned"))?;
+            .map_err(|_| anyhow::anyhow!("Editor settings apply lock was poisoned"))?;
         apply_settings_with(
             profile,
             selected,
@@ -167,24 +197,27 @@ pub fn apply_settings(
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = (profile, selected, expected_current, cancel);
-        anyhow::bail!("VS Code settings profiles are supported on macOS, Windows and Linux only")
+        anyhow::bail!("Editor settings profiles are supported on macOS, Windows and Linux only")
     }
 }
 
-fn default_settings_path() -> Result<PathBuf> {
+fn default_settings_path(target: EditorSettingsTarget) -> Result<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var_os("HOME").context("HOME is unavailable")?;
         let home = PathBuf::from(home);
         anyhow::ensure!(home.is_absolute(), "HOME must be an absolute path");
-        Ok(home.join("Library/Application Support/Code/User/settings.json"))
+        Ok(editor_settings_path(
+            &home.join("Library/Application Support"),
+            target,
+        ))
     }
     #[cfg(target_os = "windows")]
     {
         let appdata = std::env::var_os("APPDATA").context("APPDATA is unavailable")?;
         let appdata = PathBuf::from(appdata);
         anyhow::ensure!(appdata.is_absolute(), "APPDATA must be an absolute path");
-        Ok(appdata.join("Code").join("User").join("settings.json"))
+        Ok(editor_settings_path(&appdata, target))
     }
     #[cfg(target_os = "linux")]
     {
@@ -194,21 +227,22 @@ fn default_settings_path() -> Result<PathBuf> {
             .context("XDG_CONFIG_HOME and HOME are unavailable")?;
         anyhow::ensure!(
             config.is_absolute(),
-            "VS Code configuration directory must be absolute"
+            "Editor configuration directory must be absolute"
         );
-        Ok(config.join("Code").join("User").join("settings.json"))
+        Ok(editor_settings_path(&config, target))
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
-        anyhow::bail!("VS Code settings profiles are supported on macOS, Windows and Linux only")
+        let _ = target;
+        anyhow::bail!("Editor settings profiles are supported on macOS, Windows and Linux only")
     }
 }
 
 fn capture_settings_at(path: &Path, cancel: &AtomicBool) -> Result<SettingsSnapshot> {
-    anyhow::ensure!(path.is_absolute(), "VS Code settings path must be absolute");
+    anyhow::ensure!(path.is_absolute(), "Editor settings path must be absolute");
     anyhow::ensure!(
         !cancel.load(Ordering::Acquire),
-        "VS Code settings capture was cancelled"
+        "Editor settings capture was cancelled"
     );
     let original = read_settings_file(path)?;
     let settings = match original.as_deref() {
@@ -217,7 +251,7 @@ fn capture_settings_at(path: &Path, cancel: &AtomicBool) -> Result<SettingsSnaps
     };
     anyhow::ensure!(
         !cancel.load(Ordering::Acquire),
-        "VS Code settings capture was cancelled"
+        "Editor settings capture was cancelled"
     );
     Ok(SettingsSnapshot {
         path: path.to_owned(),
@@ -227,32 +261,32 @@ fn capture_settings_at(path: &Path, cancel: &AtomicBool) -> Result<SettingsSnaps
 }
 
 fn read_settings_file(path: &Path) -> Result<Option<Vec<u8>>> {
-    anyhow::ensure!(path.is_absolute(), "VS Code settings path must be absolute");
+    anyhow::ensure!(path.is_absolute(), "Editor settings path must be absolute");
     let parent = path
         .parent()
-        .context("VS Code settings path has no parent directory")?;
+        .context("Editor settings path has no parent directory")?;
     let parent_metadata =
-        fs::symlink_metadata(parent).context("Inspect VS Code user settings directory")?;
+        fs::symlink_metadata(parent).context("Inspect Editor user settings directory")?;
     anyhow::ensure!(
         parent_metadata.is_dir() && !parent_metadata.file_type().is_symlink(),
-        "VS Code user settings directory must be a real directory"
+        "Editor user settings directory must be a real directory"
     );
     match fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error).context("Inspect VS Code user settings file"),
+        Err(error) => Err(error).context("Inspect Editor user settings file"),
         Ok(metadata) => {
             anyhow::ensure!(
                 metadata.is_file() && !metadata.file_type().is_symlink(),
-                "VS Code user settings must be a regular file"
+                "Editor user settings must be a regular file"
             );
             anyhow::ensure!(
                 metadata.len() <= MAX_SETTINGS_BYTES as u64,
-                "VS Code user settings exceed the size limit"
+                "Editor user settings exceed the size limit"
             );
-            let bytes = fs::read(path).context("Read VS Code user settings")?;
+            let bytes = fs::read(path).context("Read Editor user settings")?;
             anyhow::ensure!(
                 bytes.len() <= MAX_SETTINGS_BYTES,
-                "VS Code user settings exceed the size limit"
+                "Editor user settings exceed the size limit"
             );
             Ok(Some(bytes))
         }
@@ -262,22 +296,22 @@ fn read_settings_file(path: &Path) -> Result<Option<Vec<u8>>> {
 fn parse_settings(bytes: &[u8]) -> Result<(Value, BTreeMap<String, Value>)> {
     anyhow::ensure!(
         bytes.len() <= MAX_SETTINGS_BYTES,
-        "VS Code user settings exceed the size limit"
+        "Editor user settings exceed the size limit"
     );
-    let text = std::str::from_utf8(bytes).context("VS Code user settings are not UTF-8")?;
+    let text = std::str::from_utf8(bytes).context("Editor user settings are not UTF-8")?;
     let options = settings_parse_options();
     let document: Value = jsonc_parser::parse_to_serde_value(text, &options)
-        .context("Parse VS Code JSONC user settings")?;
+        .context("Parse Editor JSONC user settings")?;
     anyhow::ensure!(
         document.is_object(),
-        "VS Code user settings must contain a JSON object"
+        "Editor user settings must contain a JSON object"
     );
     let root =
-        CstRootNode::parse(text, &options).context("Parse VS Code settings for safe merge")?;
+        CstRootNode::parse(text, &options).context("Parse Editor settings for safe merge")?;
     let object = root
         .value()
         .and_then(|node| node.as_object())
-        .context("VS Code user settings must contain a JSON object")?;
+        .context("Editor user settings must contain a JSON object")?;
     reject_duplicate_allowed_keys(&object)?;
     let settings = allowed_settings(&document)?;
     Ok((document, settings))
@@ -286,7 +320,7 @@ fn parse_settings(bytes: &[u8]) -> Result<(Value, BTreeMap<String, Value>)> {
 fn allowed_settings(document: &Value) -> Result<BTreeMap<String, Value>> {
     let values = document
         .as_object()
-        .context("VS Code user settings must contain a JSON object")?;
+        .context("Editor user settings must contain a JSON object")?;
     let mut settings = BTreeMap::new();
     for key in ALLOWED_SETTINGS {
         if let Some(value) = values.get(*key) {
@@ -302,11 +336,11 @@ fn reject_duplicate_allowed_keys(object: &CstObject) -> Result<()> {
     for property in object.properties() {
         let key = property
             .decoded_name()
-            .context("VS Code settings contains an unreadable property name")?;
+            .context("Editor settings contains an unreadable property name")?;
         if ALLOWED_SETTINGS.contains(&key.as_str()) {
             anyhow::ensure!(
                 seen.insert(key.clone()),
-                "VS Code settings contains duplicate supported key {key}"
+                "Editor settings contains duplicate supported key {key}"
             );
         }
     }
@@ -314,26 +348,26 @@ fn reject_duplicate_allowed_keys(object: &CstObject) -> Result<()> {
 }
 
 fn reject_duplicate_profile_keys(bytes: &[u8]) -> Result<()> {
-    let text = std::str::from_utf8(bytes).context("VS Code settings profile is not UTF-8")?;
+    let text = std::str::from_utf8(bytes).context("Editor settings profile is not UTF-8")?;
     let root = CstRootNode::parse(text, &strict_json_options())
-        .context("VS Code settings profile must be strict JSON")?;
+        .context("Editor settings profile must be strict JSON")?;
     let document = root
         .value()
         .and_then(|node| node.as_object())
-        .context("VS Code settings profile must contain a JSON object")?;
+        .context("Editor settings profile must contain a JSON object")?;
     let settings = document
         .get("settings")
         .and_then(|property| property.value())
         .and_then(|node| node.as_object())
-        .context("VS Code settings profile must contain a settings object")?;
+        .context("Editor settings profile must contain a settings object")?;
     let mut seen = BTreeSet::new();
     for property in settings.properties() {
         let key = property
             .decoded_name()
-            .context("VS Code settings profile contains an unreadable key")?;
+            .context("Editor settings profile contains an unreadable key")?;
         anyhow::ensure!(
             seen.insert(key.clone()),
-            "VS Code settings profile contains duplicate key {key}"
+            "Editor settings profile contains duplicate key {key}"
         );
     }
     Ok(())
@@ -372,7 +406,7 @@ fn strict_json_options() -> jsonc_parser::ParseOptions {
 fn validate_value(key: &str, value: &Value) -> Result<()> {
     anyhow::ensure!(
         ALLOWED_SETTINGS.contains(&key),
-        "Unsupported VS Code setting {key}"
+        "Unsupported Editor setting {key}"
     );
     match key {
         "editor.fontFamily" | "terminal.integrated.fontFamily" => validate_text(value, 256, true),
@@ -433,26 +467,26 @@ fn validate_value(key: &str, value: &Value) -> Result<()> {
             anyhow::ensure!(value.is_boolean(), "{key} must be a boolean");
             Ok(())
         }
-        _ => anyhow::bail!("Unsupported VS Code setting {key}"),
+        _ => anyhow::bail!("Unsupported Editor setting {key}"),
     }
 }
 
 fn validate_text(value: &Value, maximum: usize, allow_empty: bool) -> Result<()> {
-    let text = value.as_str().context("VS Code setting must be a string")?;
+    let text = value.as_str().context("Editor setting must be a string")?;
     anyhow::ensure!(
         (allow_empty || !text.is_empty())
             && text.len() <= maximum
             && !text.chars().any(char::is_control),
-        "VS Code setting string is empty, too long or contains control characters"
+        "Editor setting string is empty, too long or contains control characters"
     );
     Ok(())
 }
 
 fn validate_enum(value: &Value, options: &[&str]) -> Result<()> {
-    let text = value.as_str().context("VS Code setting must be a string")?;
+    let text = value.as_str().context("Editor setting must be a string")?;
     anyhow::ensure!(
         options.contains(&text),
-        "VS Code setting has an unsupported value"
+        "Editor setting has an unsupported value"
     );
     Ok(())
 }
@@ -460,19 +494,19 @@ fn validate_enum(value: &Value, options: &[&str]) -> Result<()> {
 fn validate_integer(value: &Value, minimum: u64, maximum: u64) -> Result<()> {
     let number = value
         .as_u64()
-        .context("VS Code setting must be an unsigned integer")?;
+        .context("Editor setting must be an unsigned integer")?;
     anyhow::ensure!(
         (minimum..=maximum).contains(&number),
-        "VS Code setting is outside its supported range"
+        "Editor setting is outside its supported range"
     );
     Ok(())
 }
 
 fn validate_number(value: &Value, minimum: f64, maximum: f64) -> Result<()> {
-    let number = value.as_f64().context("VS Code setting must be a number")?;
+    let number = value.as_f64().context("Editor setting must be a number")?;
     anyhow::ensure!(
         number.is_finite() && (minimum..=maximum).contains(&number),
-        "VS Code setting is outside its supported range"
+        "Editor setting is outside its supported range"
     );
     Ok(())
 }
@@ -486,19 +520,19 @@ fn render_merged_settings(
     let text = original
         .map(std::str::from_utf8)
         .transpose()
-        .context("VS Code user settings are not UTF-8")?
+        .context("Editor user settings are not UTF-8")?
         .unwrap_or("{}\n");
     let (document, root, object) = parse_settings_text(text)?;
     let _ = allowed_settings(&document)?;
     for key in selected {
         anyhow::ensure!(
             ALLOWED_SETTINGS.contains(&key.as_str()),
-            "Selected VS Code setting is unsupported"
+            "Selected Editor setting is unsupported"
         );
         let value = profile
             .settings
             .get(key)
-            .with_context(|| format!("Selected VS Code setting {key} has no profile value"))?;
+            .with_context(|| format!("Selected Editor setting {key} has no profile value"))?;
         let replacement = cst_value(value)?;
         if let Some(property) = object.get(key) {
             property.set_value(replacement);
@@ -509,7 +543,7 @@ fn render_merged_settings(
     let output = root.to_string().into_bytes();
     anyhow::ensure!(
         output.len() <= MAX_SETTINGS_BYTES,
-        "Merged VS Code settings exceed the size limit"
+        "Merged Editor settings exceed the size limit"
     );
     Ok(output)
 }
@@ -517,21 +551,21 @@ fn render_merged_settings(
 fn parse_settings_text(text: &str) -> Result<(Value, CstRootNode, CstObject)> {
     anyhow::ensure!(
         text.len() <= MAX_SETTINGS_BYTES,
-        "VS Code user settings exceed the size limit"
+        "Editor user settings exceed the size limit"
     );
     let options = settings_parse_options();
     let document: Value = jsonc_parser::parse_to_serde_value(text, &options)
-        .context("Parse VS Code JSONC user settings")?;
+        .context("Parse Editor JSONC user settings")?;
     anyhow::ensure!(
         document.is_object(),
-        "VS Code user settings must contain a JSON object"
+        "Editor user settings must contain a JSON object"
     );
     let root =
-        CstRootNode::parse(text, &options).context("Parse VS Code settings for safe merge")?;
+        CstRootNode::parse(text, &options).context("Parse Editor settings for safe merge")?;
     let object = root
         .value()
         .and_then(|node| node.as_object())
-        .context("VS Code user settings must contain a JSON object")?;
+        .context("Editor user settings must contain a JSON object")?;
     reject_duplicate_allowed_keys(&object)?;
     Ok((document, root, object))
 }
@@ -543,7 +577,7 @@ fn cst_value(value: &Value) -> Result<CstInputValue> {
         Value::Number(value) => Ok(CstInputValue::Number(value.to_string())),
         Value::String(value) => Ok(CstInputValue::String(value.clone())),
         Value::Array(_) | Value::Object(_) => {
-            anyhow::bail!("VS Code settings profiles accept scalar values only")
+            anyhow::bail!("Editor settings profiles accept scalar values only")
         }
     }
 }
@@ -556,27 +590,27 @@ fn apply_settings_with(
     cancel: &AtomicBool,
 ) -> Result<SettingsApplyOutcome> {
     profile.validate()?;
-    anyhow::ensure!(!selected.is_empty(), "Select at least one VS Code setting");
+    anyhow::ensure!(!selected.is_empty(), "Select at least one Editor setting");
     for key in selected {
         anyhow::ensure!(
             profile.settings.contains_key(key),
-            "Selected VS Code setting {key} has no profile value"
+            "Selected Editor setting {key} has no profile value"
         );
         anyhow::ensure!(
             ALLOWED_SETTINGS.contains(&key.as_str()),
-            "Selected VS Code setting {key} is unsupported"
+            "Selected Editor setting {key} is unsupported"
         );
     }
     anyhow::ensure!(
         !cancel.load(Ordering::Acquire),
-        "VS Code settings apply was cancelled before review"
+        "Editor settings apply was cancelled before review"
     );
 
     let current = capture_settings_at(&expected_current.path, cancel)?;
     for key in selected {
         anyhow::ensure!(
             current.settings.get(key) == expected_current.settings.get(key),
-            "VS Code setting {key} changed after review; refresh the comparison"
+            "Editor setting {key} changed after review; refresh the comparison"
         );
     }
     let before = SettingsProfile {
@@ -602,25 +636,25 @@ fn apply_settings_with(
 
     let mut operation_error = None;
     if cancel.load(Ordering::Acquire) {
-        operation_error = Some("VS Code settings apply was cancelled before commit".to_owned());
+        operation_error = Some("Editor settings apply was cancelled before commit".to_owned());
     } else if before.settings != requested.settings {
         match read_settings_file(&current.path) {
             Ok(bytes) if bytes == current.original => {
                 if let Err(error) = studio_core::write_atomic(&current.path, &planned) {
                     operation_error = Some(format!(
-                        "Could not atomically write VS Code settings: {error}"
+                        "Could not atomically write Editor settings: {error}"
                     ));
                 }
             }
             Ok(_) => {
                 operation_error = Some(
-                    "VS Code settings changed while preparing the merge; refresh and review again"
+                    "Editor settings changed while preparing the merge; refresh and review again"
                         .to_owned(),
                 );
             }
             Err(error) => {
                 operation_error = Some(format!(
-                    "Could not recheck VS Code settings before commit: {error:#}"
+                    "Could not recheck Editor settings before commit: {error:#}"
                 ));
             }
         }
@@ -640,7 +674,7 @@ fn apply_settings_with(
         }
         Err(error) => {
             operation_error
-                .get_or_insert_with(|| format!("VS Code settings readback failed: {error:#}"));
+                .get_or_insert_with(|| format!("Editor settings readback failed: {error:#}"));
             (None, None)
         }
     };
@@ -654,10 +688,10 @@ fn apply_settings_with(
             .collect()
     });
     let mut detail = if verified {
-        "All selected VS Code settings match the requested values.".to_owned()
+        "All selected Editor settings match the requested values.".to_owned()
     } else {
         operation_error
-            .unwrap_or_else(|| "VS Code settings readback did not match the request.".to_owned())
+            .unwrap_or_else(|| "Editor settings readback did not match the request.".to_owned())
     };
     if verified && cancelled {
         detail.push_str(" Cancellation arrived after commit; the completed write was not undone.");
@@ -856,6 +890,26 @@ mod settings_tests {
             r#"{"editor.fontSize": 14}"#
         );
         assert!(!data.exists());
+    }
+
+    #[test]
+    fn editor_settings_targets_use_separate_user_paths() {
+        let root = Path::new("config");
+        let path = |target| editor_settings_path(root, target);
+        assert_eq!(
+            path(EditorSettingsTarget::VsCodeStable),
+            root.join("Code").join("User").join("settings.json")
+        );
+        assert_eq!(
+            path(EditorSettingsTarget::VsCodeInsiders),
+            root.join("Code - Insiders")
+                .join("User")
+                .join("settings.json")
+        );
+        assert_eq!(
+            path(EditorSettingsTarget::Cursor),
+            root.join("Cursor").join("User").join("settings.json")
+        );
     }
 
     #[test]

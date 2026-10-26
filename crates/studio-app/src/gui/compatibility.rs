@@ -478,7 +478,16 @@ impl Studio {
                     )).color(palette().muted));
                 }
                 Err(error) => {
-                    ui.colored_label(palette().danger, format!("{error:#}"));
+                    let detail = format!("{error:#}");
+                    let message = if detail == "Choose the operation's corresponding scope before reviewing" {
+                        tx(
+                            "请先选择与当前目标对应的操作范围，再审核。",
+                            "Choose the operation's corresponding scope before reviewing",
+                        )
+                    } else {
+                        detail.as_str()
+                    };
+                    ui.colored_label(palette().danger, message);
                     ui.label(tx(
                         "请检查当前目标允许的领域、该领域的单项选择，以及高级 Profile 配置。",
                         "Check which capabilities this target supports, the items selected for those capabilities, and the advanced Profile settings.",

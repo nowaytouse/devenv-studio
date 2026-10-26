@@ -66,8 +66,8 @@ impl HybridState {
 
 impl Studio {
     pub(super) fn recipes_page(&mut self, ui: &mut egui::Ui) {
-        ui.heading(tx("方案工作区", "Workspace recipes"));
-        ui.label(tx("从旧工具导入，或从一个用途组合开始，再逐项修改。", "Import a legacy profile or start with a mixed workflow, then adjust individual choices."));
+        ui.heading(tx("按用途快速配置", "Quick setup by purpose"));
+        ui.label(tx("选择 Rust、Python、Web 等常见用途，先预览会加入哪些项目；加入后自动打开变更方案供你审核，再分别确认执行。", "Choose a common use such as Rust, Python or Web. Preview included items first; adding opens the change plan for review before any separate execution confirmation."));
         ui.add_space(10.0);
         self.target_controls(ui);
         ui.horizontal_wrapped(|ui| {
@@ -94,23 +94,39 @@ impl Studio {
         ui.add_space(14.0);
         for recipe in solutions::RECIPES {
             let index = usize::from(i18n::english());
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .selectable_label(
-                        self.hybrid.recipe.as_deref() == Some(recipe.id),
-                        recipe.title[index],
-                    )
-                    .clicked()
-                {
-                    self.hybrid.recipe = Some(recipe.id.into());
-                    self.hybrid.error = None;
-                }
-                ui.label(
-                    RichText::new(recipe.description[index])
-                        .size(12.0)
-                        .color(palette().muted),
-                );
-            });
+            let selected = self.hybrid.recipe.as_deref() == Some(recipe.id);
+            egui::Frame::new()
+                .fill(if selected {
+                    palette().wash
+                } else {
+                    palette().surface
+                })
+                .stroke(Stroke::new(
+                    1.0,
+                    if selected {
+                        palette().accent
+                    } else {
+                        palette().line
+                    },
+                ))
+                .corner_radius(8)
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        if ui
+                            .selectable_label(selected, RichText::new(recipe.title[index]).strong())
+                            .clicked()
+                        {
+                            self.hybrid.recipe = Some(recipe.id.into());
+                            self.hybrid.error = None;
+                        }
+                        ui.label(
+                            RichText::new(recipe.description[index])
+                                .size(12.0)
+                                .color(palette().muted),
+                        );
+                    });
+                });
             ui.add_space(6.0);
         }
         if let Some(id) = self.hybrid.recipe.as_deref()
@@ -452,7 +468,8 @@ impl Studio {
                 self.setting_states.clear();
                 self.deployment_states.clear();
                 self.hybrid.error = None;
-                self.notice = Some(Notice { text: tx("已加入方案。可继续逐项修改；进入变更方案检查后再分别确认执行。", "Added to the workspace. Adjust individual choices, then review the plan before confirming execution.").into(), error: false });
+                self.notice = Some(Notice { text: tx("已加入方案；请在此处核对具体变更后再确认执行。", "Added to the workspace. Review the exact changes here before confirming execution.").into(), error: false });
+                self.page = Page::Plan;
             }
             Err(error) => self.hybrid.error = Some(format!("{error:#}")),
         }

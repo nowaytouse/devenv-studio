@@ -1,5 +1,13 @@
 # 验证记录
 
+## Unreleased — 快速开始、帮助入口与多编辑器设置，2026-10-26
+
+- 环境页提供 macOS 基础工具一键预选与 Windows 用途方案入口；加入方案会打开变更计划，必须复核并单独确认才会执行。各页面右上角 ❓ 按钮打开分步帮助。
+- 编辑器档案支持 VS Code 稳定版、Insiders 与 Cursor 默认用户设置；切换目标会清除旧快照、勾选和确认，保留可迁移档案。三种编辑器目录映射回归通过；未读取本机编辑器设置或执行应用。
+- 最终补充范围提示的中英文映射后，工作区测试 342 项通过、2 项按设计忽略；全目标严格 Clippy 无问题，格式检查、锁定工作区检查与锁定构建通过。macOS 本地预览打包并启动检查；未在预览中读取编辑器配置或执行部署。
+- `cargo audit` 扫描 433 项锁定依赖，无漏洞公告，有 3 个 Linux D-Bus/variant 依赖未维护警告。`cargo outdated --workspace --depth 3 --aggressive` 未报告其他可兼容升级；`eframe 0.37.0` 与 `jsonc-parser 0.34.0` 为当前最新。Windows-rs 依赖仍为 0.62.2 系列，最新 0.100.0 是协调迁移的大版本，本轮未改 Cargo 清单或锁文件。`roxmltree` 属性数量复杂度问题仍待上游发布修复，详见依赖审查。
+- 版本保持 0.10.0 / Unreleased。当前仅安装 `aarch64-apple-darwin`；Windows 目标编译、设备验收、CI、签名与公证尚未完成。
+
 ## Unreleased — VS Code JSONC 用户设置档案，2026-10-26
 
 - 完整工作区 339 项测试通过，2 项子进程辅助测试按设计忽略；`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`cargo build --workspace --locked` 与 `git diff --check` 通过。

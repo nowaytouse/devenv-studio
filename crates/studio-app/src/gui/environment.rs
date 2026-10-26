@@ -78,6 +78,34 @@ impl Studio {
         }
     }
 
+    fn select_mac_starter_tools(&mut self) {
+        match native::brew_candidates(None) {
+            Ok(starter) => {
+                self.backup
+                    .brew_selected
+                    .extend(starter.iter().map(|entry| entry.id()));
+                self.backup.brew_confirm = false;
+                self.notice = Some(Notice {
+                    text: lf!(
+                        "已预选 {} 项 Mac 基础工具；尚未执行。",
+                        "Selected {} Mac starter tools; nothing has run yet.",
+                        starter.len()
+                    ),
+                    error: false,
+                });
+            }
+            Err(error) => {
+                self.notice = Some(Notice {
+                    text: lf!(
+                        "读取 Mac 基础工具清单失败：{error:#}",
+                        "Could not load Mac starter tools: {error:#}",
+                    ),
+                    error: true,
+                });
+            }
+        }
+    }
+
     pub(super) fn environment_page(&mut self, ui: &mut egui::Ui) {
         ui.heading(tx("开发环境配置", "Developer environment configuration"));
         ui.label(
@@ -90,17 +118,24 @@ impl Studio {
         ui.add_space(14.0);
         surface_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.heading(tx("从环境清单开始", "Start with an environment inventory"));
+            ui.heading(tx("快速开始", "Quick start"));
             ui.label(tx(
-                "先备份或载入清单，再选择需要配置的工具与渠道。",
-                "Back up or load an inventory, then choose your tools and channels.",
+                "先备份当前环境；macOS 可预选基础工具，Windows 可按用途挑选常见方案。两种方式都只准备待审清单，不会立即执行。",
+                "Back up this environment; on macOS preselect starter tools, or choose a Windows recipe by purpose. Both only prepare a reviewable selection; nothing runs yet.",
             ));
             ui.add_space(8.0);
             ui.horizontal_wrapped(|ui| {
                 if primary(ui, tx("备份 / 载入环境", "Back up / load environment"), true).clicked() {
                     self.page = Page::Backup;
                 }
-                if ui.button(tx("Windows 配置工作区", "Windows configuration workspace")).clicked() {
+                if cfg!(target_os = "macos")
+                    && ui
+                        .button(tx("选择 Mac 基础工具", "Select Mac starter tools"))
+                        .clicked()
+                {
+                    self.select_mac_starter_tools();
+                }
+                if ui.button(tx("选择 Windows 常见方案", "Choose a Windows recipe")).clicked() {
                     self.page = Page::Recipes;
                 }
             });
@@ -164,7 +199,7 @@ impl Studio {
                 .id_salt("npm-global-panel")
                 .default_open(false)
                 .show(ui, |ui| self.npm_tools_page(ui));
-            egui::CollapsingHeader::new(tx("VS Code 扩展", "VS Code extensions"))
+            egui::CollapsingHeader::new(tx("编辑器设置与扩展", "Editor settings and extensions"))
                 .id_salt("vscode-extension-panel")
                 .default_open(false)
                 .show(ui, |ui| self.vscode_tools_page(ui));
@@ -218,12 +253,8 @@ impl Studio {
             if ui
                 .button(tx("选择基础开发工具", "Select starter tools"))
                 .clicked()
-                && let Ok(starter) = native::brew_candidates(None)
             {
-                self.backup
-                    .brew_selected
-                    .extend(starter.iter().map(|e| e.id()));
-                self.backup.brew_confirm = false;
+                self.select_mac_starter_tools();
             }
             if ui
                 .button(tx("清空 Mac 选择", "Clear Mac selections"))
@@ -506,6 +537,25 @@ mod tests {
             BTreeSet::from(["existing-windows-task".into()])
         );
         Ok(())
+    }
+
+    #[test]
+    fn mac_starter_selection_is_opt_in_and_resets_confirmation() {
+        let mut app = preview();
+        app.backup.brew_confirm = true;
+        let expected = native::brew_candidates(None)
+            .unwrap()
+            .iter()
+            .map(|entry| entry.id())
+            .collect::<BTreeSet<_>>();
+
+        app.select_mac_starter_tools();
+
+        assert_eq!(app.backup.brew_selected, expected);
+        assert!(!app.backup.brew_confirm);
+        let notice = app.notice.as_ref().unwrap();
+        assert!(!notice.error);
+        assert!(notice.text.contains("nothing has run yet") || notice.text.contains("尚未执行"));
     }
 
     #[test]

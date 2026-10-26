@@ -1187,6 +1187,14 @@ impl Studio {
                     palette().wash,
                     palette().accent,
                 );
+                if self.page != Page::Help
+                    && ui
+                        .small_button(tx("❓ 帮助", "❓ Help"))
+                        .on_hover_text(tx("打开分步使用指南", "Open the step-by-step guide"))
+                        .clicked()
+                {
+                    self.page = Page::Help;
+                }
             });
         });
         ui.add_space(14.0);

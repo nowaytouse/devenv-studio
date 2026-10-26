@@ -522,6 +522,10 @@ impl Studio {
 
     pub(super) fn help_page(&self, ui: &mut egui::Ui) {
         ui.heading(tx("帮助", "Help"));
+        ui.label(tx(
+            "随时点击右上角 ❓ 帮助返回本页。macOS 可从基础工具开始，Windows 可选用途方案；都只预选项目，不会立即执行。最终操作前请在变更方案页核对并确认。",
+            "Click the ❓ Help button in the upper-right corner to return here from any page. On macOS, start with the starter tools; on Windows, choose a recipe. Both prepare choices only. Review and confirm exact changes on the Change plan page.",
+        ));
         settings_section(
             ui,
             tx(
@@ -533,6 +537,20 @@ impl Studio {
                 ui.label(tx("Mac 环境配置从基础工具或备份中逐项选择 Homebrew formula/cask，审核并导出 Brewfile，或在已准备 Homebrew 的 Mac 上确认配置。依赖可能改变，取消不保证安装器已停止，没有自动回滚。", "Mac configuration selects Homebrew formulae/casks from starter tools or a backup. Review and export a Brewfile, or confirm local configuration after preparing Homebrew. Dependencies can change, installers may continue after cancellation, and no automatic rollback is available."));
                 ui.label(tx("重部署支持 Homebrew 补齐、滚动与 HEAD，HEAD 需要独立渠道回查；Rust 可选择 stable、beta、nightly、固定版本或按日 nightly，保存/载入请求及导出原生 rust-toolchain.toml 和 mise.toml。Rust 需标准位置现有 rustup 与已有官方默认工具链，执行后核对实际编译器版本和提交；mise 目前只导出清单。", "Redeployment supports missing-only, rolling and HEAD Homebrew policies with independent HEAD readback. Rust supports stable, beta, nightly, exact releases and dated nightly, with saved requests and native rust-toolchain.toml/mise.toml export. Rust needs standard rustup with an existing official default; results verify compiler release and commit. mise currently exports manifests only."));
                 ui.label(tx("Windows 备份在迁移页按可信身份映射；筛选和分页保留勾选。Windows 配置使用原有方案和提供程序，WinGet 导出仅含所选 WinGet 软件；其他工具继续使用应用档案。", "Windows backups map trusted identities on the review page; filtering and paging preserve checks. Windows configuration uses the existing workspace and providers. WinGet export contains only selected WinGet applications; other tools remain in app profiles."));
+            },
+        );
+        settings_section(
+            ui,
+            tx("编辑器设置档案", "Editor settings profile"),
+            |ui| {
+                ui.label(tx(
+                    "选择 VS Code 稳定版、Insiders 或 Cursor，再读取当前电脑的默认用户设置；也可先载入一份档案。逐项勾选要迁移的设置，检查本机差异并确认应用。切换编辑器会清空旧的本机对比和勾选，但保留档案以便迁移。",
+                    "Choose VS Code Stable, Insiders or Cursor and read its default user settings, or load a profile. Select settings one by one, review local differences and confirm. Switching editors clears the old comparison and checks while keeping the portable profile.",
+                ));
+                ui.label(tx(
+                    "只处理 21 项通用白名单，保留注释和未选值；不复制扩展、工作区、账号、密钥或命名配置档。应用前关闭所选编辑器；写入不提供自动回滚。",
+                    "Only 21 common allowlisted settings are handled; comments and unchecked values remain. Extensions, workspaces, accounts, secrets and named profiles are excluded. Close the selected editor before applying; automatic rollback is unavailable.",
+                ));
             },
         );
         settings_section(
