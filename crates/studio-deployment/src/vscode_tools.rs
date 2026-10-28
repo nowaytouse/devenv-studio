@@ -1,9 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+#[cfg(any(target_os = "macos", test))]
+use std::sync::atomic::Ordering;
+#[cfg(target_os = "macos")]
 use std::time::Duration;
 
 use anyhow::{Context, ensure};
@@ -11,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 const MAX_EXTENSIONS: usize = 256;
+#[cfg(target_os = "macos")]
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,15 +53,18 @@ pub struct Report {
     pub detail: String,
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug)]
 struct Cancelled;
 
+#[cfg(any(target_os = "macos", test))]
 impl std::fmt::Display for Cancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("VS Code extension deployment was cancelled")
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 impl std::error::Error for Cancelled {}
 
 pub fn validate(request: &Request) -> anyhow::Result<()> {
@@ -157,6 +166,7 @@ pub fn parse_inventory(text: &str) -> anyhow::Result<Vec<crate::backup::Package>
         .collect())
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn invocation(electron: &Path, cli: &Path, args: &[&str]) -> crate::process::Invocation {
     let mut full_args = vec![cli.to_string_lossy().into_owned()];
     full_args.extend(args.iter().map(|arg| (*arg).to_owned()));
@@ -168,6 +178,7 @@ fn invocation(electron: &Path, cli: &Path, args: &[&str]) -> crate::process::Inv
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn step(
     runner: &mut impl crate::process::Runner,
     electron: &Path,
@@ -198,6 +209,7 @@ fn step(
     Ok(output)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn inventory(
     runner: &mut impl crate::process::Runner,
     electron: &Path,
@@ -214,6 +226,7 @@ fn inventory(
     parse_inventory(&output.stdout)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn run_recorded(
     runner: &mut impl crate::process::Runner,
     electron: &Path,
@@ -593,17 +606,16 @@ mod tests {
         evidence: &mut BTreeMap<String, serde_json::Value>,
     ) -> anyhow::Result<Report> {
         let cancel = Arc::new(AtomicBool::new(false));
-        let electron =
-            PathBuf::from("/Applications/Visual Studio Code.app/Contents/MacOS/Electron");
-        let cli =
-            PathBuf::from("/Applications/Visual Studio Code.app/Contents/Resources/app/out/cli.js");
+        let root = std::env::temp_dir().join("devenv-studio-vscode-fixture");
+        let electron = root.join("Visual Studio Code.app/Contents/MacOS/Electron");
+        let cli = root.join("Visual Studio Code.app/Contents/Resources/app/out/cli.js");
         run_recorded(
             runner,
             &electron,
             &cli,
             request,
             &cancel,
-            Path::new("/private/history"),
+            &root.join("history"),
             &mut |name, value| {
                 evidence.insert(name.into(), value.clone());
                 Ok(())

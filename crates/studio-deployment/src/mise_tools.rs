@@ -923,7 +923,7 @@ mod tests {
         fs::create_dir(&workspace).unwrap();
         let report = run_recorded(
             &mut fake,
-            Path::new("/test/mise"),
+            &temp.0.join("mise"),
             &request(),
             &Arc::new(AtomicBool::new(false)),
             &mut |name, value| {
@@ -1000,7 +1000,7 @@ mod tests {
         let mut records = BTreeMap::<String, serde_json::Value>::new();
         let result = run_recorded(
             &mut fake,
-            Path::new("/test/mise"),
+            &temp.0.join("mise"),
             &request(),
             &Arc::new(AtomicBool::new(false)),
             &mut |name, value| {

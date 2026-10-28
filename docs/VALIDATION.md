@@ -1,5 +1,13 @@
 # 验证记录
 
+## Unreleased — Windows CI 严格检查与跨平台测试修复，2026-10-29
+
+- GitHub run `40696647528` 对应提交 `1eb71c92c8d081cabca86abf99f1150b10b08be5`。API 核对三平台任务均没有步骤和日志，失败注释均为付款／支出限制导致未启动；macOS 另有 ARM runner 容量排队的 notice。Actions 已启用、仓库没有自托管 runner；这些记录不能作为代码编译或测试失败证据。所有者确认限制尚未解除，要求先完成代码修复，因此不手动反复重跑。
+- 本地复现并修复 Windows 全工作区严格 Clippy 的条件编译问题：macOS 原生适配器、仅在该平台使用的导入、超时常量和进程辅助函数按实际调用范围编译；跨平台模拟测试仍保留。Topgrade 的目录 builder 仅在 Unix 分支可变，原有 0700 权限逻辑不变。未增加 allow、削弱 -D warnings 或删除测试。
+- Cargo、npm、VS Code、通用开发工具、mise 和 uv 模拟测试使用所在平台的绝对路径，参数、NPM 清单前缀及对应断言一起更新。生产路径校验未放宽；这些测试不调用真实安装程序。Windows 交叉编译包含测试代码，不能替代 Windows 上实际执行测试。
+- 最终工作区 351 项测试通过、2 项按设计忽略；macOS 全工作区全目标严格 Clippy、锁定构建、格式与 diff 检查通过。Windows GNU 全工作区全目标严格 Clippy 通过，无警告。两个 GitHub Actions 工作流通过 actionlint；不修改现有三平台矩阵和原生 ARM 覆盖，也不通过忽略步骤掩盖外部门禁。
+- 版本仍为 0.10.0 / Unreleased；未修改依赖或锁文件。未执行 Windows 测试二进制、Windows/LTSC 设备验收、真实配置、打包、签名或公证。远端 CI 仍待账户限制解除后验收；macOS 排队通知来自 GitHub 服务，不能宣称已由源码修复。
+
 ## Unreleased — 完整本地退役与全部工作区改动审查，2026-10-28
 
 - 核对旧七个后端、配置/映射及 GUI 接线，确认当前程序无相邻旧目录依赖。旧未认证恢复、个人清单、字体、未审查 Agent 资源和原 EXE 按既定边界留作历史资料。旧 main 最终退役文档提交 `1493c1eaed1e1187f9b50ea0eaf43a411ae28148` 通过保留当前产品内容的历史合并进入 ancestry，包含全部 33 个旧 main 可达提交；本地检查点引用不发布。GitHub API 核对旧远端 archived=true。

@@ -1,20 +1,22 @@
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
+#[cfg(any(target_os = "macos", test))]
+use std::{collections::BTreeMap, sync::atomic::Ordering};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fs::{self, OpenOptions},
     io::Read,
-    path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
-    },
-    time::Duration,
+    path::Path,
+    sync::{Arc, atomic::AtomicBool},
 };
+#[cfg(target_os = "macos")]
+use std::{path::PathBuf, sync::atomic::AtomicU64, time::Duration};
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 const MAX_TOOLS: usize = 8;
+#[cfg(target_os = "macos")]
 const CARGO_TIMEOUT: Duration = Duration::from_secs(45 * 60);
+#[cfg(target_os = "macos")]
 const GIT_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,12 +193,12 @@ impl std::fmt::Display for Cancelled {
 #[cfg(any(target_os = "macos", test))]
 impl std::error::Error for Cancelled {}
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 struct CargoHome {
     path: PathBuf,
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 impl CargoHome {
     fn create() -> Result<Self> {
         static SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -248,7 +250,7 @@ impl CargoHome {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 impl Drop for CargoHome {
     fn drop(&mut self) {
         if !self.path.as_os_str().is_empty() {
@@ -257,13 +259,13 @@ impl Drop for CargoHome {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 struct Native {
     git: Option<PathBuf>,
     cargo_home: PathBuf,
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 impl crate::process::Runner for Native {
     fn run(
         &mut self,
@@ -749,13 +751,14 @@ mod tests {
         };
         let cancel = Arc::new(AtomicBool::new(false));
         let mut evidence = BTreeMap::new();
+        let root = std::env::temp_dir().join("devenv-studio-cargo-fixture");
         let report = run_recorded(
             &mut runner,
             RunPaths {
-                cargo: Path::new("/home/user/.cargo/bin/cargo"),
-                git: Some(Path::new("/usr/bin/git")),
-                root: Path::new("/home/user/.cargo"),
-                evidence_path: Path::new("/private/history/run"),
+                cargo: &root.join("bin/cargo"),
+                git: Some(&root.join("bin/git")),
+                root: &root,
+                evidence_path: &root.join("history"),
             },
             &request,
             &cancel,

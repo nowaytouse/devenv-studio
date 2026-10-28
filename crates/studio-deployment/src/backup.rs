@@ -102,7 +102,7 @@ impl std::fmt::Display for MissingProvider {
 #[cfg(any(windows, test))]
 impl std::error::Error for MissingProvider {}
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 pub(crate) fn vscode_cli_paths(
     home: &std::path::Path,
 ) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
@@ -171,13 +171,13 @@ pub(crate) fn valid_version(value: &str) -> bool {
             }))
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 pub(crate) fn npm_cli_paths() -> Option<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)>
 {
     capture::npm_cli_paths()
 }
 
-#[cfg(any(windows, target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test))]
 pub(crate) fn parse_npm_inventory(
     text: &str,
     root: &std::path::Path,

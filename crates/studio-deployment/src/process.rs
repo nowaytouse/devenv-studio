@@ -126,6 +126,7 @@ fn network_provider(invocation: &Invocation) -> Option<&'static str> {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn sensitive_environment_name(name: &std::ffi::OsStr) -> bool {
     let upper = name.to_string_lossy().to_ascii_uppercase();
     matches!(
@@ -392,7 +393,7 @@ pub(crate) fn run_python_tools(
     run_configured(invocation, cancel, timeout, configure_python_tools)
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 pub(crate) fn run_cargo_tools(
     invocation: &Invocation,
     cancel: &Arc<AtomicBool>,
@@ -430,7 +431,7 @@ pub(crate) fn run_cargo_tools(
     })
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 pub(crate) fn run_git_tools(
     invocation: &Invocation,
     cancel: &Arc<AtomicBool>,

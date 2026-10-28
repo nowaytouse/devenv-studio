@@ -798,23 +798,24 @@ mod tests {
             pip: || Ok(crate::pip::tests::layout()),
         }
     }
+    fn fixture_path(relative: &str) -> PathBuf {
+        std::env::temp_dir()
+            .join("devenv-engine-fixture")
+            .join(relative)
+    }
     fn fake_developer(kind: &str) -> Result<DeveloperTool> {
         Ok(DeveloperTool {
-            program: format!(
-                "/trusted/{}",
-                match kind {
-                    "vscode" => "Code.exe",
-                    "npm" => "node.exe",
-                    _ => kind,
-                }
-            )
-            .into(),
-            cargo_root: (kind == "cargo").then(|| PathBuf::from("/trusted/.cargo")),
+            program: fixture_path("trusted").join(match kind {
+                "vscode" => "Code.exe",
+                "npm" => "node.exe",
+                _ => kind,
+            }),
+            cargo_root: (kind == "cargo").then(|| fixture_path("trusted/.cargo")),
             vscode_cli: (kind == "vscode")
-                .then(|| PathBuf::from("/trusted/resources/app/out/cli.js")),
+                .then(|| fixture_path("trusted/resources/app/out/cli.js")),
             npm_cli: (kind == "npm")
-                .then(|| PathBuf::from("/trusted/node_modules/npm/bin/npm-cli.js")),
-            npm_prefix: (kind == "npm").then(|| PathBuf::from("/user/npm")),
+                .then(|| fixture_path("trusted/node_modules/npm/bin/npm-cli.js")),
+            npm_prefix: (kind == "npm").then(|| fixture_path("user/npm")),
             scoop_script: None,
         })
     }
@@ -1157,12 +1158,13 @@ mod tests {
     #[test]
     fn developer_argv_is_direct_exact_and_uses_fixed_vscode_environment() {
         let cargo = invocation(&tools(), &developer_task("cargo", "ripgrep"), false).unwrap();
+        let cargo_root = fixture_path("trusted/.cargo");
         assert_eq!(
             cargo.args,
             [
                 "install",
                 "--root",
-                "/trusted/.cargo",
+                cargo_root.to_str().unwrap(),
                 "--locked",
                 "--registry",
                 "crates-io",
@@ -1179,11 +1181,12 @@ mod tests {
             false,
         )
         .unwrap();
-        assert_eq!(vscode.program, PathBuf::from("/trusted/Code.exe"));
+        assert_eq!(vscode.program, fixture_path("trusted").join("Code.exe"));
+        let vscode_cli = fixture_path("trusted/resources/app/out/cli.js");
         assert_eq!(
             vscode.args,
             [
-                "/trusted/resources/app/out/cli.js",
+                vscode_cli.to_str().unwrap(),
                 "--install-extension",
                 "rust-lang.rust-analyzer"
             ]
@@ -1288,27 +1291,30 @@ mod tests {
         }
     }
     fn npm_list(id: Option<&str>) -> String {
-        let mut list = serde_json::json!({"path":"/user/npm","name":"npm","extraneous":false,"_dependencies":{},"devDependencies":{},"peerDependencies":{}});
+        let prefix = fixture_path("user/npm");
+        let mut list = serde_json::json!({"path":prefix,"name":"npm","extraneous":false,"_dependencies":{},"devDependencies":{},"peerDependencies":{}});
         if let Some(id) = id {
-            list["dependencies"] = serde_json::json!({id:{"name":id,"version":"1.2.3","path":format!("/user/npm/node_modules/{id}"),"overridden":false}});
+            list["dependencies"] = serde_json::json!({id:{"name":id,"version":"1.2.3","path":prefix.join("node_modules").join(id),"overridden":false}});
         }
         list.to_string()
     }
     #[test]
     fn npm_arguments_use_one_fixed_user_prefix_and_no_lifecycle_scripts() {
+        let npm_cli = fixture_path("trusted/node_modules/npm/bin/npm-cli.js");
+        let npm_prefix = fixture_path("user/npm");
         for inspect in [true, false] {
             let command =
                 invocation(&tools(), &developer_task("npm", "@scope/tool"), inspect).unwrap();
-            assert_eq!(command.program, PathBuf::from("/trusted/node.exe"));
+            assert_eq!(command.program, fixture_path("trusted").join("node.exe"));
             assert!(command.npm_node && !command.vscode_node);
             assert_eq!(
                 &command.args[..14],
                 [
-                    "/trusted/node_modules/npm/bin/npm-cli.js",
+                    npm_cli.to_str().unwrap(),
                     if inspect { "ls" } else { "install" },
                     "--global",
                     "--prefix",
-                    "/user/npm",
+                    npm_prefix.to_str().unwrap(),
                     "--registry=https://registry.npmjs.org/",
                     "--userconfig=NUL",
                     "--globalconfig=NUL.ltsc-global",
@@ -1349,10 +1355,12 @@ mod tests {
     }
     #[test]
     fn npm_json_requires_exact_complete_identity_and_same_prefix() {
+        let prefix = fixture_path("user/npm");
+        let prefix = prefix.to_str().unwrap();
         for id in ["typescript", "@scope/tool"] {
-            assert!(installed_npm(id, &npm_list(Some(id)), "/user/npm").unwrap());
-            assert!(!installed_npm(id, &npm_list(None), "/user/npm").unwrap());
-            assert!(!installed_npm(id, &npm_list(Some("other-tool")), "/user/npm").unwrap());
+            assert!(installed_npm(id, &npm_list(Some(id)), prefix).unwrap());
+            assert!(!installed_npm(id, &npm_list(None), prefix).unwrap());
+            assert!(!installed_npm(id, &npm_list(Some("other-tool")), prefix).unwrap());
             assert!(installed_npm(id, &npm_list(Some(id)), "/other/npm").is_err());
             let original: serde_json::Value = serde_json::from_str(&npm_list(Some(id))).unwrap();
             for (field, value) in [
@@ -1373,7 +1381,7 @@ mod tests {
                 let mut list = original.clone();
                 list["dependencies"][id][field] = value;
                 assert!(
-                    installed_npm(id, &list.to_string(), "/user/npm").is_err(),
+                    installed_npm(id, &list.to_string(), prefix).is_err(),
                     "{field}"
                 );
             }
@@ -1384,7 +1392,7 @@ mod tests {
                     .unwrap()
                     .remove(field);
                 assert!(
-                    installed_npm(id, &list.to_string(), "/user/npm").is_err(),
+                    installed_npm(id, &list.to_string(), prefix).is_err(),
                     "{field}"
                 );
             }
@@ -1421,7 +1429,7 @@ mod tests {
         for after in [
             npm_list(None),
             "{}".into(),
-            r#"{"path":"/user/npm","error":{}}"#.into(),
+            serde_json::json!({"path":fixture_path("user/npm"),"error":{}}).to_string(),
         ] {
             let mut fake = Fake {
                 outputs: VecDeque::from([

@@ -1,21 +1,21 @@
 use crate::backup::{self, Package};
-use anyhow::{Context, ensure};
+#[cfg(any(target_os = "macos", test))]
+use anyhow::Context;
+use anyhow::ensure;
 use serde::{Deserialize, Serialize};
+#[cfg(any(target_os = "macos", test))]
+use std::{collections::BTreeMap, path::Path, sync::atomic::Ordering};
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    collections::BTreeSet,
+    sync::{Arc, atomic::AtomicBool},
 };
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 use std::time::Duration;
 
 const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 #[cfg(any(target_os = "macos", test))]
 const REGISTRY: &str = "https://registry.npmjs.org/";
@@ -48,15 +48,18 @@ pub struct Report {
     pub detail: String,
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug)]
 struct Cancelled;
 
+#[cfg(any(target_os = "macos", test))]
 impl std::fmt::Display for Cancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("npm global package redeployment was cancelled")
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 impl std::error::Error for Cancelled {}
 
 pub fn validate(request: &Request) -> anyhow::Result<()> {
@@ -473,8 +476,16 @@ mod tests {
 
     fn test_paths(prefix: &Path) -> NpmPaths<'_> {
         NpmPaths {
-            node: Path::new("/opt/homebrew/bin/node"),
-            cli: Path::new("/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js"),
+            node: Path::new(if cfg!(windows) {
+                r"C:\tools\node.exe"
+            } else {
+                "/opt/homebrew/bin/node"
+            }),
+            cli: Path::new(if cfg!(windows) {
+                r"C:\tools\npm-cli.js"
+            } else {
+                "/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js"
+            }),
             prefix,
         }
     }
@@ -535,7 +546,8 @@ mod tests {
 
     #[test]
     fn exact_saved_version_skips_matching_packages_and_is_read_back() {
-        let prefix = Path::new("/opt/homebrew");
+        let prefix = std::env::temp_dir().join("devenv-studio-npm-fixture");
+        let prefix = prefix.as_path();
         let inventory = listing(prefix, &[("@scope/tool", "1.2.3-beta.1")]);
         let mut runner = FakeRunner {
             outputs: [result(0, inventory.clone()), result(0, inventory)]
@@ -549,7 +561,7 @@ mod tests {
             test_paths(prefix),
             &request(None),
             &Arc::new(AtomicBool::new(false)),
-            Path::new("/history"),
+            &prefix.join("history"),
             &mut |name, value| {
                 evidence.insert(name.into(), value.clone());
                 Ok(())
@@ -564,7 +576,8 @@ mod tests {
 
     #[test]
     fn dist_tag_install_is_safe_and_requires_post_install_readback() {
-        let prefix = Path::new("/opt/homebrew");
+        let prefix = std::env::temp_dir().join("devenv-studio-npm-fixture");
+        let prefix = prefix.as_path();
         let before = listing(prefix, &[("@scope/tool", "1.2.3")]);
         let after = listing(prefix, &[("@scope/tool", "2.0.0-beta.1")]);
         let mut runner = FakeRunner {
@@ -582,7 +595,7 @@ mod tests {
             test_paths(prefix),
             &request(Some("beta")),
             &Arc::new(AtomicBool::new(false)),
-            Path::new("/history"),
+            &prefix.join("history"),
             &mut |_, _| Ok(()),
         )
         .unwrap();
@@ -603,7 +616,8 @@ mod tests {
 
     #[test]
     fn failed_install_records_observed_partial_state_and_never_claims_success() {
-        let prefix = Path::new("/opt/homebrew");
+        let prefix = std::env::temp_dir().join("devenv-studio-npm-fixture");
+        let prefix = prefix.as_path();
         let inventory = listing(prefix, &[("@scope/tool", "1.2.3")]);
         let mut runner = FakeRunner {
             outputs: [
@@ -622,7 +636,7 @@ mod tests {
                 test_paths(prefix),
                 &request(Some("next")),
                 &Arc::new(AtomicBool::new(false)),
-                Path::new("/history"),
+                &prefix.join("history"),
                 &mut |name, value| {
                     evidence.insert(name.into(), value.clone());
                     Ok(())

@@ -203,4 +203,6 @@ cargo build --release --locked -p devenv-studio
 
 Check 工作流在三种桌面系统上运行检查；Package desktop 工作流需手动触发，生成对应运行器平台的可执行文件及许可证，不自动发布 Release。当前仓库不附带未经验证的旧 EXE。
 
+若 Actions 提示付款或支出限制、且任务没有任何步骤或日志，需由账户所有者在 [Billing & licensing](https://github.com/settings/billing) 检查付款状态和 Actions 预算；仓库代码及重跑任务不能解除该门禁。页面没有可处理问题时，可按 [GitHub 账户计费锁说明](https://docs.github.com/en/billing/how-tos/troubleshooting/locked-account) 联系 Support。`macos-latest` 的 ARM 容量排队通知是独立的服务提示；保留原生 ARM 检查与打包覆盖，不将其视作源码检查通过或失败。
+
 与旧工具的实际功能差距见 [LEGACY_PARITY.md](docs/LEGACY_PARITY.md)，后续迁移顺序见 [ROADMAP.md](docs/ROADMAP.md)，变更记录见 [CHANGELOG.md](CHANGELOG.md)。采用 MIT 许可证；上游版权与许可证完整保留。

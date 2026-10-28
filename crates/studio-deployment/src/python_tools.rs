@@ -562,7 +562,7 @@ mod tests {
         let mut records: Vec<(String, serde_json::Value)> = Vec::new();
         let report = run_recorded(
             &mut fake,
-            &PathBuf::from(if cfg!(windows) { "C:\\uv.exe" } else { "/uv" }),
+            &std::env::temp_dir().join("uv"),
             &request(),
             &Arc::new(AtomicBool::new(false)),
             &mut |name, value| {
@@ -633,7 +633,7 @@ mod tests {
         assert!(
             run_recorded(
                 &mut fake,
-                &PathBuf::from("/uv"),
+                &std::env::temp_dir().join("uv"),
                 &Request {
                     schema_version: 1,
                     tools: vec![PythonTool {
@@ -665,7 +665,7 @@ mod tests {
         };
         let report = run_recorded(
             &mut fake,
-            &PathBuf::from("/uv"),
+            &std::env::temp_dir().join("uv"),
             &Request {
                 schema_version: 1,
                 tools: vec![PythonTool {
