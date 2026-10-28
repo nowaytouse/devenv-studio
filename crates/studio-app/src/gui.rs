@@ -32,6 +32,7 @@ mod rust_toolchains;
 mod scoop_tools;
 mod storage;
 mod theme;
+mod topgrade;
 mod vscode_tools;
 
 use theme::palette;
@@ -142,6 +143,9 @@ enum FileOperation {
     SaveGitProfile,
     LoadGitProfile,
     SaveGitReport,
+    SaveTopgrade,
+    LoadTopgrade,
+    ExtractTopgrade,
 }
 
 impl FileOperation {
@@ -197,6 +201,9 @@ impl FileOperation {
             Self::SaveGitProfile => tx("保存 Git 配置档案", "Save Git profile"),
             Self::LoadGitProfile => tx("载入 Git 配置档案", "Load Git profile"),
             Self::SaveGitReport => tx("保存 Git 配置结果", "Save Git configuration result"),
+            Self::SaveTopgrade => tx("保存 Topgrade 迁移包", "Save Topgrade package"),
+            Self::LoadTopgrade => tx("载入 Topgrade 迁移包", "Load Topgrade package"),
+            Self::ExtractTopgrade => tx("还原到全新目录", "Extract to a new directory"),
             Self::NetworkSave => tx("保存网络方案", "Save network profile"),
             Self::NetworkLoad => tx("载入网络方案", "Load network profile"),
             Self::NetworkExportConfig => {
@@ -248,6 +255,7 @@ enum WorkerResult {
     ScoopTools(studio_deployment::scoop_tools::Report),
     MiseRuntime(studio_deployment::mise_tools::Report),
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
+    TopgradeCapture(studio_deployment::topgrade::Profile),
     GitConfigCapture(studio_deployment::git_config::Profile),
     GitConfigRefresh(studio_deployment::git_config::Profile),
     GitConfigApply(studio_deployment::git_config::ApplyReport),
@@ -419,6 +427,7 @@ impl Studio {
                         | WorkerResult::RustInventory(_)
                         | WorkerResult::PythonToolsInventory(_)
                         | WorkerResult::MiseRuntimeInventory(_)
+                        | WorkerResult::TopgradeCapture(_)
                         | WorkerResult::GitConfigCapture(_)
                         | WorkerResult::GitConfigRefresh(_)
                         | WorkerResult::VSCodeSettingsCapture(_))
@@ -640,6 +649,18 @@ impl Studio {
                     ),
                     error: report.cancelled || report.failed > 0,
                 },
+                Ok(WorkerResult::TopgradeCapture(profile)) => {
+                    let count = profile.files.len();
+                    self.backup.topgrade.accept(profile);
+                    Notice {
+                        text: lf!(
+                            "已采集 {count} 个 Topgrade 文件；请审核后保存。",
+                            "Captured {count} Topgrade files; review before saving.",
+                            count = count
+                        ),
+                        error: false,
+                    }
+                }
                 Ok(WorkerResult::GitConfigCapture(profile)) => {
                     let count = profile.settings.len();
                     self.backup.git_config.profile = Some(profile.clone());
@@ -2191,7 +2212,7 @@ impl Studio {
                 match &mut dialog {
                     Dialog::File { operation, path, error } => {
                         ui.heading(operation.title());
-                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::LoadVscodeRequest | FileOperation::LoadVscodeSettingsProfile | FileOperation::NetworkLoad | FileOperation::LoadGitProfile) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
+                        ui.label(RichText::new(if matches!(operation, FileOperation::LoadTopgrade) { tx("输入现有 Topgrade 迁移包 JSON 的完整路径。载入后文件全部未选，不会执行或启用。", "Enter the full path of an existing Topgrade package JSON. Files start unselected; loading does not execute or activate anything.") } else if matches!(operation, FileOperation::ExtractTopgrade) { tx("输入一个尚不存在的新目录。仅还原所选文件，完成后仍需审核路径和工具依赖。", "Enter a new directory that does not exist. Only selected files are extracted; review paths and tool dependencies before activation.") } else if matches!(operation, FileOperation::LoadBackup) { tx("输入开发环境 JSON 备份完整路径。载入不会改变 Windows 方案选择。", "Enter the full environment backup JSON path. Loading does not change Windows selections.") } else if matches!(operation, FileOperation::LoadRustRequest | FileOperation::LoadCompatibilityRequest | FileOperation::LoadVscodeRequest | FileOperation::LoadVscodeSettingsProfile | FileOperation::NetworkLoad | FileOperation::LoadGitProfile | FileOperation::LoadTopgrade) { tx("输入现有 JSON 请求或网络档案的完整路径。载入后仍需审核确认，不会自动执行或启用。", "Enter an existing JSON request or network profile path. Loading still requires review and confirmation; it does not execute or activate automatically.") } else if matches!(operation, FileOperation::Load) { t("输入现有 JSON 档案的完整路径。载入会替换当前选择。") } else { t("输入新文件的完整路径。为保护现有文件，已存在的路径不会被覆盖。") }).color(palette().muted));
                         ui.add_space(12.0);
                         ui.add(egui::TextEdit::singleline(path).desired_width(f32::INFINITY).hint_text(t("完整文件路径，例如 /Users/you/Desktop/lt-sc.json")));
                         if let Some(error) = error.as_ref() { ui.colored_label(palette().danger, error); }
@@ -2409,8 +2430,19 @@ impl Studio {
                 path.display()
             ));
         }
+        if matches!(
+            operation,
+            FileOperation::SaveTopgrade
+                | FileOperation::LoadTopgrade
+                | FileOperation::ExtractTopgrade
+        ) {
+            return self.topgrade_file_operation(operation, &path);
+        }
         let catalog = self.catalog.as_ref().map_err(Clone::clone)?;
         match operation {
+            FileOperation::SaveTopgrade
+            | FileOperation::LoadTopgrade
+            | FileOperation::ExtractTopgrade => Err("Topgrade operation was not dispatched".into()),
             FileOperation::SaveCompatibilityRequest | FileOperation::LoadCompatibilityRequest => {
                 Err("Extended deployment request was not dispatched".into())
             }

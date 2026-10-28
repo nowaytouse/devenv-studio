@@ -5,6 +5,7 @@ mod migration;
 mod migration_locale;
 mod prefs;
 mod solutions;
+mod topgrade_cli;
 mod workspace_io;
 
 use anyhow::{Context, Result, bail};
@@ -17,7 +18,7 @@ List software/features/maintenance: devenv-studio tasks
 List reviewed AC power choices: devenv-studio power
 Inspect developer provider candidates: devenv-studio providers
 Back up native macOS or Windows developer inventory: devenv-studio backup --output /absolute/path/environment-backup.json
-Read delete-notification policy only: devenv-studio storage-status
+Back up Topgrade configs and explicit scripts: devenv-studio topgrade-backup --output /absolute/path/topgrade.json [--include /absolute/path/script]\nExtract reviewed files to a new directory: devenv-studio topgrade-extract --input /absolute/path/topgrade.json --output /absolute/new-directory --all\nRead delete-notification policy only: devenv-studio storage-status
 Add opt-in AC choices to a plan: devenv-studio plan --target win11-ltsc-2024 --power <choice-id>
 Build mixed plan: devenv-studio plan --target win11-ltsc-2024 --select explorer-extensions --tasks software-git-git
 Mixed workspace recipe: devenv-studio plan --target win11-ltsc-2024 --recipe rust
@@ -211,6 +212,7 @@ fn execute(args: &[String]) -> Result<()> {
                 );
             }
         }
+        "topgrade-backup" | "topgrade-extract" => topgrade_cli::execute(args)?,
         "backup" if args.len() == 3 && args[1] == "--output" => {
             let path = PathBuf::from(&args[2]);
             anyhow::ensure!(path.is_absolute(), "Backup output must be an absolute path");

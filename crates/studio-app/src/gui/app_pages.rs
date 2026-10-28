@@ -541,6 +541,14 @@ impl Studio {
         );
         settings_section(
             ui,
+            tx("Topgrade 环境迁移", "Topgrade environment migration"),
+            |ui| {
+                ui.label(tx("在环境配置页采集标准 Topgrade 主配置与分段配置；自定义脚本和依赖文件通过附件绝对路径逐项添加。保存为本地迁移包后，可在另一台设备载入、查看原文、选择文件并确认还原到全新目录。", "On the Environment page, capture standard Topgrade main and drop-in configs. Explicitly attach custom scripts and dependency files by absolute path. Save a local package, then load it on another device, review original text, select files and confirm extraction into a new directory."));
+                ui.label(tx("还原不会运行任何命令或覆盖当前配置；Unix 上不恢复脚本执行位。需要另行安装 Topgrade 和外部工具，并审核主目录路径、include 及自定义命令。Topgrade 的 --config 参数会跳过自动分段配置发现，不应只指向导出的主文件就视作完整恢复。", "Extraction never runs commands or overwrites current settings; Unix executable bits are not restored. Install Topgrade and external tools separately, and review home paths, includes and custom commands. Topgrade --config skips automatic drop-in discovery; pointing it at the extracted main file alone does not restore the complete setup."));
+            },
+        );
+        settings_section(
+            ui,
             tx("编辑器设置档案", "Editor settings profile"),
             |ui| {
                 ui.label(tx(

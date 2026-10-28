@@ -156,6 +156,8 @@ impl Studio {
                 });
         });
         ui.add_space(16.0);
+        self.topgrade_page(ui);
+        ui.add_space(16.0);
         self.git_config_page(ui);
         ui.add_space(16.0);
         surface_frame().show(ui, |ui| {
