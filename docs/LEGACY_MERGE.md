@@ -1,6 +1,6 @@
 # LTSC Workspace 后端整合与退役
 
-DevEnv Studio 是后续唯一维护入口。旧 [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) 保留为历史来源，不删除旧本地目录、旧源码、旧产物或未提交工作。整合从旧 main [`a8523abbe08147b4d5de8746f26d99d056057ab0`](https://github.com/nowaytouse/LTSC_Tools_Backup/tree/a8523abbe08147b4d5de8746f26d99d056057ab0) 开始；这不是通过替换项目名字来宣称功能已经合并。
+DevEnv Studio 是唯一维护入口。旧 [LTSC_Tools_Backup](https://github.com/nowaytouse/LTSC_Tools_Backup) 维持只读归档并保留来源历史。2026-10-28 所有者明确授权在合并后删除旧本地目录；原始源码、产物、未提交工作和本地检查点先完整私有归档，核验后移除旧开发入口。整合从旧 main [`a8523abbe08147b4d5de8746f26d99d056057ab0`](https://github.com/nowaytouse/LTSC_Tools_Backup/tree/a8523abbe08147b4d5de8746f26d99d056057ab0) 开始；这不是通过替换项目名字来宣称功能已经合并。
 
 ## 源码进入同一 Rust 工作区
 
@@ -24,7 +24,7 @@ DevEnv Studio 是后续唯一维护入口。旧 [LTSC_Tools_Backup](https://gith
 
 旧仓库已只读归档，DevEnv Studio 独立构建和运行。`studio-legacy` 不再保留旧 GitHub Raw / Contents API 清单地址、下载与回退逻辑，也不再读取 `LOCALAPPDATA/LTSCWorkspace/macos_inventory.json` 或 `inventory_source_url.txt`。这些入口在新应用中没有调用者；删除它们不会改变当前部署计划，也不会删除或覆盖磁盘上的旧缓存。映射所需的中性样例和 parity 规则随当前程序构建；现用开发环境备份和重部署仍通过 DevEnv Studio 自身的清单流程完成。
 
-历史来源链接、固定源码 revision、catalog ID、`ltsc-studio` 命令别名、旧应用存储位置及已管理文件标记继续保留，用于来源追溯和读取已有数据，不表示依赖旧仓库服务或恢复独立维护。旧本地源码、原始 EXE、未提交文件及私有退役备份也继续保留；完整退役不要求删除它们。
+历史来源链接、固定源码 revision、catalog ID、`ltsc-studio` 命令别名、旧应用存储位置及已管理文件标记继续保留，用于来源追溯和读取已有数据，不表示依赖旧仓库服务或恢复独立维护。旧本地源码、原始 EXE、未提交文件及本地检查点统一保存在仓库外的私有退役归档；旧工作目录已按所有者授权删除。私有归档不属于当前产品输入，也不上传到 GitHub。
 
 ## 扩展部署请求与单项选择
 
@@ -55,13 +55,21 @@ DevEnv Studio 是后续唯一维护入口。旧 [LTSC_Tools_Backup](https://gith
 | `Cargo-worktree.patch` | `0d9c3aab0381565d5f63c3e8840ab1b4844044574308ef08c06b6e7679f7b1fb` |
 | `LTSC_Tools_Backup-all.bundle` | `31e5940c037a83c94bf811ffe2cc8da74efdecff195bed02d9313e7d6f7ff5f3` |
 
-原文件保持原路径。它们是已有工作进度，不要求先提交到旧 main 才能归档；尤其旧 `windows-collections 0.100.0` 与 `windows 0.62.2` 的组合有已知兼容失败记录。不得为清理工作区丢弃修改、强推或把未验证组合标为最终可用。
+以上为 2026-10-23 的历史备份检查点。2026-10-28 删除旧工作目录前，原件及这些未提交工作再次进入完整私有归档，不要求先提交到旧 main。旧 `windows-collections 0.100.0` 与 `windows 0.62.2` 的组合有实际 Windows 编译失败；当前工作区修正为兼容的精确版本 `=0.3.2`，保留其余兼容补丁更新，审查见 [DEPENDENCY_REVIEW.md](DEPENDENCY_REVIEW.md)。不为清理工作区丢弃原件、强推或把失败组合标为可用。
+
+## 2026-10-28 完整本地退役
+
+- 旧 main 最终提交 `1493c1eaed1e1187f9b50ea0eaf43a411ae28148` 仅修改退役文档；在已适配七个后端的当前工作树上，以保留当前产品内容的历史合并补齐此提交，不覆盖新应用。全部旧 main 可达历史进入当前 ancestry；本地 agents/codex 检查点只留在私有归档。
+- 仓库外私人目录 `DevEnv Studio Retirement-20261028` 保存 `LTSC_Tools_Backup-complete.tar.gz` 和 `LTSC_Tools_Backup-all.bundle`。完整归档包括 `.git`、651 个普通文件、306 个目录、未提交 Cargo 原件、被忽略本地文件、EXE 与未迁入资源；逐项检查文件字节、目录/文件权限和修改时间。bundle 通过 `git bundle verify`，包含全部引用及完整历史。
+- 完整归档 SHA-256：`890c698103fea4fbaad3298a9bd61df331b2dacf6bd8dc04dead36cfe99f66d2`；bundle SHA-256：`9fb7cfbdcc57ad897eb5e180ae8dcd755764338849d7d0627c11beee969472d8`。私人目录为 0700，归档文件为 0600；这些归档及内容不进入仓库或产品资源。
+- 核验后删除原 `LTSC_Tools_Backup` 工作目录。GitHub 旧仓库继续只读归档，用于固定来源链接；维护、构建、配置与备份统一进入 DevEnv Studio，旧应用数据和用户恢复记录不在删除范围。
 
 ## 旧项目的退役顺序
 
 1. 保留并验证 Git bundle、未提交工作和摘要。
 2. 完成主项目实际整合、必要检查和精确提交推送；不提升当前 0.10.0 开发基线、不创建发行标签。
 3. 推送旧项目 README 重定向和 `ARCHIVED.md`，注明新仓库当前私有，公开用户可能没有访问权限。
-4. 最后设置旧 GitHub 仓库只读归档，保留旧地址、历史文件和产物；旧本地目录继续保留。
+4. 旧 GitHub 仓库保持只读归档，保留旧地址、历史文件和产物。
+5. 按 2026-10-28 所有者授权，先完整归档并逐文件核验旧本地目录，补齐最终旧 main 历史，再删除该目录；不删除应用偏好、恢复历史、当前 DevEnv Studio 或私有退役归档。
 
 旧根目录 `ltsc_setup_gui.exe` 来自 `3fd48acec93650f885bd235073d9bb3abb8fe486`，SHA-256 为 `b1f783bad5c0ba3f8ee8e54e309bd05558e1a61d4060be17e8514ed46186505c`，本次不替换。退役准备时旧仓库没有标签或 GitHub Release；归档不创建新发行。本文描述整合与保留契约，不替代实际提交、归档状态、Windows/LTSC 设备验收或签名产物证据。

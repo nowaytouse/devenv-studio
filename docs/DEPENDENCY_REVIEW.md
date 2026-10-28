@@ -1,5 +1,39 @@
 # Dependency review — 2026-10-23
 
+## Workspace retirement and dependency review — 2026-10-28
+
+Reviewed the complete pre-existing dependency delta against `467998c`. Twelve compatible patch updates are retained; no package is added or removed relative to that committed baseline, and all 433 locked package entries remain from their existing sources. Independently hashing the 24 old/new cached published `.crate` archives matched their corresponding lockfile checksums.
+
+| Package | Previous | Reviewed | Declared Rust minimum | License |
+| --- | --- | --- | --- | --- |
+| accesskit | 0.25.1 | 0.25.2 | 1.87 | MIT OR Apache-2.0 |
+| accesskit_atspi_common | 0.21.0 | 0.21.1 | 1.87 | MIT OR Apache-2.0 |
+| accesskit_consumer | 0.39.1 | 0.39.2 | 1.87 | MIT OR Apache-2.0 |
+| accesskit_ios | 0.2.1 | 0.2.2 | 1.87 | MIT OR Apache-2.0 |
+| accesskit_macos | 0.27.1 | 0.27.2 | 1.87 | MIT OR Apache-2.0 |
+| accesskit_unix | 0.24.0 | 0.24.1 | 1.87 | MIT OR Apache-2.0 |
+| accesskit_windows | 0.35.1 | 0.35.2 | 1.87 | MIT OR Apache-2.0 |
+| accesskit_winit | 0.34.1 | 0.34.2 | 1.87 | Apache-2.0 |
+| ordered-float | 5.5.0 | 5.5.1 | 1.90 | MIT |
+| rustix | 1.1.5 | 1.1.6 | 1.65 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| unicode-width | 0.2.2 | 0.2.3 | 1.66 | MIT OR Apache-2.0 |
+| wl-clipboard-rs | 0.9.4 | 0.9.5 | not declared | MIT OR Apache-2.0 |
+
+The dirty `windows-collections 0.100.0` update was incompatible with the existing [`windows 0.62.2` projection](https://docs.rs/crate/windows/0.62.2), which requires collections 0.3.2 and core 0.62.2. Reproduced six E0277 errors in `winget_bootstrap.rs` on `x86_64-pc-windows-gnu`: its `Uri` and `IIterable<Uri>` came from different `windows-core` families. The direct dependency is now pinned to `=0.3.2`, with a comment requiring coordinated future upgrades. Cargo removed the five unused 0.100.0 packages while preserving every compatible patch update above. This corrects the reviewed update; a larger Windows API migration is outside this checkpoint.
+
+The current published manifests declare no Rust minimum above the workspace's 1.95 requirement; the compiler used for validation is Rust 1.99.1, so this is not a direct Rust 1.95 build. License identifiers remain permissive; a complete binary distribution-notice audit was not performed.
+
+`cargo audit --json` fetched RustSec database commit `40f5be6fb12ed93fc591bf4ab23b7d793b3f2239` (updated 2026-10-28), reporting zero matching vulnerability advisories. A second audit after the correction examined 433 packages and again found none, with the same three pre-existing unmaintained notices: `zbus_names` (RUSTSEC-2026-0371), `zvariant` (RUSTSEC-2026-0370), and `zvariant_derive` (RUSTSEC-2026-0372). They enter through the Linux accessibility/D-Bus stack; migrating that stack to zbus 6 is an upstream integration follow-up, not part of these patch updates.
+
+Validation after the correction:
+
+- `cargo clippy -p studio-legacy --all-targets --target x86_64-pc-windows-gnu --locked -- -D warnings`: passed.
+- `cargo check --workspace --all-targets --target x86_64-pc-windows-gnu --locked`: passed with 26 pre-existing platform-specific unused import/dead-code/mutability warnings.
+- Full workspace Windows strict Clippy: failed on those warnings, including the existing Topgrade directory builder; do not present the workspace as warning-free on Windows.
+- `git diff --check`: passed. Native workspace checks and any subsequent warning repairs are recorded separately in VALIDATION.md.
+
+No Windows program was linked or run, no LTSC device was tested, and no CI run was inspected for this dependency review. The older review sections below are historical evidence for their stated snapshots.
+
 ## Current compatible-version and security check — 2026-10-26
 
 `cargo outdated --workspace --depth 3 --aggressive` reported only Windows-rs support crates whose newest versions move to the 0.100.0 family or are removed; no compatible update was offered. The app uses the coordinated `windows 0.62.2` family, while current `eframe 0.37.0` and `jsonc-parser 0.34.0` are already the latest published versions at this check. No dependency or lockfile changes are needed for the current UI and editor-target work.
