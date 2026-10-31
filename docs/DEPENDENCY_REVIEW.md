@@ -1,5 +1,31 @@
 # Dependency review — 2026-10-23
 
+## Topgrade environment refresh and workspace review — 2026-10-31
+
+Reviewed the complete existing dependency delta against `2ada60b`. The dirty manifest had changed the exact `windows-collections` pin from `=0.3.2` to `=0.100.0`, while `windows` remained 0.62.2. A fresh Windows GNU check reproduced six E0277 errors in `winget_bootstrap.rs`: the two versions use incompatible `windows-core` projection types. The original dirty files are preserved privately outside the repository. Restoring the compatible exact pin removed the five unused 0.100.0 packages; the manifest now matches the committed baseline.
+
+The final lockfile retains all ten compatible existing-package updates and adds one required transitive dependency, `utf_types 1.0.0`, through `utf8_iter 1.1.0`. It contains 434 package entries, versus 433 in the baseline; package sources are unchanged.
+
+| Package | Previous | Reviewed | Reviewed Rust minimum | License |
+| --- | --- | --- | --- | --- |
+| js-sys | 0.3.106 | 0.3.107 | 1.81 | MIT OR Apache-2.0 |
+| log | 0.4.34 | 0.4.35 | 1.71.0 | MIT OR Apache-2.0 |
+| utf8_iter | 1.0.4 | 1.1.0 | 1.83 | Apache-2.0 OR MIT |
+| utf_types | not present | 1.0.0 | 1.83 | Apache-2.0 OR MIT |
+| wasm-bindgen | 0.2.129 | 0.2.130 | 1.81 | MIT OR Apache-2.0 |
+| wasm-bindgen-futures | 0.4.79 | 0.4.80 | 1.81 | MIT OR Apache-2.0 |
+| wasm-bindgen-macro | 0.2.129 | 0.2.130 | 1.81 | MIT OR Apache-2.0 |
+| wasm-bindgen-macro-support | 0.2.129 | 0.2.130 | 1.81 | MIT OR Apache-2.0 |
+| wasm-bindgen-shared | 0.2.129 | 0.2.130 | 1.81 | MIT OR Apache-2.0 |
+| web-sys | 0.3.106 | 0.3.107 | 1.81 | MIT OR Apache-2.0 |
+| zcheapstr | 1.1.0 | 1.2.0 | 1.87 | MIT |
+
+Independent SHA-256 checks of all 21 old/new cached published `.crate` archives matched their corresponding lockfile checksums. Their published manifests introduce no new license family and no declared Rust minimum above the workspace's 1.95 requirement. `utf8_iter 1.0.4` had no declared minimum; its reviewed replacement and the new `utf_types` both declare 1.83. The Wasm support crates move as a coordinated family; this static review and the desktop checks do not prove WebAssembly runtime behavior. The actual local compiler is Rust 1.99.1, not a direct test of the 1.95 minimum.
+
+`cargo audit --json` examined the corrected 434-package lockfile using RustSec database commit `2295466c4e9df26647fd67d8fa1c705ac2fc7f81`, updated 2026-10-30. No matching vulnerability advisory was found. The three existing Linux D-Bus unmaintained notices remain: zbus_names 4.3.5 (RUSTSEC-2026-0371), zvariant 5.15.1 (RUSTSEC-2026-0370), and zvariant_derive 5.15.1 (RUSTSEC-2026-0372). These notices and the previously documented upstream XML-complexity follow-up are not resolved by this update.
+
+After correction, `cargo clippy -p studio-legacy --all-targets --target x86_64-pc-windows-gnu --locked -- -D warnings` passed. Final workspace checks are recorded separately in VALIDATION.md. This review did not execute Windows binaries, inspect CI, test a Windows/LTSC device, or perform a complete binary distribution-notice audit.
+
 ## Workspace retirement and dependency review — 2026-10-28
 
 Reviewed the complete pre-existing dependency delta against `467998c`. Twelve compatible patch updates are retained; no package is added or removed relative to that committed baseline, and all 433 locked package entries remain from their existing sources. Independently hashing the 24 old/new cached published `.crate` archives matched their corresponding lockfile checksums.

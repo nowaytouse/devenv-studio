@@ -1,5 +1,14 @@
 # 验证记录
 
+## Unreleased — Topgrade fork 环境刷新与工作区审查，2026-10-31
+
+- 本机活动 Topgrade 已来自 nowaytouse/topgrade fork 的固定提交 `0a2969bf976ce124b813a7064d17119a68cc25ac`，版本 17.14.1。入口链接、两份 Cargo 安装记录和干净 checkout 的 revision 一致，实际二进制指纹写入私有来源记录；未把安装收据视作可重复构建证明。headsync 现追踪 fork main，本轮不构建、升级或切换 Topgrade。
+- 新建私人快照，保留 10 月 28 日旧快照。34 文件文本包共 347755 字节，含 5 配置、26 脚本、项目依赖配置及两份安装记录；全部在新的 review 目录解包，独立逐项比较源文件、包内原文和解包字节相同。目录 0700、文件 0600，未恢复执行位。另存 210 文件 npm 安全资源 tar，在内存逐项核对完整成员集合、源文件字节、清单 SHA-256 和权限；不为资源包放宽应用 128 文件、单文件 256 KiB、总文本 512 KiB 边界。
+- fork 固定 profile 的 241 个安装目标均为普通非链接文件，SHA-256 和权限全部匹配。文本包 SHA-256 为 `30de68914239e38ed20ac53e031c5e36fcb21022704adbb6d7ccafee366fdf11`，资源附件为 `34e4b2d53b5ab8a50719aaf866d00b78fb9d02cbad6dd5d49bb26266087c6df0`。个人快照、安装收据、载荷和指纹只留在本机私人目录，不进入仓库或应用资源。
+- 审查前先私有保存工作区两份原始 Cargo 文件和差异，再复现不兼容投影更新的 6 个 Windows E0277 错误。保留兼容的 windows 0.62.2 / collections =0.3.2，纳入 10 项已有兼容升级及新传递依赖 utf_types 1.0.0。434 项锁定依赖的 RustSec 检查未匹配漏洞公告，仍有 3 条既有未维护提示；完整摘要、版本和 MSRV 记录见 [DEPENDENCY_REVIEW.md](DEPENDENCY_REVIEW.md)。
+- 本机 fork 更新器支持严格的仓库级 `.topgrade-dependencies.json`；本仓库加入 `allow_incompatible:false`，避免默认 edge 更新对精确约束执行 incompatible/pinned allow，继续使用声明范围内的 Cargo 更新。已核对实际解析契约与新文件内容，未运行真实依赖升级，也未修改全局更新器或其他项目。
+- 最终工作区 351 项测试通过、2 项按设计忽略；macOS 全工作区全目标严格 Clippy、锁定构建、格式与 diff 检查通过；Windows GNU 全工作区全目标严格 Clippy 通过。版本保持 0.10.0 / Unreleased；未执行真实更新、配置激活、重部署、Windows 测试二进制或实机验收、CI 查询、打包、签名或公证。
+
 ## Unreleased — Windows CI 严格检查与跨平台测试修复，2026-10-29
 
 - GitHub run `40696647528` 对应提交 `1eb71c92c8d081cabca86abf99f1150b10b08be5`。API 核对三平台任务均没有步骤和日志，失败注释均为付款／支出限制导致未启动；macOS 另有 ARM runner 容量排队的 notice。Actions 已启用、仓库没有自托管 runner；这些记录不能作为代码编译或测试失败证据。所有者确认限制尚未解除，要求先完成代码修复，因此不手动反复重跑。

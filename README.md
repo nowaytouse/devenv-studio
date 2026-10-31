@@ -36,6 +36,8 @@ DevEnv Studio 现在是唯一维护入口。`LTSC_Tools_Backup` 的配置、映�
 
 命令行支持 `devenv-studio topgrade-backup --output /absolute/topgrade.json --include /absolute/script`（`--include` 可重复），以及 `devenv-studio topgrade-extract --input /absolute/topgrade.json --output /absolute/new-directory --all`；也可用重复的 `--file` 精选文件。新目录和新档案均拒绝覆盖。目标设备的 Topgrade、工具安装、主目录路径和自定义命令须另行审核，详见[重部署范围](docs/REDEPLOYMENT.md#topgrade-配置与脚本迁移包)。
 
+迁移包也保留 fork 的自定义配置原文；重部署须核对来源仓库、固定提交和安装记录，版本号相同不代表实现兼容。本设备现用 Topgrade fork 的来源与资源附件边界见[重部署说明](docs/REDEPLOYMENT.md#fork-环境与安装来源)。本仓库已配置兼容依赖滚动策略，保留 Windows 绑定的配套版本约束。
+
 ## 开发环境重部署与渠道
 
 环境配置页新增 Homebrew 的补齐、滚动更新和 HEAD 三种策略。HEAD 使用原生安装/更新命令并独立读取已安装渠道，不能只靠普通 Bundle 存在检查；稳定版链接冲突会停止。所有策略先保存基线与请求，不强制切换、清理或卸载。滚动更新使用当前本地配方元数据，不保证网络此刻最新版本。

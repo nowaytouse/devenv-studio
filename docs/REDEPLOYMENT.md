@@ -74,6 +74,14 @@ mise 清单读取使用 mise --no-config ls --installed --json --backend core，
 - 官方配置实现确认：显式 `--config` 会绕过自动 `topgrade.d` 发现，因此本应用不生成只指向主配置就宣称完整启用的运行命令。XDG_CONFIG_HOME 或 Windows APPDATA 等其他配置根目录若位于当前主目录内，可将配置逐文件作为明确附件采集；本轮自动发现仅覆盖上述主目录布局。
 - 参考 [Topgrade 固定版本配置实现](https://github.com/topgrade-rs/topgrade/blob/352e81e9abb7602b4b8aa68f514fac8dc5b453b4/src/config.rs)，仅独立实现数据归档契约，不复制 GPL 引擎或分发其二进制。
 
+### fork 环境与安装来源
+
+2026-10-31 本设备已切换到所有者 [nowaytouse/topgrade fork](https://github.com/nowaytouse/topgrade/tree/0a2969bf976ce124b813a7064d17119a68cc25ac)，固定 revision `0a2969bf976ce124b813a7064d17119a68cc25ac`，版本仍为 17.14.1。当前二进制、Cargo 安装来源记录和本地源码 revision 已一致核对；二进制指纹、个人配置、脚本原文及归档只保存在本地私有快照，不成为应用默认配置。
+
+fork 的 [macOS profile](https://github.com/nowaytouse/topgrade/blob/0a2969bf976ce124b813a7064d17119a68cc25ac/profiles/macos/README.md) 包含 `[helm].repository_updater`、`[github_cli].skills_updater` 等专用配置和相应验证脚本。迁移器原样保存这些文本；目标设备必须核对 fork 来源、固定提交和先决工具，仅凭版本号不能判断兼容。34 文件文本包与 210 文件资源附件覆盖固定 profile 的 241 项及三个本地配置/安装记录，已逐项核验；资源附件超过文本包边界，因此单独私有保存。归档并不代表二进制或全部工具链已重部署。
+
+本仓库使用 fork 已支持的 `.topgrade-dependencies.json`（严格内容 `{"allow_incompatible": false}`）参与兼容依赖滚动更新。现用更新器会对本仓库执行 `cargo update`，保留清单约束及 Windows 绑定的配套精确版本；跨大版本升级仍需单独审查并协调 API。这是本仓库策略，不修改其他项目或全局更新器。
+
 ## 原生清单输出与成熟项目边界
 
 - `rust-toolchain.toml`：输出所选 Rust 渠道及 minimal profile，由 rustup 按其原生规则读取。应用不直接覆盖现有项目文件。

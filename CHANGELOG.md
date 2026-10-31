@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 更新本机 Topgrade fork 环境记录：固定来源 nowaytouse/topgrade 与实际安装 revision，重新采集 34 文件文本包及 210 文件 npm 安全资源附件，个人原文和指纹归档保持本地私有。记录 fork 专用配置、安装收据、前置工具与恢复边界。
+- 审查并保留 10 项兼容依赖更新及其新增 utf_types 依赖；修正不兼容的 Windows 投影更新，并使用现有 Topgrade 仓库策略保留清单约束，避免滚动更新再次自动改写固定版本。版本保持 0.10.0 / Unreleased。
+
 - 修复 Windows 严格检查中的条件编译警告，按实际调用平台编译 macOS 工具适配器、辅助函数和超时常量，保留跨平台模拟测试；Topgrade 目录权限仅在 Unix 分支设置。修正开发工具模拟测试中的 Unix 专用绝对路径，保持 Windows 的路径验证与测试断言。
 - 补充 CI 计费门禁与 macOS ARM 排队通知的排查说明；保留三平台及原生 ARM 检查，不放宽严格检查或跳过测试。版本仍为 0.10.0 / Unreleased。
 
