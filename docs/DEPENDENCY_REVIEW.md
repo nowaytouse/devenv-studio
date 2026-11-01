@@ -1,5 +1,13 @@
 # Dependency review — 2026-10-23
 
+## GUI onboarding checkpoint: webbrowser security patch — 2026-11-01
+
+Reviewed the pre-existing `webbrowser 1.2.5 → 1.2.6` lockfile update against `b364647`. Only the package version and checksum change. Both cached published archives match their lockfile and cached sparse-index checksums; the live [crates.io 1.2.6 record](https://crates.io/api/v1/crates/webbrowser/1.2.6) also matches checksum `fe8d20d0214027baf11b8b0cc307c1da7657d8f4db9aa956f7de27a6fb1acbd5` and is not yanked. The old archive checksum is `d2c8ddfbbf66e501434657400268cefe51b95140a0266236415cda7627732df7`. Both versions retain MIT OR Apache-2.0, Rust 1.85 minimum, and identical declared dependencies/features. No static compatibility blocker was found.
+
+The [upstream 1.2.6 security release](https://github.com/amodm/webbrowser-rs/releases/tag/v1.2.6), source revision `29065db6d08e3969238018d222876007f7c835a4`, fixes [GHSA-j2mc-vg6q-w75p](https://github.com/amodm/webbrowser-rs/security/advisories/GHSA-j2mc-vg6q-w75p). The advisory lists versions through 1.2.5 as affected and 1.2.6 as patched: attacker-influenced HTTP(S) URLs can be reinterpreted by a shell on the WSL browser-opening path. The published source replaces `cmd.exe /c start` with direct `rundll32.exe` invocation, uses a quoted/base64-encoded PowerShell fallback, and adds argument-preservation regression cases. Upstream states that other platforms are unaffected; this review does not establish application exploitability or prove WSL runtime behavior.
+
+This was a narrow package-integrity, metadata and source review, not a full dependency vulnerability audit. No Cargo checks, CI queries, browser launch or native/WSL execution were performed here; final application checks are recorded separately in VALIDATION.md.
+
 ## Topgrade environment refresh and workspace review — 2026-10-31
 
 Reviewed the complete existing dependency delta against `2ada60b`. The dirty manifest had changed the exact `windows-collections` pin from `=0.3.2` to `=0.100.0`, while `windows` remained 0.62.2. A fresh Windows GNU check reproduced six E0277 errors in `winget_bootstrap.rs`: the two versions use incompatible `windows-core` projection types. The original dirty files are preserved privately outside the repository. Restoring the compatible exact pin removed the five unused 0.100.0 packages; the manifest now matches the committed baseline.

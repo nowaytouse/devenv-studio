@@ -82,6 +82,8 @@ fork 的 [macOS profile](https://github.com/nowaytouse/topgrade/blob/0a2969bf976
 
 本仓库使用 fork 已支持的 `.topgrade-dependencies.json`（严格内容 `{"allow_incompatible": false}`）参与兼容依赖滚动更新。现用更新器会对本仓库执行 `cargo update`，保留清单约束及 Windows 绑定的配套精确版本；跨大版本升级仍需单独审查并协调 API。这是本仓库策略，不修改其他项目或全局更新器。
 
+2026-11-01 再次只读核对：活动 fork、完整 revision、二进制指纹和两份安装记录仍与上述来源一致；34 份文本、241 项已安装 profile 及 210 份资源载荷均仍匹配原私有快照，因此保留原包并单独增加复核记录。资源 tar 另含 210 份 macOS AppleDouble 元数据侧文件，单独校验，不计入 profile 载荷数量。Topgrade 源码工作区另有未提交的锁文件改动，本轮未改动或提交该仓库，不能把源码工作区状态当作已安装二进制的构建证明。
+
 ## 原生清单输出与成熟项目边界
 
 - `rust-toolchain.toml`：输出所选 Rust 渠道及 minimal profile，由 rustup 按其原生规则读取。应用不直接覆盖现有项目文件。

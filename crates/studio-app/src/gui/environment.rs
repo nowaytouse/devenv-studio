@@ -79,16 +79,23 @@ impl Studio {
     }
 
     fn select_mac_starter_tools(&mut self) {
+        if self.worker.is_some() {
+            return;
+        }
         match native::brew_candidates(None) {
             Ok(starter) => {
                 self.backup
                     .brew_selected
                     .extend(starter.iter().map(|entry| entry.id()));
+                self.backup.brew_policy = native::BrewPolicy::Missing;
+                self.backup.brew_query.clear();
                 self.backup.brew_confirm = false;
+                self.backup.bundle_report = None;
+                self.backup.brew_review_requested = true;
                 self.notice = Some(Notice {
                     text: lf!(
-                        "已预选 {} 项 Mac 基础工具；尚未执行。",
-                        "Selected {} Mac starter tools; nothing has run yet.",
+                        "已加入 {} 项基础工具，使用补齐模式；尚未执行。请在下方核对。",
+                        "Added {} starter tools in missing-only mode; nothing has run yet. Review them below.",
                         starter.len()
                     ),
                     error: false,
@@ -106,126 +113,16 @@ impl Studio {
         }
     }
 
-    pub(super) fn environment_page(&mut self, ui: &mut egui::Ui) {
-        ui.heading(tx("开发环境配置", "Developer environment configuration"));
-        ui.label(
-            RichText::new(tx(
-                "保留熟悉的工具，在下一台机器继续工作。",
-                "Keep your tools ready for your next machine.",
-            ))
-            .color(palette().muted),
-        );
-        ui.add_space(14.0);
+    fn homebrew_page(&mut self, ui: &mut egui::Ui) {
+        let response = ui.add_enabled_ui(self.worker.is_none(), |ui| {
         surface_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.heading(tx("快速开始", "Quick start"));
-            ui.label(tx(
-                "先备份当前环境；macOS 可预选基础工具，Windows 可按用途挑选常见方案。两种方式都只准备待审清单，不会立即执行。",
-                "Back up this environment; on macOS preselect starter tools, or choose a Windows recipe by purpose. Both only prepare a reviewable selection; nothing runs yet.",
-            ));
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                if primary(ui, tx("备份 / 载入环境", "Back up / load environment"), true).clicked() {
-                    self.navigate_to(Page::Backup);
-                }
-                if cfg!(target_os = "macos")
-                    && ui
-                        .button(tx("选择 Mac 基础工具", "Select Mac starter tools"))
-                        .clicked()
-                {
-                    self.select_mac_starter_tools();
-                }
-                if ui.button(tx("选择 Windows 常见方案", "Choose a Windows recipe")).clicked() {
-                    self.navigate_to(Page::Recipes);
-                }
-            });
-            ui.add_space(8.0);
-            self.network_summary(ui);
-            egui::CollapsingHeader::new(tx("Windows 清单与导出", "Windows inventory and export"))
-                .show(ui, |ui| {
-                    ui.label(tx("Windows 使用 WinGet、Cargo、uv、Pip、NPM、VS Code 与 Scoop。Scoop 清单只保留官方 bucket 的普通用户级包；WinGet 导出只含所选软件身份，其他提供程序仍保存在应用档案中。", "Windows uses reviewed WinGet, Cargo, uv, Pip, NPM, VS Code and Scoop. Scoop inventories retain user packages from official buckets only. Select and review WinGet tasks in the Windows workspace; other providers remain in the app profile."));
-                    ui.horizontal_wrapped(|ui| {
-                        if ui.button(tx("导出所选 WinGet 清单…", "Export selected WinGet inventory…")).clicked() {
-                            self.open_file(FileOperation::ExportWinget);
-                        }
-                    });
-                    egui::CollapsingHeader::new(tx("Scoop 软件包", "Scoop packages"))
-                        .id_salt("scoop-package-panel")
-                        .default_open(false)
-                        .show(ui, |ui| self.scoop_tools_page(ui));
-                });
-        });
-        ui.add_space(16.0);
-        self.topgrade_page(ui);
-        ui.add_space(16.0);
-        self.git_config_page(ui);
-        ui.add_space(16.0);
-        surface_frame().show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.heading(tx("Rust 工具链", "Rust toolchains"));
-            ui.label(RichText::new("macOS · Windows · rustup").color(palette().muted));
-            ui.add_space(8.0);
-            self.rust_toolchains_page(ui);
-        });
-        ui.add_space(16.0);
-        surface_frame().show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.heading(tx("Python 命令行工具", "Python command tools"));
-            ui.label(RichText::new("macOS · Windows · uv").color(palette().muted));
-            ui.add_space(8.0);
-            self.python_tools_page(ui);
-        });
-        ui.add_space(12.0);
-        surface_frame().show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.heading(tx("Cargo 命令行工具", "Cargo command-line tools"));
-            ui.add_space(6.0);
-            self.cargo_tools_page(ui);
-        });
-        ui.add_space(12.0);
-        surface_frame().show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.heading(tx(
-                "从 Mac 清单恢复开发工具",
-                "Restore developer tools from a Mac inventory",
-            ));
-            ui.label(
-                RichText::new(tx(
-                    "仅对已保存且审核过的 macOS 清单开放。",
-                    "Available only for a saved and reviewed macOS inventory.",
-                ))
-                .size(12.0)
-                .color(palette().muted),
-            );
-            egui::CollapsingHeader::new(tx("NPM 全局包", "npm global packages"))
-                .id_salt("npm-global-panel")
-                .default_open(false)
-                .show(ui, |ui| self.npm_tools_page(ui));
-            egui::CollapsingHeader::new(tx("编辑器设置与扩展", "Editor settings and extensions"))
-                .id_salt("vscode-extension-panel")
-                .default_open(false)
-                .show(ui, |ui| self.vscode_tools_page(ui));
-        });
-        ui.add_space(8.0);
-        surface_frame().show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            egui::CollapsingHeader::new(tx(
-                "其他开发运行时 · mise",
-                "Additional developer runtimes · mise",
-            ))
-            .id_salt("mise-runtime-panel")
-            .default_open(false)
-            .show(ui, |ui| self.mise_tools_page(ui));
-        });
-        ui.add_space(16.0);
-        surface_frame().show(ui, |ui| {
-            ui.set_width(ui.available_width());
-        ui.heading(tx("Homebrew 工具", "Homebrew tools"));
+        ui.heading(tx("核对要配置的工具", "Review the tools to configure"));
         ui.label(RichText::new("macOS · Bundle · HEAD").color(palette().muted));
         ui.add_space(8.0);
-        ui.label(tx("从基础工具或 Mac 备份中选择 formula / cask，再审核安装清单。", "Choose formulae / casks from starter tools or a Mac backup, then review the install inventory."));
+        ui.label(tx("选择需要的工具，核对清单后再配置。", "Choose the tools you need, then review the list before configuring."));
         let old_policy = self.backup.brew_policy;
-        egui::ComboBox::from_label(tx("重部署策略", "Redeployment policy"))
+        egui::ComboBox::from_label(tx("安装方式", "Installation policy"))
             .selected_text(brew_policy_label(self.backup.brew_policy))
             .show_ui(ui, |ui| {
                 for policy in [
@@ -242,6 +139,7 @@ impl Studio {
             });
         if old_policy != self.backup.brew_policy {
             self.backup.brew_confirm = false;
+            self.backup.bundle_report = None;
         }
         ui.add_space(8.0);
         let candidates = match native::brew_candidates(self.backup.snapshot.as_ref()) {
@@ -253,7 +151,7 @@ impl Studio {
         };
         ui.horizontal_wrapped(|ui| {
             if ui
-                .button(tx("选择基础开发工具", "Select starter tools"))
+                .button(tx("加入基础工具 · 补齐模式", "Add starter tools · missing-only"))
                 .clicked()
             {
                 self.select_mac_starter_tools();
@@ -283,7 +181,9 @@ impl Studio {
             .collect();
         egui::ScrollArea::vertical()
             .id_salt("mac-config-tools")
+            .min_scrolled_height(150.0)
             .max_height(220.0)
+            .auto_shrink([false, false])
             .show_rows(
                 ui,
                 ui.spacing().interact_size.y,
@@ -374,6 +274,7 @@ impl Studio {
             "配置可能下载软件、运行安装器并改变依赖；没有自动回滚。",
             "Configuration may download software, run installers and change dependencies; automatic rollback is unavailable.",
         )).color(palette().danger));
+        self.network_summary(ui);
         ui.checkbox(&mut self.backup.brew_confirm, tx("我已审核所选工具，并了解依赖变更与无自动回滚的范围", "I reviewed the selected tools and understand dependency changes and the lack of automatic rollback"));
         if primary(
             ui,
@@ -407,6 +308,165 @@ impl Studio {
             ui.label(&report.detail);
         }
         });
+        }).response;
+        if self.backup.brew_review_requested {
+            self.backup.brew_review_requested = false;
+            response.scroll_to_me(Some(egui::Align::Min));
+        }
+    }
+
+    pub(super) fn environment_page(&mut self, ui: &mut egui::Ui) {
+        ui.heading(tx("开发环境配置", "Developer environment configuration"));
+        ui.label(
+            RichText::new(tx(
+                "保留熟悉的工具，在下一台机器继续工作。",
+                "Keep your tools ready for your next machine.",
+            ))
+            .color(palette().muted),
+        );
+        ui.add_space(14.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("从这里开始", "Start here"));
+            ui.label(RichText::new(tx(
+                "先准备一份可检查的方案，再决定何时安装。",
+                "Prepare a plan you can review, then choose when to install.",
+            )).color(palette().muted));
+            ui.add_space(10.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.strong(tx("1  保存环境备份", "1  Save an environment backup"));
+                if ui.button(tx("备份或载入清单…", "Back up or load an inventory…")).clicked() {
+                    self.navigate_to(Page::Backup);
+                }
+            });
+            if cfg!(target_os = "macos") {
+                let saved_mac = self.backup.path.is_some()
+                    && self.backup.snapshot.as_ref().is_some_and(|s| s.platform == "macos");
+                ui.label(RichText::new(if saved_mac {
+                    tx("Mac 备份已保存；执行前还会重新核验文件。", "Mac backup saved; its file will be verified again before installation.")
+                } else {
+                    tx("安装前需要已保存的 Mac 清单。先留存现有工具，方便以后迁移。", "Save a Mac inventory before installation to keep a record of your current tools.")
+                }).color(palette().muted));
+            } else {
+                ui.label(RichText::new(tx(
+                    "建议先保存现有工具清单；也可以载入其他电脑的备份。",
+                    "Keep a record of your current tools, or load a backup from another computer.",
+                )).color(palette().muted));
+            }
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.strong(tx("2  准备工具方案", "2  Prepare your tools"));
+                if cfg!(target_os = "macos") {
+                    if primary(ui, tx("一键准备基础工具", "Prepare starter tools"), self.worker.is_none()).clicked() {
+                        self.select_mac_starter_tools();
+                    }
+                } else if primary(ui, tx("按用途选择 Windows 方案", "Choose a Windows recipe"), true).clicked() {
+                    self.navigate_to(Page::Recipes);
+                }
+            });
+            ui.label(RichText::new(if cfg!(target_os = "macos") {
+                tx("加入常用开发工具，并选用补齐模式。保留已有选择，不会开始安装。", "Add common developer tools in missing-only mode. Existing choices stay selected; installation does not start.")
+            } else {
+                tx("选择日常、Rust、Python 或 Web 等用途，再加入待审方案。", "Choose everyday, Rust, Python or Web tools, then add them to your plan.")
+            }).color(palette().muted));
+            ui.add_space(8.0);
+            ui.strong(tx("3  核对后再配置", "3  Review before installing"));
+            ui.label(tx(
+                if cfg!(target_os = "macos") { "在下方检查工具和安装方式，确认后再开始。需要 Homebrew；安装可能改变依赖。" } else { "在变更方案中核对所选项目，再分别确认执行。当前页面不会开始配置。" },
+                if cfg!(target_os = "macos") { "Review the tools and install policy below, then confirm. Homebrew is required; dependencies may change." } else { "Review selected items in the change plan, then confirm each operation. Nothing starts on this page." },
+            ));
+            if cfg!(target_os = "macos")
+                && ui.small_button(tx("查看 Windows 方案预览", "Preview Windows recipes")).clicked()
+            {
+                self.navigate_to(Page::Recipes);
+            }
+            ui.add_space(10.0);
+            egui::CollapsingHeader::new(tx("Windows 清单与导出", "Windows inventory and export"))
+                .show(ui, |ui| {
+                    ui.label(tx("Windows 使用 WinGet、Cargo、uv、Pip、NPM、VS Code 与 Scoop。Scoop 清单只保留官方 bucket 的普通用户级包；WinGet 导出只含所选软件身份，其他提供程序仍保存在应用档案中。", "Windows uses reviewed WinGet, Cargo, uv, Pip, NPM, VS Code and Scoop. Scoop inventories retain user packages from official buckets only. Select and review WinGet tasks in the Windows workspace; other providers remain in the app profile."));
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button(tx("导出所选 WinGet 清单…", "Export selected WinGet inventory…")).clicked() {
+                            self.open_file(FileOperation::ExportWinget);
+                        }
+                    });
+                    egui::CollapsingHeader::new(tx("Scoop 软件包", "Scoop packages"))
+                        .id_salt("scoop-package-panel")
+                        .default_open(false)
+                        .show(ui, |ui| self.scoop_tools_page(ui));
+                });
+        });
+        if cfg!(target_os = "macos") {
+            ui.add_space(16.0);
+            self.homebrew_page(ui);
+        }
+        ui.add_space(16.0);
+        self.topgrade_page(ui);
+        ui.add_space(16.0);
+        self.git_config_page(ui);
+        ui.add_space(16.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("Rust 工具链", "Rust toolchains"));
+            ui.label(RichText::new("macOS · Windows · rustup").color(palette().muted));
+            ui.add_space(8.0);
+            self.rust_toolchains_page(ui);
+        });
+        ui.add_space(16.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("Python 命令行工具", "Python command tools"));
+            ui.label(RichText::new("macOS · Windows · uv").color(palette().muted));
+            ui.add_space(8.0);
+            self.python_tools_page(ui);
+        });
+        ui.add_space(12.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("Cargo 命令行工具", "Cargo command-line tools"));
+            ui.add_space(6.0);
+            self.cargo_tools_page(ui);
+        });
+        ui.add_space(12.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx(
+                "从 Mac 清单恢复开发工具",
+                "Restore developer tools from a Mac inventory",
+            ));
+            ui.label(
+                RichText::new(tx(
+                    "仅对已保存且审核过的 macOS 清单开放。",
+                    "Available only for a saved and reviewed macOS inventory.",
+                ))
+                .size(12.0)
+                .color(palette().muted),
+            );
+            egui::CollapsingHeader::new(tx("NPM 全局包", "npm global packages"))
+                .id_salt("npm-global-panel")
+                .default_open(false)
+                .show(ui, |ui| self.npm_tools_page(ui));
+            egui::CollapsingHeader::new(tx("编辑器设置与扩展", "Editor settings and extensions"))
+                .id_salt("vscode-extension-panel")
+                .default_open(false)
+                .show(ui, |ui| self.vscode_tools_page(ui));
+        });
+        ui.add_space(8.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            egui::CollapsingHeader::new(tx(
+                "其他开发运行时 · mise",
+                "Additional developer runtimes · mise",
+            ))
+            .id_salt("mise-runtime-panel")
+            .default_open(false)
+            .show(ui, |ui| self.mise_tools_page(ui));
+        });
+        ui.add_space(16.0);
+        if !cfg!(target_os = "macos") {
+            egui::CollapsingHeader::new(tx("macOS 工具方案预览", "Preview macOS tools"))
+                .id_salt("macos-tools-preview")
+                .show(ui, |ui| self.homebrew_page(ui));
+        }
     }
 }
 
@@ -455,6 +515,8 @@ mod tests {
             deployment_states: BTreeMap::new(),
             last_event: None,
             page: Page::Environment,
+            help_origin: None,
+            help_focus_requested: false,
             navigation_groups: DEFAULT_NAVIGATION_GROUPS,
             category: String::new(),
             query: String::new(),
@@ -546,19 +608,95 @@ mod tests {
     fn mac_starter_selection_is_opt_in_and_resets_confirmation() {
         let mut app = preview();
         app.backup.brew_confirm = true;
-        let expected = native::brew_candidates(None)
+        app.backup.brew_policy = native::BrewPolicy::Head;
+        app.backup.brew_query = "hidden-by-filter".into();
+        app.backup
+            .brew_selected
+            .insert("existing-hidden-choice".into());
+        app.selected.insert("explorer-extensions".into());
+        app.deployment_selected.insert("software-git-git".into());
+        app.backup.bundle_report = Some(native::BundleReport {
+            requested: 1,
+            verified: true,
+            cancelled: false,
+            resolved_versions: Vec::new(),
+            detail: "Previous request".into(),
+        });
+        let mut expected = native::brew_candidates(None)
             .unwrap()
             .iter()
             .map(|entry| entry.id())
             .collect::<BTreeSet<_>>();
+        expected.insert("existing-hidden-choice".into());
 
         app.select_mac_starter_tools();
 
         assert_eq!(app.backup.brew_selected, expected);
+        assert_eq!(app.backup.brew_policy, native::BrewPolicy::Missing);
+        assert!(app.backup.brew_query.is_empty());
         assert!(!app.backup.brew_confirm);
+        assert!(app.backup.bundle_report.is_none());
+        assert!(app.backup.brew_review_requested);
+        assert_eq!(app.selected, BTreeSet::from(["explorer-extensions".into()]));
+        assert_eq!(
+            app.deployment_selected,
+            BTreeSet::from(["software-git-git".into()])
+        );
+        assert!(app.worker.is_none());
         let notice = app.notice.as_ref().unwrap();
         assert!(!notice.error);
         assert!(notice.text.contains("nothing has run yet") || notice.text.contains("尚未执行"));
+    }
+
+    #[test]
+    fn starter_preparation_does_not_change_an_active_request() {
+        let mut app = preview();
+        app.backup
+            .brew_selected
+            .insert("keep-current-request".into());
+        app.backup.brew_policy = native::BrewPolicy::Head;
+        app.backup.brew_confirm = true;
+        app.backup.brew_query = "current-filter".into();
+        app.backup.brew_review_requested = true;
+        let (_sender, receiver) = std::sync::mpsc::channel();
+        app.worker = Some(Worker {
+            cancel: Arc::new(AtomicBool::new(false)),
+            receiver,
+            events: None,
+            thread: None,
+            label: "Synthetic active task",
+        });
+
+        app.select_mac_starter_tools();
+
+        assert_eq!(
+            app.backup.brew_selected,
+            BTreeSet::from(["keep-current-request".into()])
+        );
+        assert_eq!(app.backup.brew_policy, native::BrewPolicy::Head);
+        assert!(app.backup.brew_confirm);
+        assert_eq!(app.backup.brew_query, "current-filter");
+        assert!(app.backup.brew_review_requested);
+        assert!(app.notice.is_none());
+    }
+
+    #[test]
+    fn review_scroll_is_consumed_once_without_starting_configuration() {
+        let mut app = preview();
+        app.select_mac_starter_tools();
+        let selected = app.backup.brew_selected.clone();
+        assert!(app.backup.brew_review_requested);
+        let context = egui::Context::default();
+        for _ in 0..2 {
+            let mut output = context.run_ui(egui::RawInput::default(), |ui| {
+                egui::CentralPanel::default().show(ui, |ui| app.homebrew_page(ui));
+            });
+            output.textures_delta.clear();
+            assert!(!app.backup.brew_review_requested);
+            assert_eq!(app.backup.brew_selected, selected);
+            assert!(!app.backup.brew_confirm);
+            assert!(app.worker.is_none());
+        }
     }
 
     #[test]

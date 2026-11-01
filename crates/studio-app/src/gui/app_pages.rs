@@ -520,11 +520,301 @@ impl Studio {
         }
     }
 
-    pub(super) fn help_page(&self, ui: &mut egui::Ui) {
+    pub(super) fn help_page(&mut self, ui: &mut egui::Ui) {
+        let origin = self.help_origin;
+        let (title, steps) = match origin {
+            Some(Page::Backup) => (
+                tx("备份当前开发环境", "Back up your developer environment"),
+                [
+                    tx(
+                        "点击采集，或载入已有的本地备份；先检查每类工具的采集结果。",
+                        "Capture this machine or load a local backup; check the result for each tool category.",
+                    ),
+                    tx(
+                        "保存备份后再进入环境配置。备份清单不包含项目、凭据或完整系统。",
+                        "Save the backup before opening Environment. The inventory excludes projects, credentials and a full system image.",
+                    ),
+                    tx(
+                        "Mac 可从清单选择工具；Windows 清单先进入迁移与映射，审核后再加入方案。",
+                        "On Mac, select tools from the inventory. For Windows, review Migration & mapping before adding items to a plan.",
+                    ),
+                ],
+            ),
+            Some(Page::Environment) => (
+                tx("配置开发环境", "Set up your developer environment"),
+                [
+                    tx(
+                        "先在环境备份页采集或载入清单，并保存到本地。",
+                        "Capture or load an inventory on Environment backup, then save it locally.",
+                    ),
+                    tx(
+                        "选择基础工具或所需运行时，查看将要安装的项目和版本。",
+                        "Select starter tools or runtimes, then review the requested tools and versions.",
+                    ),
+                    tx(
+                        "Mac 在对应工具面板勾选确认后配置；Windows 系统方案到变更方案审核。",
+                        "On Mac, confirm in the relevant tool panel before configuring. Review Windows system plans on Change plan.",
+                    ),
+                ],
+            ),
+            Some(Page::Recipes) => (
+                tx(
+                    "按用途准备 Windows 方案",
+                    "Prepare a Windows plan by purpose",
+                ),
+                [
+                    tx(
+                        "先选择目标 Windows 版本，再选择 Rust、Python、Web 等用途。",
+                        "Choose the target Windows version, then a purpose such as Rust, Python or Web.",
+                    ),
+                    tx(
+                        "查看包含的设置和软件，点击加入当前方案；之后仍可逐项修改。",
+                        "Review the included settings and software, then add them to the workspace; every item remains editable.",
+                    ),
+                    tx(
+                        "加入后打开变更方案。仅在受支持的 Windows 本机分别确认执行；其他系统可预览。",
+                        "Adding opens Change plan. Execute only after separate confirmations on a supported Windows host; other systems can preview.",
+                    ),
+                ],
+            ),
+            Some(Page::Network) => (
+                tx("设置本应用使用的网络", "Set the network used by this app"),
+                [
+                    tx(
+                        "选择继承、直连或明确代理，再按需填写软件源。",
+                        "Choose inherited, direct or explicit proxy settings, then enter package sources when needed.",
+                    ),
+                    tx(
+                        "先审核并保存网络方案，再启用；后续适用任务会固定使用该方案。",
+                        "Review and save the network profile, then activate it; supported later tasks pin that profile.",
+                    ),
+                    tx(
+                        "原生配置只导出为新文件。此页不修改系统代理、DNS 或 VPN。",
+                        "Native settings export to new files only. This page does not change system proxy, DNS or VPN.",
+                    ),
+                ],
+            ),
+            Some(Page::Migration) => (
+                tx(
+                    "从旧清单选择要迁移的项目",
+                    "Select items from an older inventory",
+                ),
+                [
+                    tx(
+                        "选择旧档案或 Mac 清单，并核对目标 Windows 版本。",
+                        "Choose a legacy profile or Mac inventory and check the Windows target.",
+                    ),
+                    tx(
+                        "点击分析，查看可信映射与未支持项目；分析不会自动勾选。",
+                        "Analyze it, then review trusted mappings and unsupported items; analysis selects nothing automatically.",
+                    ),
+                    tx(
+                        "勾选需要的映射后加入当前方案，再到变更方案检查并确认。",
+                        "Select the mappings you need and add them to the workspace, then review and confirm on Change plan.",
+                    ),
+                ],
+            ),
+            Some(Page::Compatibility) => (
+                tx("使用扩展部署", "Use extended deployment"),
+                [
+                    tx(
+                        "先启用需要的领域，再按来源搜索并勾选软件、扩展或模型。",
+                        "Enable the capabilities you need, then filter and select software, extensions or models.",
+                    ),
+                    tx(
+                        "审核本页的实际请求；可以先保存请求，载入后仍需重新确认。",
+                        "Review the actual request on this page; you can save it first, and loading it requires fresh confirmation.",
+                    ),
+                    tx(
+                        "确认范围和限制后再执行。自定义安装可能留下部分变更，没有通用回滚。",
+                        "Confirm the scope and limits before executing. Custom installations may leave partial changes and have no general rollback.",
+                    ),
+                ],
+            ),
+            Some(
+                Page::Workbench
+                | Page::Developer
+                | Page::Software
+                | Page::Features
+                | Page::Maintenance,
+            ) => (
+                tx(
+                    "选择 Windows 配置项目",
+                    "Select Windows configuration items",
+                ),
+                [
+                    tx(
+                        "核对顶部的目标 Windows 版本；预览目标不等于已检测到那台电脑。",
+                        "Check the Windows target at the top; a preview target does not identify a real machine.",
+                    ),
+                    tx(
+                        "只勾选需要的项目，再打开变更方案查看操作、权限和限制。",
+                        "Select only the items you need, then open Change plan to inspect actions, permissions and limits.",
+                    ),
+                    tx(
+                        "在受支持的 Windows 本机分别确认执行。安装与维护不能通过设置恢复撤销。",
+                        "Confirm each execution area on a supported Windows host. Settings recovery cannot undo installations or maintenance.",
+                    ),
+                ],
+            ),
+            Some(Page::Power) => (
+                tx("调整插电时的电源设置", "Adjust plugged-in power settings"),
+                [
+                    tx(
+                        "查看当前电源方案，只选择需要的插电 AC 参数。",
+                        "Review the current power scheme and select only the plugged-in AC values you need.",
+                    ),
+                    tx(
+                        "核对原值与拟用值，再确认应用；电池 DC 参数不会改变。",
+                        "Review original and requested values, then confirm; battery DC values remain unchanged.",
+                    ),
+                    tx(
+                        "需要恢复时使用独立电源恢复记录；方案改变或原值冲突会停止覆盖。",
+                        "Use the separate power recovery record when needed; scheme changes or value conflicts stop overwrites.",
+                    ),
+                ],
+            ),
+            Some(Page::Storage) => (
+                tx("检查或维护磁盘", "Inspect or maintain disks"),
+                [
+                    tx(
+                        "先查看卷与操作范围，分清分析和优化。",
+                        "Review volumes and operation scope first, and distinguish analysis from optimization.",
+                    ),
+                    tx(
+                        "只选择需要的磁盘任务，检查权限和维护限制后确认执行。",
+                        "Select the disk tasks you need and confirm only after reviewing permissions and maintenance limits.",
+                    ),
+                    tx(
+                        "完成后查看真实执行记录。优化不是文件备份，也没有通用回滚。",
+                        "Review the actual execution record afterwards. Optimization is not a file backup and has no general rollback.",
+                    ),
+                ],
+            ),
+            Some(Page::Plan) => (
+                tx("确认将要执行的变更", "Confirm the requested changes"),
+                [
+                    tx(
+                        "逐项核对实际操作、适用目标、权限和警告；移除不需要的项目。",
+                        "Check exact actions, target applicability, permissions and warnings; remove unwanted items.",
+                    ),
+                    tx(
+                        "可以先保存或导出方案。保存不表示已安装或已应用。",
+                        "Save or export the plan first if useful. Saving does not install or apply anything.",
+                    ),
+                    tx(
+                        "满足本机执行条件后，分别确认设置、电源或部署；完成后查看真实结果。",
+                        "Once host prerequisites are met, confirm settings, power or deployment separately, then inspect actual results.",
+                    ),
+                ],
+            ),
+            Some(Page::Recovery) => (
+                tx(
+                    "检查记录并恢复支持的原值",
+                    "Inspect records and restore supported originals",
+                ),
+                [
+                    tx(
+                        "选择对应的原值记录，核对来源、时间和操作范围。",
+                        "Choose the original-value record and check its source, time and scope.",
+                    ),
+                    tx(
+                        "先审核恢复计划；发生外部修改或记录校验失败时停止处理。",
+                        "Review the recovery plan first; external changes or invalid records stop the operation.",
+                    ),
+                    tx(
+                        "明确确认后只恢复该记录支持的设置；软件安装和系统维护另行处理。",
+                        "Explicit confirmation restores only settings supported by that record; handle installations and maintenance separately.",
+                    ),
+                ],
+            ),
+            Some(Page::Settings) => (
+                tx("调整界面", "Adjust the interface"),
+                [
+                    tx(
+                        "选择语言、明暗主题、强调色和界面缩放，立即查看效果。",
+                        "Choose language, light or dark theme, accent and scale to preview the result.",
+                    ),
+                    tx(
+                        "点击保存后，下次启动继续使用；设置文件错误会在页面中说明。",
+                        "Save to keep the choices for the next launch; settings-file errors are shown on the page.",
+                    ),
+                    tx(
+                        "返回刚才页面继续工作；外观设置不会运行环境配置。",
+                        "Return to your previous page to continue; appearance settings do not configure the environment.",
+                    ),
+                ],
+            ),
+            Some(Page::Status | Page::Sources | Page::About) => (
+                tx("核对状态、结果与来源", "Check status, results and sources"),
+                [
+                    tx(
+                        "查看本机识别结果和最近操作，分清成功、失败、取消与部分完成。",
+                        "Inspect host detection and recent operations, distinguishing success, failure, cancellation and partial completion.",
+                    ),
+                    tx(
+                        "遇到问题时保留真实错误与执行记录；项目来源用于核对功能和许可证边界。",
+                        "Preserve actual errors and execution records when troubleshooting; sources document functionality and license boundaries.",
+                    ),
+                    tx(
+                        "返回刚才页面处理相应问题；取消不会自动撤销已完成的变更。",
+                        "Return to the relevant page to address the issue; cancellation does not undo completed changes.",
+                    ),
+                ],
+            ),
+            Some(Page::Help) | None => (
+                tx("从这里开始", "Start here"),
+                [
+                    tx(
+                        "打开环境备份，采集这台电脑或载入已有清单，然后保存。",
+                        "Open Environment backup, capture this machine or load an inventory, then save it.",
+                    ),
+                    tx(
+                        "在环境配置选择基础工具；Windows 也可按用途选择常见方案。",
+                        "Select starter tools on Environment; for Windows you can also choose a recipe by purpose.",
+                    ),
+                    tx(
+                        "先审核具体变更，再明确确认执行。每页右上角的 ? 帮助会解释当前操作。",
+                        "Review exact changes before explicitly confirming execution. The ? Help button explains the current page.",
+                    ),
+                ],
+            ),
+        };
+        let guide = surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.add(egui::Label::new(RichText::new(title).heading()).wrap());
+            ui.add_space(8.0);
+            for (index, step) in steps.into_iter().enumerate() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        RichText::new(format!("{}.", index + 1))
+                            .color(palette().accent)
+                            .strong(),
+                    );
+                    ui.add(egui::Label::new(step).wrap());
+                });
+                ui.add_space(6.0);
+            }
+            if let Some(page) = origin {
+                if primary(ui, tx("返回刚才页面", "Back to previous page"), true).clicked() {
+                    self.navigate_to(page);
+                }
+            } else if primary(ui, tx("打开环境配置", "Open Environment"), true).clicked() {
+                self.navigate_to(Page::Environment);
+            }
+        });
+        if std::mem::take(&mut self.help_focus_requested) {
+            guide.response.scroll_to_me(Some(egui::Align::Min));
+        }
+        ui.add_space(14.0);
+        egui::CollapsingHeader::new(tx("完整使用手册", "Complete user guide"))
+            .id_salt(("help-handbook", origin.is_some()))
+            .default_open(origin.is_none())
+            .show(ui, |ui| {
         ui.heading(tx("帮助", "Help"));
         ui.label(tx(
-            "左侧导航分组可点击展开或收起；macOS 默认优先显示跨平台环境，Windows 配置和执行记录可随时展开。右上角 ? 帮助会返回本页。预选或加入方案都不会立即执行，最后请到变更方案复核并分别确认。",
-            "Click a left navigation heading to show or hide its pages. On macOS, cross-platform pages start open; Windows configuration and execution history can be opened when needed. The upper-right ? Help returns here. Presets only prepare choices; review the change plan and confirm each action before anything runs.",
+            "左侧导航分组可点击展开或收起；macOS 默认优先显示跨平台环境，Windows 配置和执行记录可随时展开。右上角 ? 帮助会先说明当前页面的操作，并可返回原页面。预选和加入方案都不会立即执行：Mac 在对应工具面板确认，Windows 系统方案在变更方案复核并分别确认。",
+            "Click a left navigation heading to show or hide its pages. On macOS, cross-platform pages start open; Windows configuration and execution history can be opened when needed. The upper-right ? Help explains the current page and lets you return. Presets only prepare choices: confirm Mac tools in their panels and review Windows system plans on Change plan before separate execution confirmations.",
         ));
         settings_section(
             ui,
@@ -535,7 +825,7 @@ impl Studio {
             |ui| {
                 ui.label(tx("在环境备份页明确采集当前 Mac 或 Windows，再保存本地清单。完整、未找到与失败分别记录；清单不包含项目、凭据、配置文件或虚拟环境。", "Explicitly capture this Mac or Windows machine on the backup page, then save a local inventory. Complete, unavailable and failed are distinct. Projects, credentials, settings and virtual environments are not included."));
                 ui.label(tx("Mac 环境配置从基础工具或备份中逐项选择 Homebrew formula/cask，审核并导出 Brewfile，或在已准备 Homebrew 的 Mac 上确认配置。依赖可能改变，取消不保证安装器已停止，没有自动回滚。", "Mac configuration selects Homebrew formulae/casks from starter tools or a backup. Review and export a Brewfile, or confirm local configuration after preparing Homebrew. Dependencies can change, installers may continue after cancellation, and no automatic rollback is available."));
-                ui.label(tx("重部署支持 Homebrew 补齐、滚动与 HEAD，HEAD 需要独立渠道回查；Rust 可选择 stable、beta、nightly、固定版本或按日 nightly，保存/载入请求及导出原生 rust-toolchain.toml 和 mise.toml。Rust 需标准位置现有 rustup 与已有官方默认工具链，执行后核对实际编译器版本和提交；mise 目前只导出清单。", "Redeployment supports missing-only, rolling and HEAD Homebrew policies with independent HEAD readback. Rust supports stable, beta, nightly, exact releases and dated nightly, with saved requests and native rust-toolchain.toml/mise.toml export. Rust needs standard rustup with an existing official default; results verify compiler release and commit. mise currently exports manifests only."));
+                ui.label(tx("重部署支持 Homebrew 补齐、滚动与 HEAD，HEAD 需要独立渠道回查；Rust 可选择 stable、beta、nightly、固定版本或按日 nightly，保存/载入请求及导出原生 rust-toolchain.toml 和 mise.toml。Rust 需标准位置现有 rustup 与已有官方默认工具链，执行后核对实际编译器版本和提交；mise 另有已安装运行时采集、逐项选择、版本锁定与重部署；需先准备可用的 mise，安装仍须明确确认。", "Redeployment supports missing-only, rolling and HEAD Homebrew policies with independent HEAD readback. Rust supports stable, beta, nightly, exact releases and dated nightly, with saved requests and native rust-toolchain.toml/mise.toml export. Rust needs standard rustup with an existing official default; results verify compiler release and commit. mise also inventories installed runtimes and supports selected, locked redeployment; it requires an existing mise installation and explicit confirmation."));
                 ui.label(tx("Windows 备份在迁移页按可信身份映射；筛选和分页保留勾选。Windows 配置使用原有方案和提供程序，WinGet 导出仅含所选 WinGet 软件；其他工具继续使用应用档案。", "Windows backups map trusted identities on the review page; filtering and paging preserve checks. Windows configuration uses the existing workspace and providers. WinGet export contains only selected WinGet applications; other tools remain in app profiles."));
             },
         );
@@ -580,7 +870,7 @@ impl Studio {
                 ui.label(tx("可导出 Git/Cargo/npm/Pip/uv 原生配置新文件；不覆盖全局文件，不修改系统代理、DNS、VPN、WinGet、DISM、VS Code 或 SSH，也不自动测试连接。自定义源需自行审核服务方。", "Export new native Git/Cargo/npm/Pip/uv configuration files. Global files, system proxy, DNS, VPN, WinGet, DISM, VS Code and SSH are not changed, and connectivity is not automatically tested. Review custom source operators."));
             },
         );
-        settings_section(ui, tx("开始使用", "Get started"), |ui| {
+        settings_section(ui, tx("Windows 方案：开始使用", "Windows plans: get started"), |ui| {
             for (zh, en) in [
                 (
                     "1. 选择目标 Windows 版本；预览目标不代表已检测到那台设备。",
@@ -618,7 +908,7 @@ impl Studio {
         );
         settings_section(
             ui,
-            tx("为什么 macOS 无法应用", "Why macOS cannot apply a plan"),
+            tx("为什么无法应用 Windows 方案", "Why Windows plans cannot be applied here"),
             |ui| {
                 ui.label(tx("本程序不会把 macOS 或 Linux 当作 Windows 注册表。这里可以整理选择、检查适用性、载入与导出档案；实际应用和恢复只允许已识别的受支持 Windows 版本。","macOS and Linux are not treated as Windows registries. You can prepare selections, review applicability and load or export profiles here. Applying and restoring require an identified, supported Windows host."));
             },
@@ -639,6 +929,7 @@ impl Studio {
                 concat!(env!("CARGO_PKG_REPOSITORY"), "/issues"),
             );
         });
+            });
     }
 
     pub(super) fn about_page(&self, ui: &mut egui::Ui) {

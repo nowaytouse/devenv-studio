@@ -297,6 +297,8 @@ struct Studio {
     deployment_states: BTreeMap<String, (String, String)>,
     last_event: Option<String>,
     page: Page,
+    help_origin: Option<Page>,
+    help_focus_requested: bool,
     navigation_groups: [bool; 3],
     category: String,
     query: String,
@@ -341,6 +343,8 @@ impl Studio {
             deployment_states: BTreeMap::new(),
             last_event: None,
             page: Page::Environment,
+            help_origin: None,
+            help_focus_requested: false,
             navigation_groups: DEFAULT_NAVIGATION_GROUPS,
             category: String::new(),
             query: String::new(),
@@ -974,11 +978,24 @@ impl Studio {
     }
 
     fn navigate_to(&mut self, page: Page) {
+        let preserve_query =
+            page == Page::Help || (self.page == Page::Help && self.help_origin == Some(page));
+        if page == Page::Help {
+            self.help_focus_requested = true;
+            if self.page != Page::Help {
+                self.help_origin = Some(self.page);
+            }
+        } else {
+            self.help_origin = None;
+            self.help_focus_requested = false;
+        }
         self.page = page;
         if let Some(index) = page.navigation_group() {
             self.navigation_groups[index] = true;
         }
-        self.query.clear();
+        if !preserve_query {
+            self.query.clear();
+        }
         self.hybrid.visible_tasks = 60;
     }
 
@@ -1258,8 +1275,11 @@ impl Studio {
                 );
                 if self.page != Page::Help
                     && ui
-                        .small_button(tx("? 帮助", "? Help"))
-                        .on_hover_text(tx("打开分步使用指南", "Open the step-by-step guide"))
+                        .button(tx("? 使用帮助", "? How to use"))
+                        .on_hover_text(tx(
+                            "查看当前页面的操作步骤，随后可返回继续",
+                            "Read the steps for this page, then return to continue",
+                        ))
                         .clicked()
                 {
                     self.navigate_to(Page::Help);
@@ -3077,6 +3097,8 @@ mod tests {
             deployment_states: BTreeMap::new(),
             last_event: None,
             page: Page::Recipes,
+            help_origin: None,
+            help_focus_requested: false,
             navigation_groups: [true, true, true],
             category: String::new(),
             query: String::new(),
@@ -3580,6 +3602,53 @@ mod tests {
         app.navigation_groups[0] = false;
         app.navigate_to(Page::Network);
         assert!(app.navigation_groups[0]);
+    }
+
+    #[test]
+    fn contextual_help_returns_to_the_original_page_without_losing_selection_or_filter() {
+        let mut app = preview();
+        app.page = Page::Software;
+        app.query = "git".into();
+        app.deployment_selected.insert("software-git-git".into());
+        let selected = app.deployment_selected.clone();
+        app.navigate_to(Page::Help);
+        assert!(app.help_origin == Some(Page::Software));
+        assert_eq!(app.query, "git");
+        app.navigate_to(Page::Help);
+        assert!(app.help_origin == Some(Page::Software));
+        app.navigate_to(app.help_origin.unwrap());
+        assert!(app.page == Page::Software && app.help_origin.is_none());
+        assert_eq!(app.query, "git");
+        assert_eq!(app.deployment_selected, selected);
+        assert!(app.worker.is_none());
+
+        app.navigate_to(Page::Help);
+        app.navigate_to(Page::Network);
+        assert!(app.help_origin.is_none());
+        assert!(app.query.is_empty());
+        assert_eq!(app.deployment_selected, selected);
+    }
+
+    #[test]
+    fn help_opens_at_its_current_steps_once_without_starting_work() {
+        for page in [Page::Environment, Page::Software, Page::Network] {
+            let mut app = preview();
+            app.page = page;
+            app.navigate_to(Page::Help);
+            assert!(app.help_focus_requested);
+            let context = egui::Context::default();
+            for _ in 0..2 {
+                let mut output = context.run_ui(Default::default(), |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| app.help_page(ui));
+                });
+                output.textures_delta.clear();
+                assert!(!app.help_focus_requested);
+                assert!(app.help_origin == Some(page));
+                assert!(app.worker.is_none());
+            }
+            app.navigate_to(Page::Help);
+            assert!(app.help_focus_requested);
+        }
     }
 
     #[test]

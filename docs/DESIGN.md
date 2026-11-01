@@ -1,5 +1,13 @@
 # DevEnv Studio — design record
 
+## Unreleased — guided preparation and contextual help
+
+The environment landing page leads with backup, preparation and review. On macOS the existing Homebrew workbench follows immediately; starter preparation adds the reviewed defaults, chooses missing-only policy, clears filters and prior confirmation/result state, and requests a single scroll to review. Active workers disable draft edits at both the UI and helper boundaries. The saved-inventory readback, host checks and explicit execution approval remain in the existing backend path. No additional installer or setup engine is introduced; Homebrew Bundle remains the native execution contract ([official behavior](https://docs.brew.sh/Brew-Bundle-and-Brewfile)). Other provider workflows and Windows recipe selection remain available.
+
+Help uses the existing Page identity and navigation method to remember its origin. Each context starts with three concrete steps and a return action; the existing full handbook remains expandable. A help round trip retains the search filter and selections, while navigation to another workspace continues to clear the old filter. Copy distinguishes Mac provider panels, Windows change plans and extended deployment; it no longer describes implemented mise deployment as export-only. Existing palette, native controls and selection tokens are reused.
+
+These changes improve the guided entry flow; they do not establish complete all-page usability, performance benchmarks, Windows device acceptance or remote CI results. Those remain separate evidence requirements for the ongoing product goal.
+
 ## Unreleased — legacy engine consolidation
 
 Seven owner-authorized Rust backend modules from LTSC_Tools_Backup are adapted into studio-legacy. Extended deployment is a page of the same GUI and uses the root worker, cancellation flag and the same Windows mutation.lock as modern registry/power workflows. It introduces no second executable, window, UAC identity or independent maintenance project. Cross-platform parsing/review is separated from a supported-Windows-only execute boundary; a canonical reviewed configuration is checked again before mutation.
