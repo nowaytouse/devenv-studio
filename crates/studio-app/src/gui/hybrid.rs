@@ -5,6 +5,8 @@ use crate::{
     solutions,
 };
 
+const WINGET_EXPORT_COMMAND: &str = "winget export --output winget.json --include-versions";
+
 pub(super) struct HybridState {
     pub path: String,
     pub report: Option<MigrationReport>,
@@ -184,8 +186,29 @@ impl Studio {
 
     pub(super) fn migration_page(&mut self, ui: &mut egui::Ui) {
         ui.heading(tx("迁移与映射", "Migration and mapping"));
-        ui.label(tx("读取旧 SetupProfile 或 schema 1 Mac 清单 JSON，逐项查看映射和未迁移内容。原文件保持不变。", "Read legacy SetupProfile or schema 1 Mac inventory JSON and review every mapping and gap. The source file remains unchanged."));
+        ui.label(tx("导入 WinGet 导出清单、DevEnv Studio 的 Mac/Windows 备份，或旧 SetupProfile/Mac 清单。先分析，再勾选要加入 Windows 方案的项目；原文件保持不变。", "Import a WinGet export, a DevEnv Studio Mac/Windows backup, or a legacy SetupProfile/Mac inventory. Analyze first, then select items for a Windows plan; the source file stays unchanged."));
         self.target_controls(ui);
+        ui.strong(tx("1. 导入现成清单", "1. Import an existing inventory"));
+        ui.label(
+            RichText::new(tx(
+                "选择清单路径或拖入文件，分析后再逐项审核。",
+                "Enter an inventory path or drop a file, then analyze and review its items.",
+            ))
+            .size(12.0)
+            .color(palette().muted),
+        );
+        egui::CollapsingHeader::new(tx("如何导出 WinGet 清单", "How to export a WinGet inventory"))
+            .id_salt("migration-winget-export-help")
+            .show(ui, |ui| {
+                ui.label(tx("在装有 WinGet 的 Windows 电脑上，打开 PowerShell，按需自行运行：", "On a Windows computer with WinGet, open PowerShell and run this yourself when needed:"));
+                ui.add(egui::Label::new(RichText::new(WINGET_EXPORT_COMMAND).monospace()).wrap());
+                if ui.button(tx("复制导出命令", "Copy export command")).clicked() {
+                    ui.ctx().copy_text(WINGET_EXPORT_COMMAND.to_owned());
+                }
+                ui.label(tx("请将示例 winget.json 改为一个新的输出文件名，并保留之前的清单。导出后拖入本页，或输入其绝对路径后分析；本页只提供说明与复制，不执行命令。", "Use a new output filename in place of winget.json and keep earlier inventories. Drop the export here or enter its absolute path to analyze. This page only explains and copies the command; it does not run it."));
+                ui.label(tx("WinGet 可能遗漏未识别的软件。导出不是完整系统备份，记录的版本不代表本应用会锁定或恢复该版本。", "WinGet may omit unrecognized software. The export is not a full system backup, and recorded versions are not installation pins or version-restoration guarantees here."));
+                ui.label(tx("此处的 Windows 软件方案在 Mac 上只供预览或导出；实际安装须在受支持的 Windows 上另行核对并确认。", "Windows software plans here can only be previewed or exported on Mac. Installation requires separate review and confirmation on supported Windows."));
+            });
         for dropped in ui.ctx().input(|input| input.raw.dropped_files.clone()) {
             self.hybrid.path = dropped.path().display().to_string();
         }
@@ -201,7 +224,7 @@ impl Studio {
             if ui
                 .add_enabled(
                     self.worker.is_none(),
-                    egui::Button::new(tx("分析导入", "Analyze import")),
+                    egui::Button::new(tx("分析清单", "Analyze inventory")),
                 )
                 .clicked()
             {
@@ -231,9 +254,10 @@ impl Studio {
                 }
             }
         });
-        ui.label(RichText::new(tx("导入只产生报告。Git 身份、Shell 内容、镜像地址及未支持的系统调优不会被自动写入；报告不会回显这些私密字段值。", "Import only produces a report. Git identity, shell content, mirror addresses and unsupported system tuning are never automatically written; their private values are not echoed.")).size(12.0).color(palette().muted));
+        ui.label(RichText::new(tx("分析只生成报告，不会勾选或安装。未知软件、未支持的来源或安装选项保留为说明；私密源地址、安装参数、Git 身份与 Shell 内容不会原样回显或写入。", "Analysis only creates a report; it selects and installs nothing. Unknown packages, unsupported sources and installation options remain review notes. Private source addresses, installer arguments, Git identity and shell content are not echoed or written.")).size(12.0).color(palette().muted));
         if let Some(report) = &self.hybrid.report {
             ui.separator();
+            ui.strong(tx("2. 查看并勾选映射", "2. Review and select mappings"));
             ui.label(lf!(
                 "已分析文件：{}",
                 "Analyzed file: {}",
@@ -247,7 +271,7 @@ impl Studio {
             ui.label(lf!(
                 "来源：{}；可映射 {} 项；其余 {} 项说明",
                 "Source: {}; mapped {}; other notes {}",
-                report.source,
+                crate::migration_locale::source(&report.source, self.preferences.language),
                 mapped,
                 report.items.len() - mapped
             ));
@@ -380,6 +404,10 @@ impl Studio {
                     },
                 );
             }
+            ui.strong(tx(
+                "3. 加入当前 Windows 方案",
+                "3. Add to the Windows workspace",
+            ));
             let (added_settings, added_tasks) = self.hybrid.checked_requests();
             let target_matches = self.migration_current();
             if !target_matches {
@@ -552,5 +580,154 @@ impl Studio {
             }
         });
         ui.label(RichText::new(tx("可在软件部署中明确选择 Rust MSVC、uv、Node.js LTS、Python 和 VS Code，再勾选对应工具。Pip 还需已有可用的 pip；Rust 链接器、SDK 等前提需按工具链准备。", "Explicitly select Rust MSVC, uv, Node.js LTS, Python and VS Code in Software, then choose tools. Pip also requires a working pip installation; prepare the Rust linker, SDK and other toolchain prerequisites as required.")).size(12.0).color(palette().muted));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn winget_review_starts_unselected_and_merges_only_checked_trusted_rows() -> anyhow::Result<()>
+    {
+        let mut app = super::super::tests::preview();
+        app.navigate_to(Page::Migration);
+        app.preferences.language = Language::EnUs;
+        i18n::set_language(Language::EnUs);
+        app.catalog = Ok(studio_core::load_catalog()?);
+        let catalog = studio_deployment::catalog()?;
+        let trusted: Vec<_> = catalog
+            .tasks
+            .iter()
+            .filter(|task| task.kind == "package" && task.targets.contains(&app.target))
+            .take(2)
+            .collect();
+        assert_eq!(trusted.len(), 2);
+        let added = trusted[0].id.clone();
+        let identity = trusted[0].package_id.clone().unwrap();
+        let previous = trusted[1].id.clone();
+        app.deployment_selected.insert(previous.clone());
+        app.deployment_catalog = Ok(catalog);
+        let document = serde_json::json!({
+            "$schema": "https://aka.ms/winget-packages.schema.2.0.json",
+            "Sources": [{
+                "SourceDetails": {
+                    "Argument": "https://cdn.winget.microsoft.com/cache",
+                    "Identifier": "Microsoft.Winget.Source_8wekyb3d8bbwe",
+                    "Name": "winget",
+                    "Type": "Microsoft.PreIndexed.Package"
+                },
+                "Packages": [
+                    {"PackageIdentifier": identity, "Version": "2.0"},
+                    {"PackageIdentifier": "Unknown.Tool", "InitialCustomSwitches": "secret-options-marker"}
+                ]
+            }]
+        });
+        let mut report = migration::analyze(&serde_json::to_vec(&document)?, app.target)?;
+        assert_eq!(report.source, "winget_export");
+        assert!(!serde_json::to_string(&report)?.contains("secret-options-marker"));
+        let mapped = report
+            .items
+            .iter()
+            .position(|item| item.status == "mapped")
+            .unwrap();
+        let manual = report
+            .items
+            .iter()
+            .position(|item| item.status == "manual")
+            .unwrap();
+        report.items[manual]
+            .settings
+            .push("manual-setting-must-not-merge".into());
+        report.items[manual]
+            .deployment
+            .push("manual-task-must-not-merge".into());
+        app.hybrid.report = Some(report);
+        app.hybrid.path = std::env::temp_dir()
+            .join("winget-review.json")
+            .display()
+            .to_string();
+        app.hybrid.report_path = Some(app.hybrid.path.clone());
+        app.hybrid.report_target = Some(app.target);
+
+        let context = egui::Context::default();
+        context.enable_accesskit();
+        let mut output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(980.0, 1200.0),
+                )),
+                ..Default::default()
+            },
+            |ui| {
+                egui::CentralPanel::default().show(ui, |ui| app.migration_page(ui));
+            },
+        );
+        output.textures_delta.clear();
+        let nodes = output
+            .platform_output
+            .accesskit_update
+            .expect("accessibility tree")
+            .nodes;
+        for required in ["Analyze inventory", "Target", short_target(app.target)] {
+            assert!(
+                nodes
+                    .iter()
+                    .any(|(_, node)| { node.label().or_else(|| node.value()) == Some(required) }),
+                "{required} is reachable"
+            );
+        }
+        for hidden in ["Load profile", "Save profile", "Inspect selection"] {
+            assert!(
+                !nodes
+                    .iter()
+                    .any(|(_, node)| { node.label().or_else(|| node.value()) == Some(hidden) }),
+                "{hidden} is outside the inventory workflow"
+            );
+        }
+        assert!(nodes.iter().any(|(_, node)| {
+            node.label()
+                .or_else(|| node.value())
+                .is_some_and(|label| label.contains("Source: WinGet export"))
+        }));
+        assert!(!nodes.iter().any(|(_, node)| {
+            node.label()
+                .or_else(|| node.value())
+                .is_some_and(|label| label.contains("secret-options-marker"))
+        }));
+        assert!(app.hybrid.selected_rows.is_empty());
+        assert!(
+            app.hybrid.checked_requests().0.is_empty()
+                && app.hybrid.checked_requests().1.is_empty()
+        );
+        assert_eq!(app.deployment_selected, BTreeSet::from([previous.clone()]));
+        assert!(app.worker.is_none() && app.dialog.is_none());
+
+        app.hybrid.selected_rows.extend([manual, usize::MAX]);
+        assert!(
+            app.hybrid.checked_requests().0.is_empty()
+                && app.hybrid.checked_requests().1.is_empty()
+        );
+        app.hybrid.selected_rows.insert(mapped);
+        let (settings, tasks) = app.hybrid.checked_requests();
+        assert!(settings.is_empty());
+        assert_eq!(tasks, BTreeSet::from([added.clone()]));
+        assert!(app.migration_current());
+        let original_path = app.hybrid.path.clone();
+        app.hybrid.path.push_str(".changed");
+        assert!(!app.migration_current());
+        app.hybrid.path = original_path;
+        app.target = Target::Win10Ltsc2021;
+        assert!(!app.migration_current());
+        app.target = Target::Win11Ltsc2024;
+        assert!(app.migration_current());
+        app.merge_workspace(&settings, &tasks);
+        assert_eq!(app.deployment_selected, BTreeSet::from([previous, added]));
+        assert!(app.selected.is_empty());
+        assert!(app.worker.is_none() && app.dialog.is_none());
+        assert!(app.page == Page::Plan);
+        i18n::set_language(Language::ZhCn);
+        Ok(())
     }
 }

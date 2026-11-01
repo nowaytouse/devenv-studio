@@ -1,0 +1,33 @@
+{
+  "$schema": "https://aka.ms/winget-packages.schema.2.0.json",
+  "WinGetVersion": "1.12.350",
+  "CreationDate": "2026-11-01T00:00:00Z",
+  "Sources": [
+    {
+      "SourceDetails": {
+        "Name": "winget",
+        "Identifier": "Microsoft.Winget.Source_8wekyb3d8bbwe",
+        "Argument": "https://cdn.winget.microsoft.com/cache",
+        "Type": "Microsoft.PreIndexed.Package"
+      },
+      "Packages": [
+        {"PackageIdentifier": "Git.Git", "Version": "2.50.1"},
+        {"PackageIdentifier": "Microsoft.VisualStudioCode"},
+        {"PackageIdentifier": "OpenJS.NodeJS.LTS"},
+        {"PackageIdentifier": "Example.UnreviewedApp"},
+        {"PackageIdentifier": "Python.Python.3.14", "Scope": "user"}
+      ]
+    },
+    {
+      "SourceDetails": {
+        "Name": "example-untrusted",
+        "Identifier": "Example.Untrusted.Source",
+        "Argument": "https://packages.example.invalid/cache",
+        "Type": "Microsoft.PreIndexed.Package"
+      },
+      "Packages": [
+        {"PackageIdentifier": "Mozilla.Firefox"}
+      ]
+    }
+  ]
+}

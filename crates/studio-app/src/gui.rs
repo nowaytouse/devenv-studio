@@ -1397,26 +1397,28 @@ impl Studio {
                         }
                     }
                 });
-            if ui
-                .add_enabled(self.worker.is_none(), egui::Button::new(t("载入档案")))
-                .clicked()
-            {
-                self.open_file(FileOperation::Load);
-            }
-            if ui
-                .add_enabled(self.worker.is_none(), egui::Button::new(t("保存档案")))
-                .clicked()
-            {
-                self.open_file(FileOperation::Save);
-            }
-            if ui
-                .add_enabled(
-                    self.worker.is_none() && self.selection_count() > 0,
-                    egui::Button::new(t("检查所选项目状态")),
-                )
-                .clicked()
-            {
-                self.start_inspect();
+            if self.page != Page::Migration {
+                if ui
+                    .add_enabled(self.worker.is_none(), egui::Button::new(t("载入档案")))
+                    .clicked()
+                {
+                    self.open_file(FileOperation::Load);
+                }
+                if ui
+                    .add_enabled(self.worker.is_none(), egui::Button::new(t("保存档案")))
+                    .clicked()
+                {
+                    self.open_file(FileOperation::Save);
+                }
+                if ui
+                    .add_enabled(
+                        self.worker.is_none() && self.selection_count() > 0,
+                        egui::Button::new(t("检查所选项目状态")),
+                    )
+                    .clicked()
+                {
+                    self.start_inspect();
+                }
             }
         });
         ui.label(

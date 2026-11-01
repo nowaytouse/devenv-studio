@@ -84,7 +84,9 @@ Python 工具区新增 macOS/Windows 共用的 uv 命令行工具重部署：读
 
 Windows 配置可从方案工作区开始，提供日常桌面、Rust开发、Python工具、Python数据与交互、Web开发和WSL组件准备六种混合方案。每个组合同时列出设置、软件、工具或扩展；检查后明确加入当前选择，仍可逐项修改，再保存为同一份v3档案或导出完整方案。加入组合不会执行系统变更。
 
-迁移页面可读取旧工具的SetupProfile 2.2.0或schema 1 Mac清单JSON，也可拖入文件。报告逐项区分已映射、需手动处理和未支持；初始不勾选，由用户决定哪些映射加入当前方案。只接受当前可信目录内的精确任务，保留其他选择并校验互斥设置。未迁移的私密字段不回显其值，原文件保持不变。Mac功能映射不保证相同版本、构建选项或二进制。
+迁移页面可读取本应用的Mac/Windows备份、旧SetupProfile/Mac清单，以及WinGet 2.0导出JSON，也可拖入文件。报告逐项区分已映射、需手动处理和未支持；初始不勾选，由用户决定哪些映射加入当前方案。只接受当前可信目录内的精确任务，保留其他选择并校验互斥设置。未迁移的私密字段不回显其值，原文件保持不变。Mac功能映射不保证相同版本、构建选项或二进制。
+
+已有Windows软件清单可通过 `winget export --output winget.json --include-versions` 手动导出，请使用新的输出文件名并保留旧清单；迁移页提供说明和命令复制，环境配置页也有迁移入口。导入只分析文件中声明的标准社区来源及包身份：唯一可信目录映射才可勾选，Store、自定义源、未知或重复身份，以及带渠道、范围、安装参数或未知属性的条目保留待审说明。来源标识不是下载内容或目标机软件源配置的认证；程序不自动添加或替换来源。版本只作信息，不恢复原版本或安装参数，也不保证清单包含全部已安装软件。勾选后复用原计划和Windows执行门禁，不调用 `winget import`。Mac可分析和导出，实际执行需要受支持的Windows设备。
 
 Windows 开发环境提供Cargo、uv、Pip、NPM和Microsoft VS Code五个实际执行适配器。计划先执行明确选中的WinGet软件，再执行开发任务，最后处理功能与维护；开发提供程序按任务重新查找，避免软件安装后仍沿用缺失状态。提供程序来自固定安装位置，不执行导入档案里的命令。Rust链接器/SDK、兼容Python和网络源需已准备好，uv不会自动下载Python。旧SetupProfile及Mac清单中的NPM包仅在当前目录有完全相同ID时映射；Pip按规范化发行包名匹配，37项中包含旧固定清单全部26项；Scoop、Cursor配置和其余系统调优仍保留未迁移说明。
 
@@ -169,6 +171,7 @@ cargo run -p devenv-studio -- power
 cargo run -p devenv-studio -- providers
 cargo run -p devenv-studio -- backup --output /absolute/path/mac-backup.json
 cargo run -p devenv-studio -- migrate --target win11-ltsc-2024 --input examples/mac-development-backup.json
+cargo run -p devenv-studio -- migrate --target win11-ltsc-2024 --input examples/winget-export.json
 cargo run -p devenv-studio -- plan --target win11-ltsc-2024 --recipe python-data
 cargo run -p devenv-studio -- storage-status
 cargo run -p devenv-studio -- plan --profile examples/storage-workspace.json

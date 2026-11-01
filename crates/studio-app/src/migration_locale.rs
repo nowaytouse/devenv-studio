@@ -3,6 +3,27 @@
 use crate::prefs::Language;
 
 const DETAIL_PHRASES: &[(&str, &str)] = &[
+    (
+        "The source is not the fixed Microsoft community source or contains unsupported metadata. Source values were not imported.",
+        "来源不是固定的微软社区源，或包含未支持的元数据。不会导入来源字段值。",
+    ),
+    (
+        "Multiple entries request this package identity. Repeated exports and version conflicts require manual review; no entry was selected automatically.",
+        "多个条目请求同一软件身份。重复导出或版本冲突需手动审核，不会自动选择其中任何一项。",
+    ),
+    (
+        "This package contains unsupported channel, scope, installer arguments or additional properties. Their values were not imported.",
+        "此条目包含未支持的渠道、安装范围、安装参数或额外属性。不会导入这些字段值。",
+    ),
+    (
+        "Version metadata does not pin installation. Only the current trusted task is suggested.",
+        "来源版本不会锁定安装版本；这里只建议审核当前可信目录中的任务。",
+    ),
+    (
+        "Exported version metadata is present; its value is hidden.",
+        "导出清单包含版本元数据，其值已隐藏。",
+    ),
+    ("Exported version: ", "导出清单中的版本："),
     ("Captured Windows version: ", "备份中的 Windows 版本："),
     (
         ". Only reviewed catalog identities can be selected. Versions are evidence, not installation pins; unknown tools require manual review.",
@@ -229,6 +250,23 @@ pub fn detail(value: &str, language: Language) -> String {
         })
 }
 
+pub fn source(value: &str, language: Language) -> String {
+    let (chinese, english) = match value {
+        "setup_profile" => ("旧版配置档案", "Legacy setup profile"),
+        "macos_inventory" => ("旧版 Mac 工具清单", "Legacy Mac inventory"),
+        "studio_macos_backup" => ("DevEnv Studio Mac 备份", "DevEnv Studio Mac backup"),
+        "studio_windows_backup" => ("DevEnv Studio Windows 备份", "DevEnv Studio Windows backup"),
+        "winget_export" => ("WinGet 导出清单", "WinGet export"),
+        _ => ("其他导入清单", "Other imported inventory"),
+    };
+    if language == Language::EnUs {
+        english
+    } else {
+        chinese
+    }
+    .to_owned()
+}
+
 pub fn requested(value: &str, language: Language) -> String {
     if language == Language::EnUs {
         return value.to_owned();
@@ -236,6 +274,7 @@ pub fn requested(value: &str, language: Language) -> String {
     match value {
         "[value redacted]" => "［值已隐藏］".to_owned(),
         "(empty list)" => "（空列表）".to_owned(),
+        "(unsupported source)" => "（未支持的软件源）".to_owned(),
         _ => value.to_owned(),
     }
 }
@@ -356,5 +395,46 @@ mod tests {
         assert!(contains_cjk(&translated));
         assert!(translated.contains("https://example.invalid/PRIVATE_ID"));
         assert!(translated.contains("Windows provider."));
+    }
+
+    #[test]
+    fn migration_sources_have_readable_names_and_unknown_values_are_not_echoed() {
+        for value in [
+            "setup_profile",
+            "macos_inventory",
+            "studio_macos_backup",
+            "studio_windows_backup",
+            "winget_export",
+        ] {
+            assert!(contains_cjk(&source(value, Language::ZhCn)));
+            assert!(!source(value, Language::EnUs).contains('_'));
+        }
+        let private = "https://user:secret@private.example/source";
+        assert_eq!(source(private, Language::EnUs), "Other imported inventory");
+        assert_eq!(source(private, Language::ZhCn), "其他导入清单");
+    }
+
+    #[test]
+    fn winget_review_details_are_translated_without_changing_safe_version_tokens() {
+        for text in [
+            "The source is not the fixed Microsoft community source or contains unsupported metadata. Source values were not imported.",
+            "Multiple entries request this package identity. Repeated exports and version conflicts require manual review; no entry was selected automatically.",
+            "This package contains unsupported channel, scope, installer arguments or additional properties. Their values were not imported.",
+            "Version metadata does not pin installation. Only the current trusted task is suggested.",
+            "Exported version metadata is present; its value is hidden.",
+        ] {
+            let chinese = detail(text, Language::ZhCn);
+            assert!(contains_cjk(&chinese), "{text}");
+            assert_ne!(chinese, text);
+            assert_eq!(detail(text, Language::EnUs), text);
+        }
+        assert_eq!(
+            detail("Exported version: 2.47.1. ", Language::ZhCn),
+            "导出清单中的版本：2.47.1. "
+        );
+        assert_eq!(
+            requested("(unsupported source)", Language::ZhCn),
+            "（未支持的软件源）"
+        );
     }
 }

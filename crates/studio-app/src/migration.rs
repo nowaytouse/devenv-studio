@@ -6,8 +6,10 @@ use serde::{
     de::{self, MapAccess, SeqAccess, Visitor},
 };
 use serde_json::{Map, Value};
-use std::{collections::BTreeSet, fs::File, io::Read, path::Path};
+use std::{collections::BTreeSet, fs::OpenOptions, io::Read, path::Path};
 use studio_core::{Hive, RegistryChange, Target};
+
+mod winget;
 
 const MAX_BYTES: usize = 1_048_576;
 const MAX_LIST: usize = 1_024;
@@ -31,16 +33,83 @@ pub struct MigrationItem {
     pub deployment: Vec<String>,
 }
 
-/// Read at most the input limit plus one byte. This never reads software inventories
-/// automatically and never writes a profile, registry value, package or configuration.
 pub fn load(path: &Path, target: Target) -> Result<MigrationReport> {
+    let before = std::fs::symlink_metadata(path).context("Inspect migration input")?;
+    ensure!(
+        regular_input(&before),
+        "Migration input must be a bounded regular file, not a link"
+    );
+    let mut options = OpenOptions::new();
+    options.read(true);
+    // shortcut: other Unix ABIs retain metadata guards; add flags after verifying their ABI values.
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(0x104); // Darwin O_NOFOLLOW | O_NONBLOCK.
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(0x20800); // Linux x86_64 O_NOFOLLOW | O_NONBLOCK.
+    }
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(0x8800); // Linux aarch64 O_NOFOLLOW | O_NONBLOCK.
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x00200000); // FILE_FLAG_OPEN_REPARSE_POINT.
+    }
+    let file = options.open(path).context("Open migration input")?;
+    let opened = file.metadata().context("Inspect opened migration input")?;
+    ensure!(
+        regular_input(&opened)
+            && opened.len() == before.len()
+            && opened.modified()? == before.modified()?,
+        "Migration input changed while opening or is not a bounded regular file"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        ensure!(
+            opened.dev() == before.dev() && opened.ino() == before.ino(),
+            "Migration input changed while opening"
+        );
+    }
     let mut bytes = Vec::new();
-    File::open(path)
-        .context("Open migration input")?
-        .take(MAX_BYTES as u64 + 1)
+    file.take(MAX_BYTES as u64 + 1)
         .read_to_end(&mut bytes)
         .context("Read migration input")?;
+    let after = std::fs::symlink_metadata(path).context("Inspect migration input after reading")?;
+    ensure!(
+        regular_input(&after)
+            && after.len() == opened.len()
+            && after.modified()? == opened.modified()?
+            && bytes.len() as u64 == opened.len(),
+        "Migration input changed while reading"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        ensure!(
+            after.dev() == opened.dev() && after.ino() == opened.ino(),
+            "Migration input path changed while reading"
+        );
+    }
     analyze(&bytes, target)
+}
+
+fn regular_input(metadata: &std::fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return false;
+        }
+    }
+    metadata.is_file() && !metadata.file_type().is_symlink() && metadata.len() <= MAX_BYTES as u64
 }
 
 pub fn analyze(bytes: &[u8], target: Target) -> Result<MigrationReport> {
@@ -57,18 +126,31 @@ pub fn analyze(bytes: &[u8], target: Target) -> Result<MigrationReport> {
     let mut nodes = 0;
     check_shape(&root, 0, &mut nodes)?;
     let object = object(&root, "document")?;
-    if object.contains_key("platform") || object.contains_key("providers") {
+    let winget_export = object.contains_key("Sources")
+        || object.get("$schema").and_then(Value::as_str) == Some(winget::SCHEMA);
+    ensure!(
+        !winget_export
+            || !["profile_version", "schema_version", "platform", "providers"]
+                .iter()
+                .any(|key| object.contains_key(*key)),
+        "Migration document mixes WinGet and other source formats"
+    );
+    if !winget_export && (object.contains_key("platform") || object.contains_key("providers")) {
         let snapshot: studio_deployment::backup::Snapshot = serde_json::from_value(root.clone())
             .map_err(|_| anyhow::anyhow!("Invalid native macOS backup schema"))?;
         return crate::backup_migration::analyze(&snapshot, target);
     }
-    let source = match (
-        object.contains_key("profile_version"),
-        object.contains_key("schema_version"),
-    ) {
-        (true, false) => "setup_profile",
-        (false, true) => "macos_inventory",
-        _ => bail!("Migration document must identify exactly one supported source format"),
+    let source = if winget_export {
+        "winget_export"
+    } else {
+        match (
+            object.contains_key("profile_version"),
+            object.contains_key("schema_version"),
+        ) {
+            (true, false) => "setup_profile",
+            (false, true) => "macos_inventory",
+            _ => bail!("Migration document must identify exactly one supported source format"),
+        }
     };
     let settings_catalog = studio_core::load_catalog()?;
     let deployment_catalog = studio_deployment::catalog()?;
@@ -85,6 +167,8 @@ pub fn analyze(bytes: &[u8], target: Target) -> Result<MigrationReport> {
     };
     if source == "setup_profile" {
         analyzer.setup(object)?;
+    } else if source == "winget_export" {
+        analyzer.winget(object)?;
     } else {
         analyzer.inventory(object)?;
     }

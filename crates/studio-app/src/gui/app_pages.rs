@@ -626,12 +626,12 @@ impl Studio {
                 ),
                 [
                     tx(
-                        "选择旧档案或 Mac 清单，并核对目标 Windows 版本。",
-                        "Choose a legacy profile or Mac inventory and check the Windows target.",
+                        "选择应用备份、旧档案或 WinGet 导出 JSON，并核对目标 Windows 版本。",
+                        "Choose an app backup, legacy profile or WinGet export JSON, then check the Windows target.",
                     ),
                     tx(
-                        "点击分析，查看可信映射与未支持项目；分析不会自动勾选。",
-                        "Analyze it, then review trusted mappings and unsupported items; analysis selects nothing automatically.",
+                        "点击分析，查看已映射和其他说明；WinGet 的版本、非社区来源及附加要求不会变成安装参数。分析不会自动勾选。",
+                        "Analyze it and review mapped items and other notes. WinGet versions, non-community sources and extra requirements do not become installer arguments. Analysis selects nothing automatically.",
                     ),
                     tx(
                         "勾选需要的映射后加入当前方案，再到变更方案检查并确认。",
@@ -919,7 +919,7 @@ impl Studio {
         });
         settings_section(ui, tx("组合与迁移", "Recipes and migration"), |ui| {
             ui.label(tx("方案工作区可预览日常、Rust、Python工具、Python数据与交互、Web 和 WSL 组合，再明确加入当前选择。组合会一起列出系统设置、软件、开发工具与扩展，仍可逐项修改。", "Review everyday, Rust, Python tools, Python data, Web and WSL recipes in the workspace, then explicitly add them to your selection. Each recipe combines settings, software, developer tools and extensions; every item remains editable."));
-            ui.label(tx("迁移与映射先分析旧 SetupProfile 或 Mac 清单，再勾选要合并的项目。分析不会自动选择或执行；未支持内容会保留说明。更换路径或目标后须重新分析。", "Migration first analyzes a legacy SetupProfile or Mac inventory, then lets you select items to merge. Analysis never selects or executes automatically; unsupported content stays in the report. Reanalyze after changing the path or target."));
+            ui.label(tx("迁移与映射支持应用备份、旧 SetupProfile/Mac 清单及 WinGet 2.0 导出 JSON，分析后再勾选要合并的项目。WinGet 只建议官方社区源中能唯一对应可信目录的软件；其他来源、附加安装要求及未知软件保留说明，版本不作为安装锁定。分析不会自动选择或执行，更换路径或目标后须重新分析。", "Migration accepts app backups, legacy SetupProfile/Mac inventories and WinGet 2.0 export JSON. Select items after analysis. WinGet suggests only community-source packages with unique trusted catalog identities; other sources, extra installation requirements and unknown packages stay visible, and versions are not installation pins. Analysis never selects or executes automatically. Reanalyze after changing the path or target."));
             ui.label(tx("开发环境页可按 Cargo、uv、Pip、NPM 和 VS Code 筛选。Pip 核对标准 CPython、用户目录和包身份；uv 需要已有 Python，NPM 使用用户前缀并禁用生命周期脚本。", "Filter developer tasks by Cargo, uv, Pip, NPM and VS Code. Pip validates standard CPython, user directories and package identity; uv needs an existing Python interpreter, while NPM uses the user prefix with lifecycle scripts disabled."));
         });
         settings_section(

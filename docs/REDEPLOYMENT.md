@@ -90,7 +90,7 @@ fork 的 [macOS profile](https://github.com/nowaytouse/topgrade/blob/0a2969bf976
 - uv 工具请求 JSON：可保存/载入选中的 PyPI 命令包与精确/滚动渠道；执行适配器只通过现有 uv 管理所选工具，不运行导入文件中的命令。
 - Rust 的 mise.toml 输出仍保留。mise core 运行时另有严格 JSON 请求与 GUI 重部署；导出的请求/已解析 mise.toml 只含受支持的 core: runtime，锁文件由 mise 实际生成并验证，不导入项目配置、任务、插件、环境或钩子。
 - `Brewfile`：输出受控所选身份及 HEAD 参数；不把 Homebrew 的已安装版本伪装为版本 pin。
-- WinGet 原生 packages 清单：保留现有可信身份导出与逐项部署；本轮未增加 WinGet 任意安装来源或版本恢复。
+- WinGet 原生 packages 清单：支持可信身份导出，以及在迁移工作台审核 schema 2.0 导出 JSON。只有文件声明的固定社区来源与唯一可信目录身份才产生候选；Store、自定义源、重复/未知身份和附加安装要求留为说明。版本只作元数据，不提供精确版本、渠道、范围、安装参数或任意来源恢复；执行继续使用原有可信任务，不把文件传给 winget import。
 
 mise core 流程实际调用 mise 生成跨平台锁文件并使用 install --locked；不从观测清单伪造锁条目。锁强度因 backend 而异，虽有 core archive 下载 URL/校验值仍不锁项目依赖、操作系统包与全部构建输入。
 

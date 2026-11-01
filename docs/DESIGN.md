@@ -1,5 +1,13 @@
 # DevEnv Studio — design record
 
+## Unreleased — native WinGet inventory review
+
+WinGet export JSON enters the existing migration analyzer, CLI and GUI report. The reader retains duplicate-key, byte, shape, string and collection limits; its new file checks reject non-regular/link inputs and changed identity or metadata. Verified platform-specific open flags protect the final component on macOS, Linux x86_64/aarch64 and Windows. This does not promise race-free ancestor traversal or nonblocking I/O for every regular file or ABI.
+
+Only schema 2.0 and the fixed community-source declaration can propose unique applicable tasks from the current trusted package catalog. Store/custom sources, duplicates, unknown identities and extra installation requirements remain visible review rows. Versions are bounded metadata, never executable arguments or installation pins; private source/option values are withheld. The source declaration is not origin authentication, and no source is automatically added or replaced. Unknown attributes and empty lists are handled by this application's review contract, not described as full upstream schema/import compatibility.
+
+The migration workbench keeps the same initially empty selection, report indices, pagination, target/path validity, merge validation and Windows execution gate. Its target picker omits unrelated workspace-load/save/inspect actions so inventory import has one unambiguous entry. A short export guide copies a static command only. No new installer, provider, downloaded script or dependency is introduced; the existing native identity exporter is covered by export-to-analysis round trips.
+
 ## Unreleased — purpose-based prerequisites and readable task status
 
 Mac Rust, Python and Web starter purposes select subsets of the existing seven reviewed Homebrew candidates. Every requested identity must resolve before selection changes; invalid, empty or duplicate subsets fail as a whole. Preparation merges with existing choices, uses missing-only policy and clears stale confirmation/result state. It leaves Rust channels, other provider selections and Windows workspaces untouched. The existing general starter action and Windows recipes remain available. These are prerequisite choices, not a complete language environment or a new installer.
