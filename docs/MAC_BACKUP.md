@@ -31,6 +31,10 @@ Windows采集Cargo、uv、NPM、Pip、VS Code与Scoop六类，复用现有可信
 
 环境配置页提供7个Mac基础候选（Git、rustup、uv、Node.js、Python3.14、CMake、VS Code）与有效Mac备份中完整Homebrew来源的条目。Mac选择独立于Windows工作区，默认全部关闭。勾选后可审核、导出标准Brewfile，已有文件不覆盖。Git 全局配置另有跨 macOS/Windows 的九项白名单档案；它是独立的用户选择性配置迁移，不属于 Mac 软件清单，也不包含凭据、代理或其他 Git 配置。
 
+用途准备复用上述候选：Rust基础包含Git、rustup、CMake、VS Code；Python基础包含Git、uv、Python3.14、VS Code；Web基础包含Git、Node.js、VS Code。每个集合完整校验后再与已有选择合并，使用补齐模式，清除旧确认和结果并定位审核区；重复点击不会删除原有选择。忙碌时不改请求，也不改Rust渠道、其他提供程序或Windows工作区。用途只准备基础依赖；运行时、项目依赖、NPM包和编辑器扩展仍需各自审核，不代表完整语言环境已就绪。
+
+Topgrade、Git、Rust、uv、Cargo空面板初始收起，已有清单、草稿或结果会影响标题提示和首次展开；用户主动收起后不会被下一帧重新展开，选择与确认仍保留。Rust/uv/mise成功读取清单即使不弹提示，也会更新状态页最近结果；取消和错误仍可见。Rust面板的mise导出只生成Rust清单，其他core运行时的锁定和安装在独立mise面板操作。
+
 在Mac执行需要已保存且内容未变的Mac清单、用户明确确认、可用Homebrew及本地运行时。载入的备份可以来自另一台Mac，不代表本机当前状态，也不是恢复点。执行重新生成私有临时Brewfile，仅含有效brew/cask身份；不执行外部编辑的Brewfile或任意Ruby内容。先bundle install --no-upgrade，再独立bundle check --no-upgrade；不运行cleanup、uninstall、force或zap。依赖可能改变或升级，取消和失败可能留下已执行部分，没有自动回滚；结果仅验证已安装存在，不验证历史版本、CLI或项目构建。执行前先在本地应用数据的environment-history私有运行目录重新采集并保存本机before.json（Homebrew两类必须完整），再保存并同步精确request.json；任一步失败都不运行变更命令；执行后另存脱敏result.json。只有started而没有结果的记录代表完成状态未知，不能当作成功或恢复点；结果持久化失败也不会报告成功。最近结果另可导出JSON，取消后后代安装器可能继续运行。Cargo、uv 与 VS Code 扩展已有独立 Mac 重部署流程。VS Code 扩展部署只操作稳定版默认用户配置文件，不恢复账号或同步状态；编辑器设置由独立的 21 项白名单档案逐项迁移，保留 JSONC 注释及未选设置。扩展身份与版本经 CLI 回读，但 Marketplace 后续版本、扩展行为和其他用户数据不受此清单保证。Cargo HEAD 仅来自固定审核仓库，并保存解析到的提交号；安装后 Cargo 清单只能回读包名和版本。
 
 Windows继续使用原有可信方案流程，Windows备份按同提供程序精确身份匹配，未知项手动审核。WinGet清单导出只含当前Windows方案选中的软件与固定官方SourceDetails，不包含其他提供程序、版本锁、自定义来源或安装参数；完整跨工具档案仍使用应用档案。Windows执行保留现有LTSC版本门禁，不推断其他Windows版本兼容。

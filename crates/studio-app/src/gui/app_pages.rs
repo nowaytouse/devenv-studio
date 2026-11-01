@@ -221,62 +221,79 @@ impl Studio {
             }
         });
         ui.label(RichText::new(tx("来自当前主机、已验证目录与实际执行报告；不推测系统健康度。","Actual host information, validated catalogs and execution reports. No inferred health score.")).color(palette().muted));
-        settings_section(ui, tx("主机与能力", "Host and capabilities"), |ui| {
-            property(ui, tx("运行主机", "Host"), &self.host.name);
-            property(ui, tx("方案目标", "Plan target"), self.target.label());
-            property(
-                ui,
-                tx("已识别的 Windows", "Detected Windows"),
-                self.host.target.map(|target| target.label()).unwrap_or(tx(
-                    "未识别受支持的 Windows",
-                    "No supported Windows identified",
-                )),
-            );
-            property(
-                ui,
-                tx("执行模式", "Execution mode"),
-                if self.mutation_available() {
-                    tx(
-                        "可在当前目标执行；仍需最终确认",
-                        "Execution available for this target; final confirmation required",
-                    )
-                } else if self.worker.is_some() {
-                    tx(
-                        "任务运行中，禁止并发执行",
-                        "A task is running; concurrent execution is disabled",
-                    )
-                } else {
-                    tx(
-                        "方案预览 / 导出；本机执行不可用",
-                        "Plan preview / export; execution unavailable",
-                    )
-                },
-            );
-            property(
-                ui,
-                "WinGet",
-                if self.winget.available {
-                    tx(
-                        "已识别微软应用安装程序执行别名",
-                        "Microsoft App Installer alias identified",
-                    )
-                } else {
-                    tx(
-                        "当前不可用；查看软件部署页的检测详情",
-                        "Unavailable; see capability details on the Software page",
-                    )
-                },
-            );
-            egui::CollapsingHeader::new(tx(
-                "原始主机与能力诊断",
-                "Raw host and capability diagnostics",
-            ))
-            .id_salt("status-host-raw")
-            .show(ui, |ui| {
-                ui.label(&self.host.explanation);
-                ui.label(&self.winget.detail);
-            });
-        });
+        settings_section(
+            ui,
+            tx("本机与 Windows 方案", "This device and Windows plans"),
+            |ui| {
+                ui.label(tx(
+                "本节的执行能力仅针对 Windows 系统方案；开发工具的可用条件请在环境配置页分别核对。",
+                "Execution capability in this section applies to Windows system plans. Check each developer tool panel on Environment for its requirements.",
+            ));
+                property(ui, tx("运行平台", "Operating system"), std::env::consts::OS);
+                property(
+                    ui,
+                    tx("Windows 主机检测", "Windows host detection"),
+                    &self.host.name,
+                );
+                property(
+                    ui,
+                    tx("Windows 方案目标", "Windows plan target"),
+                    self.target.label(),
+                );
+                property(
+                    ui,
+                    tx("已识别的 Windows", "Detected Windows"),
+                    self.host.target.map(|target| target.label()).unwrap_or(tx(
+                        "未识别受支持的 Windows",
+                        "No supported Windows identified",
+                    )),
+                );
+                property(
+                    ui,
+                    tx("Windows 方案执行", "Windows plan execution"),
+                    if self.mutation_available() {
+                        tx(
+                            "可在当前目标执行；仍需最终确认",
+                            "Execution available for this target; final confirmation required",
+                        )
+                    } else if self.worker.is_some() {
+                        tx(
+                            "任务运行中，禁止并发执行",
+                            "A task is running; concurrent execution is disabled",
+                        )
+                    } else {
+                        tx(
+                            "仅预览或导出 Windows 方案",
+                            "Windows plan preview or export only",
+                        )
+                    },
+                );
+                property(
+                    ui,
+                    "WinGet",
+                    if self.winget.available {
+                        tx(
+                            "已识别微软应用安装程序执行别名",
+                            "Microsoft App Installer alias identified",
+                        )
+                    } else {
+                        tx(
+                            "当前不可用；查看软件部署页的检测详情",
+                            "Unavailable; see capability details on the Software page",
+                        )
+                    },
+                );
+                egui::CollapsingHeader::new(tx(
+                    "原始主机与能力诊断",
+                    "Raw host and capability diagnostics",
+                ))
+                .id_salt("status-host-raw")
+                .show(ui, |ui| {
+                    ui.label(&self.host.explanation);
+                    ui.label(&self.winget.detail);
+                });
+            },
+        );
         settings_section(ui, tx("目录与选择", "Catalogs and selection"), |ui| {
             match &self.catalog {
                 Ok(catalog) => {
@@ -548,8 +565,16 @@ impl Studio {
                         "Capture or load an inventory on Environment backup, then save it locally.",
                     ),
                     tx(
-                        "选择基础工具或所需运行时，查看将要安装的项目和版本。",
-                        "Select starter tools or runtimes, then review the requested tools and versions.",
+                        if cfg!(target_os = "macos") {
+                            "按 Rust、Python、Web 用途准备基础工具，或使用通用基础；查看所选项目，再按需展开其他工具面板。"
+                        } else {
+                            "按用途选择 Windows 方案，查看包含的工具与设置；其他运行时和配置可按需展开。"
+                        },
+                        if cfg!(target_os = "macos") {
+                            "Prepare Rust, Python or Web prerequisites, or general starter tools. Review the selection, then expand other tool panels as needed."
+                        } else {
+                            "Choose a Windows recipe and review its tools and settings; expand other runtimes and configuration panels as needed."
+                        },
                     ),
                     tx(
                         "Mac 在对应工具面板勾选确认后配置；Windows 系统方案到变更方案审核。",

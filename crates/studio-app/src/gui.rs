@@ -330,7 +330,7 @@ impl Studio {
             preferences,
             preferences_error,
             last_operation: None,
-            history: studio_deployment::history().map_err(|error| format!("{error:#}")),
+            history: Ok(Vec::new()),
             catalog: studio_core::load_catalog().map_err(|e| format!("{e:#}")),
             deployment_catalog: studio_deployment::catalog().map_err(|e| format!("{e:#}")),
             winget: studio_deployment::winget_capability(),
@@ -743,8 +743,8 @@ impl Studio {
                     error: true,
                 },
             };
+            self.last_operation = Some(notice.clone());
             self.notice = (!quiet_inventory_success).then_some(notice);
-            self.last_operation = self.notice.clone();
             self.refresh_recovery();
         }
         if self.worker.is_some() {
@@ -1260,8 +1260,10 @@ impl Studio {
                         } else {
                             preview_host_name()
                         },
-                        if matches!(self.page, Page::Backup | Page::Environment | Page::Network)
-                            && cfg!(any(target_os = "macos", windows))
+                        if matches!(
+                            self.page,
+                            Page::Backup | Page::Environment | Page::Network | Page::Status
+                        ) && cfg!(any(target_os = "macos", windows))
                         {
                             tx("本机开发环境", "Local developer environment")
                         } else if self.host.can_apply {
@@ -4284,6 +4286,75 @@ mod tests {
                 && app.power_selected.is_empty()
         );
         Ok(())
+    }
+
+    #[test]
+    fn quiet_inventory_success_keeps_last_status_without_a_popup() {
+        for (result, provider) in [
+            (WorkerResult::RustInventory(Vec::new()), "Rust"),
+            (WorkerResult::PythonToolsInventory(Vec::new()), "uv"),
+            (WorkerResult::MiseRuntimeInventory(Vec::new()), "mise"),
+        ] {
+            let mut app = preview();
+            app.last_operation = Some(Notice {
+                text: "Previous synthetic failure".into(),
+                error: true,
+            });
+            let (sender, receiver) = mpsc::channel();
+            assert!(sender.send(Ok(result)).is_ok());
+            app.worker = Some(Worker {
+                cancel: Arc::new(AtomicBool::new(false)),
+                receiver,
+                thread: None,
+                events: None,
+                label: "synthetic inventory",
+            });
+            app.poll_worker(&egui::Context::default());
+            assert!(app.worker.is_none());
+            assert!(app.notice.is_none(), "Inventory success should stay quiet");
+            let status = app
+                .last_operation
+                .as_ref()
+                .expect("Keep the inventory status");
+            assert!(!status.error);
+            assert!(status.text.contains(provider));
+        }
+    }
+
+    #[test]
+    fn inventory_cancellation_and_errors_keep_visible_status() {
+        for (result, cancelled) in [
+            (Ok(WorkerResult::RustInventory(Vec::new())), true),
+            (Ok(WorkerResult::PythonToolsInventory(Vec::new())), true),
+            (Ok(WorkerResult::MiseRuntimeInventory(Vec::new())), true),
+            (Err("Synthetic inventory failure".into()), false),
+        ] {
+            let mut app = preview();
+            let (sender, receiver) = mpsc::channel();
+            assert!(sender.send(result).is_ok());
+            app.worker = Some(Worker {
+                cancel: Arc::new(AtomicBool::new(cancelled)),
+                receiver,
+                thread: None,
+                events: None,
+                label: "synthetic inventory",
+            });
+            app.poll_worker(&egui::Context::default());
+            assert!(app.worker.is_none());
+            let notice = app
+                .notice
+                .as_ref()
+                .expect("Keep cancellation and errors visible");
+            let status = app
+                .last_operation
+                .as_ref()
+                .expect("Keep cancellation and errors in Status");
+            assert!(notice.error && status.error);
+            assert_eq!(notice.text, status.text);
+            if !cancelled {
+                assert_eq!(status.text, "Synthetic inventory failure");
+            }
+        }
     }
 
     #[test]

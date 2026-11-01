@@ -1,5 +1,15 @@
 # DevEnv Studio — design record
 
+## Unreleased — purpose-based prerequisites and readable task status
+
+Mac Rust, Python and Web starter purposes select subsets of the existing seven reviewed Homebrew candidates. Every requested identity must resolve before selection changes; invalid, empty or duplicate subsets fail as a whole. Preparation merges with existing choices, uses missing-only policy and clears stale confirmation/result state. It leaves Rust channels, other provider selections and Windows workspaces untouched. The existing general starter action and Windows recipes remain available. These are prerequisite choices, not a complete language environment or a new installer.
+
+Topgrade, Git, Rust, uv and Cargo retain their existing panels behind stable expandable sections. Empty panels initially collapse; inventory, draft and prior-result hints use existing state. Default opening never overrides a user's later decision to collapse a section, and unrelated workers do not expand all panels. Context help and the prerequisite explanation point to the existing provider-specific review and execution boundaries.
+
+Quiet inventory completion now updates the session's last-operation record independently of its transient popup. Rust, uv and mise reads can remain quiet while Status reports the actual completion; cancellation and errors remain visible. Startup uses an empty history placeholder until the existing unconditional recovery refresh performs its single authoritative read before construction returns. This removes one redundant deployment-history scan without changing refresh or error propagation, and does not establish an end-to-end startup timing improvement.
+
+Status distinguishes the running operating system from the Windows adapter's host detection, target and plan execution capability. A Windows preview-only result does not describe the Mac provider workflows as unavailable; those panels retain their own prerequisites and execution checks.
+
 ## Unreleased — inventory guidance and guarded network review
 
 The backup page reuses the existing capture, file picker, migration and environment workflows in three steps: acquire an inventory, review its coverage and save it, then choose the next platform workflow. Provider details stay expandable and large package lists remain virtualized. Persistent counts distinguish complete, partial, unavailable and failed sources; incomplete records can be saved without being presented as a complete environment. Accepting a new inventory clears only related filters, selections and confirmation, while invalid imports and busy operations preserve the current work.
