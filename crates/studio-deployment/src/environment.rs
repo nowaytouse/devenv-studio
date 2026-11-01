@@ -795,13 +795,17 @@ mod tests {
     struct TestDirectory(std::path::PathBuf);
     impl TestDirectory {
         fn new() -> Result<Self> {
+            use std::sync::atomic::AtomicU64;
+            static NEXT: AtomicU64 = AtomicU64::new(0);
             let directory = Self(std::env::temp_dir().join(format!(
-                "studio-bundle-evidence-{}-{}",
+                "studio-bundle-evidence-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)?.as_nanos()
+                    .duration_since(std::time::UNIX_EPOCH)?.as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
             )));
-            std::fs::create_dir(&directory.0)?;
+            std::fs::create_dir(&directory.0)
+                .context("Create isolated bundle evidence test directory")?;
             Ok(directory)
         }
     }

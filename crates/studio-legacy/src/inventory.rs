@@ -385,6 +385,9 @@ mod tests {
         MacosInventory, ParityRules, parse_cargo_install_list, parse_npm_globals,
         parse_uv_tool_list,
     };
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn provider_outputs_are_parsed_without_versions_or_binaries() {
@@ -439,10 +442,11 @@ mod tests {
             .unwrap()
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "devenv-inventory-input-{}-{stamp}",
-            std::process::id()
+            "devenv-inventory-input-{}-{stamp}-{}",
+            std::process::id(),
+            DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&root).expect("Create isolated inventory test directory");
         let root = root.canonicalize().unwrap();
         let source = root.join("inventory.json");
         let inventory = MacosInventory::load_embedded().unwrap();
@@ -498,10 +502,11 @@ mod tests {
             .unwrap()
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "ltsc-inventory-staging-{}-{stamp}",
-            std::process::id()
+            "ltsc-inventory-staging-{}-{stamp}-{}",
+            std::process::id(),
+            DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&root).expect("Create isolated inventory test directory");
         let root = root.canonicalize().unwrap();
         let destination = root.join("inventory.json");
         let unrelated = destination.with_extension("json.tmp");

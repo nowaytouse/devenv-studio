@@ -536,14 +536,17 @@ mod tests {
                 let _ = fs::remove_dir_all(&self.0);
             }
         }
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         let dir = Directory(std::env::temp_dir().join(format!(
-                "studio-rust-request-{}-{}",
+                "studio-rust-request-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)?
-                    .as_nanos()
+                    .as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
             )));
-        fs::create_dir(&dir.0)?;
+        fs::create_dir(&dir.0).context("Create isolated Rust request test directory")?;
         let path = dir.0.join("request.json");
         let request = RustRequest {
             channel: "nightly".into(),

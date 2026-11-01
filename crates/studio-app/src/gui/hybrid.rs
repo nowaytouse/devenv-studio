@@ -6,6 +6,7 @@ use crate::{
 };
 
 const WINGET_EXPORT_COMMAND: &str = "winget export --output winget.json --include-versions";
+const MIGRATION_ANALYSIS_LABEL: &str = "正在分析清单…";
 
 pub(super) struct HybridState {
     pub path: String,
@@ -228,33 +229,17 @@ impl Studio {
                 )
                 .clicked()
             {
-                self.hybrid.report = None;
-                self.hybrid.reset_review();
-                self.hybrid.error = None;
-                self.hybrid.report_target = None;
-                self.hybrid.report_path = None;
-                let path = PathBuf::from(self.hybrid.path.trim());
-                if !path.is_absolute() {
-                    self.hybrid.error = Some(
-                        tx(
-                            "请选择绝对路径的 JSON 文件。",
-                            "Choose an absolute JSON file path.",
-                        )
-                        .into(),
-                    );
-                } else {
-                    match migration::load(&path, self.target) {
-                        Ok(report) => {
-                            self.hybrid.report = Some(report);
-                            self.hybrid.report_target = Some(self.target);
-                            self.hybrid.report_path = Some(self.hybrid.path.trim().to_owned());
-                        }
-                        Err(error) => self.hybrid.error = Some(format!("{error:#}")),
-                    }
-                }
+                self.start_migration_analysis();
             }
         });
         ui.label(RichText::new(tx("分析只生成报告，不会勾选或安装。未知软件、未支持的来源或安装选项保留为说明；私密源地址、安装参数、Git 身份与 Shell 内容不会原样回显或写入。", "Analysis only creates a report; it selects and installs nothing. Unknown packages, unsupported sources and installation options remain review notes. Private source addresses, installer arguments, Git identity and shell content are not echoed or written.")).size(12.0).color(palette().muted));
+        if self
+            .worker
+            .as_ref()
+            .is_some_and(|worker| worker.label == MIGRATION_ANALYSIS_LABEL)
+        {
+            ui.label(RichText::new(tx("正在后台分析，可继续查看帮助或其他页面。若系统显示文件访问提示，请自行允许或拒绝；取消也需等待当前文件操作返回，随后丢弃结果。", "Analysis is running in the background; help and other pages remain available. If a file-access prompt appears, allow or deny it yourself. Cancellation waits for the current file operation, then discards its result.")).size(12.0).color(palette().muted));
+        }
         if let Some(report) = &self.hybrid.report {
             ui.separator();
             ui.strong(tx("2. 查看并勾选映射", "2. Review and select mappings"));
@@ -472,6 +457,94 @@ impl Studio {
         self.hybrid.report.is_some()
             && self.hybrid.report_target == Some(self.target)
             && self.hybrid.report_path.as_deref() == Some(self.hybrid.path.trim())
+    }
+
+    fn start_migration_analysis(&mut self) {
+        if self.worker.is_some() {
+            return;
+        }
+        let path = self.hybrid.path.trim().to_owned();
+        if !PathBuf::from(&path).is_absolute() {
+            self.hybrid.error = Some(
+                tx(
+                    "请选择绝对路径的 JSON 文件。",
+                    "Choose an absolute JSON file path.",
+                )
+                .into(),
+            );
+            return;
+        }
+        let target = self.target;
+        self.hybrid.report = None;
+        self.hybrid.report_path = None;
+        self.hybrid.report_target = None;
+        self.hybrid.error = None;
+        self.hybrid.reset_review();
+        self.start_worker(MIGRATION_ANALYSIS_LABEL, move |cancel| {
+            let report = if cancel.load(Ordering::Acquire) {
+                Err("Migration analysis cancelled before reading".into())
+            } else {
+                migration::load(&PathBuf::from(&path), target).map_err(|error| format!("{error:#}"))
+            };
+            Ok(WorkerResult::Migration {
+                path,
+                target,
+                report,
+            })
+        });
+    }
+
+    pub(super) fn accept_migration_analysis(
+        &mut self,
+        path: String,
+        target: Target,
+        report: Result<MigrationReport, String>,
+        cancelled: bool,
+    ) -> Notice {
+        if cancelled {
+            return Notice {
+                text: tx(
+                    "清单分析已取消，未载入结果。",
+                    "Inventory analysis cancelled; the result was not loaded.",
+                )
+                .into(),
+                error: true,
+            };
+        }
+        if path != self.hybrid.path.trim() || target != self.target {
+            return Notice { text: tx("路径或目标已改变，旧分析结果未载入。请重新分析当前文件。", "The path or target changed; the old analysis was not loaded. Analyze the current file again.").into(), error: true };
+        }
+        match report {
+            Ok(report) => {
+                let mapped = report
+                    .items
+                    .iter()
+                    .filter(|item| item.status == "mapped")
+                    .count();
+                let other = report.items.len() - mapped;
+                self.hybrid.report = Some(report);
+                self.hybrid.report_path = Some(path);
+                self.hybrid.report_target = Some(target);
+                self.hybrid.error = None;
+                self.hybrid.reset_review();
+                Notice {
+                    text: lf!(
+                        "清单分析完成：可映射 {} 项，其余说明 {} 项。请逐项审核；尚未勾选或安装。",
+                        "Inventory analyzed: {} mapped items and {} other notes. Review each item; nothing is selected or installed.",
+                        mapped,
+                        other
+                    ),
+                    error: false,
+                }
+            }
+            Err(error) => {
+                self.hybrid.error = Some(error.clone());
+                Notice {
+                    text: error,
+                    error: true,
+                }
+            }
+        }
     }
 
     fn merge_workspace(&mut self, settings: &BTreeSet<String>, tasks: &BTreeSet<String>) {
@@ -729,5 +802,273 @@ mod tests {
         assert!(app.page == Page::Plan);
         i18n::set_language(Language::ZhCn);
         Ok(())
+    }
+
+    #[test]
+    fn migration_analysis_starts_one_worker_and_accepts_only_a_review() -> anyhow::Result<()> {
+        let mut app = super::super::tests::preview();
+        app.navigate_to(Page::Migration);
+        app.hybrid.path = "relative.json".into();
+        app.start_migration_analysis();
+        assert!(app.worker.is_none() && app.hybrid.error.is_some());
+        app.hybrid.path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/winget-export.json")
+            .display()
+            .to_string();
+        app.deployment_selected
+            .insert("keep-existing-choice".into());
+        app.start_migration_analysis();
+        assert!(app.worker.is_some() && app.hybrid.report.is_none() && app.hybrid.error.is_none());
+        assert!(app.worker.as_ref().unwrap().thread.is_some());
+        let cancel = Arc::clone(&app.worker.as_ref().unwrap().cancel);
+        app.start_migration_analysis();
+        assert!(Arc::ptr_eq(&cancel, &app.worker.as_ref().unwrap().cancel));
+        app.navigate_to(Page::Help);
+        app.worker
+            .as_mut()
+            .unwrap()
+            .thread
+            .take()
+            .unwrap()
+            .join()
+            .expect("analysis thread returns");
+        app.poll_worker(&egui::Context::default());
+        assert!(app.worker.is_none() && app.page == Page::Help && app.notice.is_none());
+        assert!(!app.last_operation.as_ref().unwrap().error);
+        assert_eq!(app.hybrid.report.as_ref().unwrap().source, "winget_export");
+        assert!(app.migration_current() && app.hybrid.selected_rows.is_empty());
+        assert!(
+            app.hybrid.checked_requests().0.is_empty()
+                && app.hybrid.checked_requests().1.is_empty()
+        );
+        assert_eq!(
+            app.deployment_selected,
+            BTreeSet::from(["keep-existing-choice".into()])
+        );
+        assert!(app.selected.is_empty() && app.dialog.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn migration_pending_read_keeps_ui_and_cancellation_available() -> anyhow::Result<()> {
+        let mut app = super::super::tests::preview();
+        app.preferences.language = Language::EnUs;
+        i18n::set_language(Language::EnUs);
+        app.navigate_to(Page::Migration);
+        app.hybrid.path = std::env::temp_dir()
+            .join("synthetic-winget.json")
+            .display()
+            .to_string();
+        let path = app.hybrid.path.clone();
+        let target = app.target;
+        let report = migration::analyze(
+            include_bytes!("../../../../examples/winget-export.json"),
+            target,
+        )?;
+        let (release, wait) = mpsc::channel();
+        app.start_worker(MIGRATION_ANALYSIS_LABEL, move |_| {
+            wait.recv().expect("test releases blocked read");
+            Ok(WorkerResult::Migration {
+                path,
+                target,
+                report: Ok(report),
+            })
+        });
+        let context = egui::Context::default();
+        context.enable_accesskit();
+        app.poll_worker(&context);
+        let mut output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(980.0, 1200.0),
+                )),
+                ..Default::default()
+            },
+            |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    app.header(ui);
+                    app.migration_page(ui);
+                });
+            },
+        );
+        output.textures_delta.clear();
+        let nodes = output
+            .platform_output
+            .accesskit_update
+            .expect("pending-read accessibility tree")
+            .nodes;
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, node)| node.label().or_else(|| node.value())
+                    == Some("Analyzing inventory…"))
+        );
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Cancel task") && !node.is_disabled())
+        );
+        assert!(nodes.iter().any(|(_, node)| {
+            node.label()
+                .or_else(|| node.value())
+                .is_some_and(|label| label.contains("file-access prompt"))
+        }));
+        app.navigate_to(Page::Help);
+        app.request_close(&context);
+        assert!(app.worker.as_ref().unwrap().cancel.load(Ordering::Acquire));
+        app.poll_worker(&context);
+        assert!(app.worker.is_some() && app.hybrid.report.is_none());
+        assert!(app.last_operation.is_none());
+        release.send(()).expect("finish synthetic read");
+        app.worker
+            .as_mut()
+            .unwrap()
+            .thread
+            .take()
+            .unwrap()
+            .join()
+            .expect("reader returns");
+        app.poll_worker(&context);
+        assert!(app.worker.is_none() && app.hybrid.report.is_none());
+        assert!(app.notice.as_ref().unwrap().error && app.last_operation.as_ref().unwrap().error);
+        assert!(app.hybrid.selected_rows.is_empty() && app.deployment_selected.is_empty());
+        assert!(app.page == Page::Help && app.dialog.is_none());
+        i18n::set_language(Language::ZhCn);
+        Ok(())
+    }
+
+    #[test]
+    fn migration_late_success_errors_and_cancellation_never_replace_new_input() -> anyhow::Result<()>
+    {
+        for (change_path, change_target, cancelled, fail) in [
+            (true, false, false, false),
+            (true, false, false, true),
+            (false, true, false, false),
+            (false, true, false, true),
+            (false, false, true, false),
+            (false, false, true, true),
+            (false, false, false, true),
+        ] {
+            let mut app = super::super::tests::preview();
+            app.hybrid.path = std::env::temp_dir()
+                .join("synthetic-winget.json")
+                .display()
+                .to_string();
+            let path = app.hybrid.path.clone();
+            let target = app.target;
+            let report = if fail {
+                Err("synthetic read failure".into())
+            } else {
+                Ok(migration::analyze(
+                    include_bytes!("../../../../examples/winget-export.json"),
+                    target,
+                )?)
+            };
+            let (sender, receiver) = mpsc::channel();
+            sender.send(Ok(WorkerResult::Migration {
+                path,
+                target,
+                report,
+            }))?;
+            app.worker = Some(Worker {
+                cancel: Arc::new(AtomicBool::new(cancelled)),
+                receiver,
+                events: None,
+                thread: None,
+                label: MIGRATION_ANALYSIS_LABEL,
+            });
+            if change_path {
+                app.hybrid.path.push_str(".new");
+            }
+            if change_target {
+                app.target = Target::Win10Ltsc2021;
+            }
+            app.poll_worker(&egui::Context::default());
+            assert!(app.worker.is_none() && app.hybrid.report.is_none());
+            assert!(app.hybrid.report_target.is_none() && app.hybrid.report_path.is_none());
+            assert!(app.hybrid.selected_rows.is_empty() && app.deployment_selected.is_empty());
+            assert!(
+                app.notice.as_ref().unwrap().error && app.last_operation.as_ref().unwrap().error
+            );
+            assert_eq!(
+                app.hybrid.error.as_deref(),
+                (!change_path && !change_target && !cancelled).then_some("synthetic read failure")
+            );
+            assert!(app.dialog.is_none());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn migration_busy_controls_fit_the_minimum_window_in_both_languages() {
+        for language in [Language::ZhCn, Language::EnUs] {
+            for scale in [100, 125] {
+                let mut app = super::super::tests::preview();
+                app.navigate_to(Page::Migration);
+                app.preferences.language = language;
+                app.preferences.scale_percent = scale;
+                i18n::set_language(language);
+                let (_sender, receiver) = mpsc::channel();
+                app.worker = Some(Worker {
+                    cancel: Arc::new(AtomicBool::new(false)),
+                    receiver,
+                    events: None,
+                    thread: None,
+                    label: MIGRATION_ANALYSIS_LABEL,
+                });
+                let context = egui::Context::default();
+                context.enable_accesskit();
+                theme::apply(&context, &app.preferences);
+                let mut nodes = BTreeMap::new();
+                for _ in 0..2 {
+                    let mut output = context.run_ui(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                egui::vec2(980.0, 680.0),
+                            )),
+                            ..Default::default()
+                        },
+                        |ui| {
+                            app.rail(ui);
+                            app.tray(ui);
+                            egui::CentralPanel::default().show(ui, |ui| {
+                                app.header(ui);
+                                egui::ScrollArea::vertical().show(ui, |ui| app.migration_page(ui));
+                            });
+                        },
+                    );
+                    output.textures_delta.clear();
+                    nodes.extend(
+                        output
+                            .platform_output
+                            .accesskit_update
+                            .expect("busy AX tree")
+                            .nodes,
+                    );
+                }
+                for title in [t("取消任务"), tx("? 使用帮助", "? How to use")] {
+                    let bounds = nodes
+                        .values()
+                        .find(|node| node.label() == Some(title))
+                        .and_then(|node| node.bounds())
+                        .expect("visible busy controls");
+                    assert!(
+                        bounds.x0 >= 0.0
+                            && bounds.y0 >= 0.0
+                            && bounds.x1 <= 980.0
+                            && bounds.y1 <= 680.0,
+                        "{language:?} {scale}% {title}: {bounds:?}"
+                    );
+                }
+                assert!(
+                    app.worker.is_some()
+                        && app.hybrid.report.is_none()
+                        && app.deployment_selected.is_empty()
+                );
+            }
+        }
+        i18n::set_language(Language::ZhCn);
     }
 }

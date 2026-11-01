@@ -242,6 +242,11 @@ enum WorkerResult {
     Deployment(studio_deployment::DeploymentReport),
     StorageStatus(Result<studio_deployment::StorageStatus, String>),
     Backup(studio_deployment::backup::Snapshot),
+    Migration {
+        path: String,
+        target: Target,
+        report: Result<crate::migration::MigrationReport, String>,
+    },
     Bundle(studio_deployment::environment::BundleReport),
     Rust(studio_deployment::toolchains::RustReport),
     RustInventory(Vec<String>),
@@ -448,6 +453,7 @@ impl Studio {
                     | WorkerResult::PythonToolsInventory(_)
                     | WorkerResult::MiseRuntimeInventory(_))
             );
+            let migration_result = matches!(&result, Ok(WorkerResult::Migration { .. }));
             let notice = match result {
                 Ok(WorkerResult::Registry(report) | WorkerResult::Power(report)) => Notice {
                     text: lf!(
@@ -474,6 +480,11 @@ impl Studio {
                     notice
                 }
                 Ok(WorkerResult::Backup(snapshot)) => self.accept_backup(snapshot),
+                Ok(WorkerResult::Migration {
+                    path,
+                    target,
+                    report,
+                }) => self.accept_migration_analysis(path, target, report, cancelled),
                 Ok(WorkerResult::Rust(report)) => {
                     let notice = Notice {
                         text: report.detail.clone(),
@@ -744,8 +755,11 @@ impl Studio {
                 },
             };
             self.last_operation = Some(notice.clone());
-            self.notice = (!quiet_inventory_success).then_some(notice);
-            self.refresh_recovery();
+            self.notice = (!(quiet_inventory_success || (migration_result && !notice.error)))
+                .then_some(notice);
+            if !migration_result {
+                self.refresh_recovery();
+            }
         }
         if self.worker.is_some() {
             ctx.request_repaint_after(Duration::from_millis(120));
@@ -3061,6 +3075,10 @@ fn logo(ui: &mut egui::Ui, size: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Context as _;
+    use std::sync::atomic::AtomicU64;
+
+    static DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     pub(super) fn preview() -> Studio {
         Studio {
@@ -3255,13 +3273,14 @@ mod tests {
     -> anyhow::Result<()> {
         use studio_deployment::network::{Format, NetworkProfile, ProxyMode};
         let dir = std::env::temp_dir().join(format!(
-            "studio-network-gui-{}-{}",
+            "studio-network-gui-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
+                .as_nanos(),
+            DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir(&dir)?;
+        std::fs::create_dir(&dir).context("Create isolated network GUI test directory")?;
         let mut app = preview();
         let original = app.network.active.clone().unwrap();
         let profile = NetworkProfile {
@@ -3330,13 +3349,14 @@ mod tests {
         };
         app.network.active = Ok(profile.clone());
         let dir = std::env::temp_dir().join(format!(
-            "studio-network-scope-{}-{}",
+            "studio-network-scope-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
+                .as_nanos(),
+            DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir(&dir)?;
+        std::fs::create_dir(&dir).context("Create isolated network GUI test directory")?;
         let path = dir.join("network.json");
         let output = path.clone();
         let (release, wait) = mpsc::channel();
@@ -4001,13 +4021,14 @@ mod tests {
             }
         }
         let path = std::env::temp_dir().join(format!(
-            "ltsc-migration-profile-{}-{}",
+            "ltsc-migration-profile-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
+                .as_nanos(),
+            DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir(&path)?;
+        std::fs::create_dir(&path).context("Create isolated GUI profile test directory")?;
         let directory = TestDirectory(path);
         let profile_path = directory.0.join("reviewed-profile.json");
         workspace_io::save(
@@ -4098,13 +4119,14 @@ mod tests {
             }
         }
         let path = std::env::temp_dir().join(format!(
-            "ltsc-power-gui-{}-{}",
+            "ltsc-power-gui-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
+                .as_nanos(),
+            DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir(&path)?;
+        std::fs::create_dir(&path).context("Create isolated GUI profile test directory")?;
         let directory = TestDirectory(path);
         let mut app = preview();
         app.catalog = Ok(studio_core::load_catalog()?);
@@ -4197,13 +4219,14 @@ mod tests {
             }
         }
         let directory = TestDir(std::env::temp_dir().join(format!(
-                "studio-backup-gui-{}-{}",
+                "studio-backup-gui-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)?
-                    .as_nanos()
+                    .as_nanos(),
+            DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
             )));
-        std::fs::create_dir(&directory.0)?;
+        std::fs::create_dir(&directory.0).context("Create isolated backup GUI test directory")?;
         let mut app = preview();
         let snapshot: studio_deployment::backup::Snapshot = serde_json::from_slice(
             include_bytes!("../../../examples/mac-development-backup.json"),

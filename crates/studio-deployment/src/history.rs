@@ -156,7 +156,7 @@ fn open_history(path: &Path, root: &Path) -> Result<File> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(0x20000); // O_NOFOLLOW
+        options.custom_flags(linux_nofollow_flag(std::env::consts::ARCH)?);
     }
     #[cfg(windows)]
     {
@@ -185,6 +185,18 @@ fn open_history(path: &Path, root: &Path) -> Result<File> {
         "History path changed while opening"
     );
     Ok(file)
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", test))]
+fn linux_nofollow_flag(architecture: &str) -> Result<i32> {
+    // Linux/AOSP fcntl.h assigns different O_NOFOLLOW bits to ARM and x86.
+    match architecture {
+        "x86" | "x86_64" => Ok(0x20000),
+        "arm" | "aarch64" => Ok(0x8000),
+        _ => anyhow::bail!(
+            "No verified O_NOFOLLOW flag for Linux/Android architecture {architecture}"
+        ),
+    }
 }
 
 fn filename_timestamp(path: &Path) -> Result<u128> {
@@ -764,6 +776,25 @@ mod tests {
         fs::remove_dir(path.parent().unwrap()).unwrap();
         symlink(&outside.0, f.0.join("deployment-history")).unwrap();
         assert!(history_in(&f.0).is_err());
+    }
+
+    #[test]
+    fn linux_nofollow_uses_verified_architecture_values() {
+        for (architecture, expected) in [
+            ("x86", 0x20000),
+            ("x86_64", 0x20000),
+            ("arm", 0x8000),
+            ("aarch64", 0x8000),
+        ] {
+            assert_eq!(
+                linux_nofollow_flag(architecture).unwrap(),
+                expected,
+                "{architecture}"
+            );
+        }
+        for architecture in ["", "unknown", "sparc64"] {
+            assert!(linux_nofollow_flag(architecture).is_err(), "{architecture}");
+        }
     }
     #[test]
     fn timestamps_have_correct_utc_calendar() {

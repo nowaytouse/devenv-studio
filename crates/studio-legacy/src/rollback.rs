@@ -163,15 +163,18 @@ mod tests {
 
     #[test]
     fn failed_journal_save_does_not_commit_in_memory_state() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         let root = std::env::temp_dir().join(format!(
-            "ltsc-journal-failure-{}-{}",
+            "ltsc-journal-failure-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&root).expect("Create isolated rollback test directory");
         let path = root.join("journal.json");
         std::fs::create_dir(&path).unwrap();
         let mut journal = RollbackJournal {

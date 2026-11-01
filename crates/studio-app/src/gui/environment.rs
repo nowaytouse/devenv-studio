@@ -652,6 +652,7 @@ fn brew_policy_label(policy: native::BrewPolicy) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Context as _;
 
     fn preview() -> Studio {
         Studio {
@@ -704,14 +705,18 @@ mod tests {
     struct TestDir(PathBuf);
     impl TestDir {
         fn new() -> anyhow::Result<Self> {
+            use std::sync::atomic::AtomicU64;
+            static NEXT: AtomicU64 = AtomicU64::new(0);
             let directory = Self(std::env::temp_dir().join(format!(
-                "studio-environment-gui-{}-{}",
+                "studio-environment-gui-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)?
-                    .as_nanos()
+                    .as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
             )));
-            std::fs::create_dir(&directory.0)?;
+            std::fs::create_dir(&directory.0)
+                .context("Create isolated environment GUI test directory")?;
             Ok(directory)
         }
     }

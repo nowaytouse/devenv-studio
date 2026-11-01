@@ -534,14 +534,17 @@ mod tests {
                 let _ = fs::remove_dir_all(&self.0);
             }
         }
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         let directory = Directory(std::env::temp_dir().join(format!(
-                "studio-python-request-{}-{}",
+                "studio-python-request-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)?
-                    .as_nanos()
+                    .as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
             )));
-        fs::create_dir(&directory.0)?;
+        fs::create_dir(&directory.0).context("Create isolated Python request test directory")?;
         let path = directory.0.join("request.json");
         save(&request(), &path)?;
         assert_eq!(load(&path)?, request());

@@ -718,17 +718,19 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn cargo_and_git_tools_use_isolated_working_directories() {
-        use std::{fs, os::unix::fs::PermissionsExt};
+        use std::{fs, os::unix::fs::PermissionsExt, sync::atomic::AtomicU64};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
 
         let root = std::env::temp_dir().join(format!(
-            "devenv-studio-isolated-cwd-{}-{}",
+            "devenv-studio-isolated-cwd-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        fs::create_dir(&root).unwrap();
+        fs::create_dir(&root).expect("Create isolated process test directory");
         let cargo_home = root.join("cargo-home");
         let git_home = root.join("git-home");
         fs::create_dir(&cargo_home).unwrap();

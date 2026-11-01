@@ -1,5 +1,13 @@
 # DevEnv Studio — design record
 
+## Unreleased — responsive inventory analysis and verified file-open ABIs
+
+Migration analysis uses the existing global worker, cancellation and status lifecycle. The UI validates the absolute path and rejects a second task before changing review state. Both successful and failed reads carry the captured path and target; cancelled or stale results never replace the current review. Success remains initially unselected and does not change pages or installation choices. Read-only migration completion avoids an unrelated recovery-history refresh.
+
+Moving the read off the UI thread keeps navigation and help available while the operating system waits for a file-access decision. It does not interrupt a blocked kernel call: cancel requests discard results after the current read returns, and closing still waits for the existing worker. The application does not grant system file permissions itself.
+
+Deployment history and legacy draft readers explicitly choose Linux/Android `O_NOFOLLOW` for x86/x86_64 (`0x20000`) and arm/aarch64 (`0x8000`); unverified architectures fail with a controlled unsupported error. This fixes the former x86 constant on ARM while preserving the metadata, identity and bounded-read checks. Values were verified against fixed [Linux ARM64](https://github.com/torvalds/linux/blob/v6.17/arch/arm64/include/uapi/asm/fcntl.h), [Linux ARM](https://github.com/torvalds/linux/blob/v6.17/arch/arm/include/uapi/asm/fcntl.h), [generic Linux](https://github.com/torvalds/linux/blob/v6.17/include/uapi/asm-generic/fcntl.h), [Android ARM64](https://github.com/aosp-mirror/platform_bionic/blob/android-16.0.0_r1/libc/kernel/uapi/asm-arm64/asm/fcntl.h) and [Android ARM](https://github.com/aosp-mirror/platform_bionic/blob/android-16.0.0_r1/libc/kernel/uapi/asm-arm/asm/fcntl.h) headers. Parameterized host-independent checks are not Linux/Android native filesystem acceptance.
+
 ## Unreleased — native WinGet inventory review
 
 WinGet export JSON enters the existing migration analyzer, CLI and GUI report. The reader retains duplicate-key, byte, shape, string and collection limits; its new file checks reject non-regular/link inputs and changed identity or metadata. Verified platform-specific open flags protect the final component on macOS, Linux x86_64/aarch64 and Windows. This does not promise race-free ancestor traversal or nonblocking I/O for every regular file or ABI.

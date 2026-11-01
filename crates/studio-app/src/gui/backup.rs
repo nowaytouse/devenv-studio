@@ -494,6 +494,7 @@ fn provider_name(kind: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Context as _;
     #[test]
     fn utc_backup_time_preserves_day_and_leap_year_boundaries() {
         assert_eq!(captured_time("0"), "1970-01-01 00:00 UTC");
@@ -516,14 +517,17 @@ mod tests {
 
     impl TestDir {
         fn new() -> anyhow::Result<Self> {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static NEXT: AtomicU64 = AtomicU64::new(0);
             let path = std::env::temp_dir().join(format!(
-                "studio-backup-guide-{}-{}",
+                "studio-backup-guide-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)?
-                    .as_nanos()
+                    .as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-            std::fs::create_dir(&path)?;
+            std::fs::create_dir(&path).context("Create isolated backup test directory")?;
             Ok(Self(path))
         }
     }
@@ -576,7 +580,7 @@ mod tests {
         let mut app = super::super::tests::preview();
         let snapshot = fixture();
         let path = directory.0.join("inventory.json");
-        studio_deployment::backup::save(&snapshot, &path)?;
+        studio_deployment::backup::save(&snapshot, &path).context("Save backup test fixture")?;
         app.backup.query = "old search".into();
         app.backup.brew_query = "old brew search".into();
         app.backup.brew_selected.insert("old brew choice".into());
@@ -601,7 +605,7 @@ mod tests {
         assert!(app.backup.bundle_report.is_some());
 
         let invalid = directory.0.join("invalid.json");
-        std::fs::write(&invalid, b"{}")?;
+        std::fs::write(&invalid, b"{}").context("Write invalid backup test fixture")?;
         app.backup.query = "keep search".into();
         app.backup.brew_confirm = true;
         assert!(

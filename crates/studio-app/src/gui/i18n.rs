@@ -116,6 +116,7 @@ pub(super) fn t(source: &str) -> &str {
             "Waiting for the current operation; actual results follow"
         }
         "正在取消…" => "Cancelling…",
+        "正在分析清单…" => "Analyzing inventory…",
         "取消任务" => "Cancel task",
         "关闭提示" => "Dismiss",
         "方案目标" => "Target",

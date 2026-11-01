@@ -214,7 +214,7 @@ pub fn load(path: &Path) -> Result<Request> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(0x20000); // O_NOFOLLOW
+        options.custom_flags(linux_nofollow_flag(std::env::consts::ARCH)?);
     }
     #[cfg(windows)]
     {
@@ -250,6 +250,18 @@ pub fn load(path: &Path) -> Result<Request> {
         serde_json::from_slice(&bytes).context("Invalid deployment request JSON")?;
     validate(&request)?;
     Ok(request)
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", test))]
+fn linux_nofollow_flag(architecture: &str) -> Result<i32> {
+    // Linux/AOSP fcntl.h assigns different O_NOFOLLOW bits to ARM and x86.
+    match architecture {
+        "x86" | "x86_64" => Ok(0x20000),
+        "arm" | "aarch64" => Ok(0x8000),
+        _ => anyhow::bail!(
+            "No verified O_NOFOLLOW flag for Linux/Android architecture {architecture}"
+        ),
+    }
 }
 
 /// Publishes a complete draft without replacing any existing file, including dangling links.
@@ -472,5 +484,24 @@ mod tests {
         assert!(save(&request, &parent.join("new.json")).is_err());
         assert!(load(&real).is_err());
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn linux_nofollow_uses_verified_architecture_values() {
+        for (architecture, expected) in [
+            ("x86", 0x20000),
+            ("x86_64", 0x20000),
+            ("arm", 0x8000),
+            ("aarch64", 0x8000),
+        ] {
+            assert_eq!(
+                linux_nofollow_flag(architecture).unwrap(),
+                expected,
+                "{architecture}"
+            );
+        }
+        for architecture in ["", "unknown", "sparc64"] {
+            assert!(linux_nofollow_flag(architecture).is_err(), "{architecture}");
+        }
     }
 }

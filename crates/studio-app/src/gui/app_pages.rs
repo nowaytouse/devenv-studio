@@ -630,8 +630,8 @@ impl Studio {
                         "Choose an app backup, legacy profile or WinGet export JSON, then check the Windows target.",
                     ),
                     tx(
-                        "点击分析，查看已映射和其他说明；WinGet 的版本、非社区来源及附加要求不会变成安装参数。分析不会自动勾选。",
-                        "Analyze it and review mapped items and other notes. WinGet versions, non-community sources and extra requirements do not become installer arguments. Analysis selects nothing automatically.",
+                        "点击分析并等待报告。若系统询问文件访问权限，请自行允许或拒绝；期间仍可查看帮助。分析不会自动勾选或安装。",
+                        "Analyze and wait for the report. If the system asks for file access, allow or deny it yourself; help remains available meanwhile. Analysis selects and installs nothing automatically.",
                     ),
                     tx(
                         "勾选需要的映射后加入当前方案，再到变更方案检查并确认。",
