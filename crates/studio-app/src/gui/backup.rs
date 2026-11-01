@@ -23,6 +23,35 @@ pub(super) struct BackupUiState {
     pub bundle_report: Option<studio_deployment::environment::BundleReport>,
 }
 
+#[derive(Default)]
+struct BackupSummary {
+    complete: usize,
+    partial: usize,
+    unavailable: usize,
+    failed: usize,
+    packages: usize,
+}
+
+impl BackupSummary {
+    fn from_snapshot(snapshot: &studio_deployment::backup::Snapshot) -> Self {
+        let mut summary = Self::default();
+        for provider in &snapshot.providers {
+            match provider.status.as_str() {
+                "complete" => summary.complete += 1,
+                "partial" => summary.partial += 1,
+                "unavailable" => summary.unavailable += 1,
+                _ => summary.failed += 1,
+            }
+            summary.packages += provider.packages.len();
+        }
+        summary
+    }
+
+    fn needs_review(&self) -> bool {
+        self.partial > 0 || self.failed > 0 || self.complete == 0
+    }
+}
+
 impl Studio {
     pub(super) fn start_backup(&mut self) {
         if !cfg!(any(target_os = "macos", windows)) || self.worker.is_some() {
@@ -37,40 +66,37 @@ impl Studio {
         &mut self,
         snapshot: studio_deployment::backup::Snapshot,
     ) -> Notice {
-        let failed = snapshot
-            .providers
-            .iter()
-            .filter(|p| p.status == "failed")
-            .count();
-        let partial = snapshot
-            .providers
-            .iter()
-            .filter(|p| p.status == "partial")
-            .count();
-        let complete = snapshot
-            .providers
-            .iter()
-            .filter(|p| p.status == "complete")
-            .count();
-        let packages: usize = snapshot.providers.iter().map(|p| p.packages.len()).sum();
+        let summary = BackupSummary::from_snapshot(&snapshot);
+        self.set_backup_snapshot(snapshot, None);
+        Notice {
+            text: lf!(
+                "采集结束：完整 {complete} 类、部分 {partial} 类、未找到 {unavailable} 类、失败 {failed} 类，共 {packages} 个条目。请检查范围并保存清单。",
+                "Capture finished: {complete} complete, {partial} partial, {unavailable} unavailable and {failed} failed providers; {packages} entries. Review the scope and save the inventory.",
+                complete = summary.complete,
+                partial = summary.partial,
+                unavailable = summary.unavailable,
+                failed = summary.failed,
+                packages = summary.packages
+            ),
+            error: summary.needs_review(),
+        }
+    }
+
+    fn set_backup_snapshot(
+        &mut self,
+        snapshot: studio_deployment::backup::Snapshot,
+        path: Option<PathBuf>,
+    ) {
         self.backup.snapshot = Some(snapshot);
-        self.backup.path = None;
+        self.backup.path = path;
+        self.backup.query.clear();
         self.backup.brew_selected.clear();
+        self.backup.brew_query.clear();
         self.backup.brew_confirm = false;
+        self.backup.brew_review_requested = false;
         self.backup.vscode_tools.clear_selection();
         self.backup.npm_tools = super::npm_tools::UiState::default();
         self.backup.scoop_tools = super::scoop_tools::UiState::default();
-        Notice {
-            text: lf!(
-                "已采集 {complete} 类来源、{packages} 个条目；部分 {partial} 类、失败 {failed} 类。请检查并保存本地备份。",
-                "Collected {complete} providers and {packages} entries; {partial} partial and {failed} failed. Review and save a local backup.",
-                complete = complete,
-                packages = packages,
-                partial = partial,
-                failed = failed
-            ),
-            error: failed > 0,
-        }
     }
 
     pub(super) fn backup_file_operation(
@@ -78,6 +104,13 @@ impl Studio {
         operation: FileOperation,
         path: PathBuf,
     ) -> Result<String, String> {
+        if self.worker.is_some() {
+            return Err(tx(
+                "请等待当前任务结束后再处理备份文件。",
+                "Wait for the current task before processing backup files.",
+            )
+            .into());
+        }
         match operation {
             FileOperation::SaveBackup => {
                 let snapshot = self.backup.snapshot.as_ref().ok_or_else(|| {
@@ -94,13 +127,7 @@ impl Studio {
             FileOperation::LoadBackup => {
                 let snapshot =
                     studio_deployment::backup::load(&path).map_err(|e| format!("{e:#}"))?;
-                self.backup.snapshot = Some(snapshot);
-                self.backup.path = Some(path.clone());
-                self.backup.brew_selected.clear();
-                self.backup.brew_confirm = false;
-                self.backup.vscode_tools.clear_selection();
-                self.backup.npm_tools = super::npm_tools::UiState::default();
-                self.backup.scoop_tools = super::scoop_tools::UiState::default();
+                self.set_backup_snapshot(snapshot, Some(path.clone()));
                 Ok(lf!(
                     "已载入开发环境备份：{}",
                     "Environment backup loaded: {}",
@@ -119,6 +146,10 @@ impl Studio {
     }
 
     pub(super) fn review_backup(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.worker.is_none(),
+            "Wait for the current task before reviewing mappings"
+        );
         let path =
             self.backup.path.as_ref().ok_or_else(|| {
                 anyhow::anyhow!("Save the backup before reviewing Windows mappings")
@@ -135,104 +166,121 @@ impl Studio {
     }
 
     pub(super) fn backup_page(&mut self, ui: &mut egui::Ui) {
-        ui.heading(tx("开发环境备份", "Developer environment backup"));
-        ui.label(tx("采集本机工具与已安装版本，保存本地备份，选择 macOS 或 Windows 配置流程。", "Capture local tools and installed versions, save a backup, then choose macOS or Windows configuration."));
-        ui.label(RichText::new(tx(
-            "macOS：Homebrew、Cargo、uv、NPM、VS Code；Windows：Cargo、uv、NPM、Pip、VS Code、Scoop。仅记录包名与版本，不复制二进制、项目、密钥、配置或虚拟环境；采集不安装或更新。",
-            "macOS: Homebrew, Cargo, uv, NPM, VS Code. Windows: Cargo, uv, NPM, Pip, VS Code, Scoop. Inventories contain identities and versions, not binaries, projects, keys, settings or virtual environments. Capture never installs or updates.",
-        )).size(12.0).color(palette().muted));
+        ui.heading(tx("备份工具清单", "Back up your tool inventory"));
+        ui.label(tx(
+            "保存当前工具与版本，供以后审核和重部署。按下面三步继续。",
+            "Save your tools and versions for later review and redeployment. Follow the three steps below.",
+        ));
         ui.add_space(12.0);
-        ui.horizontal_wrapped(|ui| {
-            if primary(
-                ui,
-                tx("采集本机开发环境", "Capture local environment"),
-                cfg!(any(target_os = "macos", windows)) && self.worker.is_none(),
-            )
-            .clicked()
-            {
-                self.start_backup();
-            }
-            if ui
-                .add_enabled(
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("1  获取工具清单", "1  Get a tool inventory"));
+            ui.label(tx(
+                "采集这台电脑，或载入另一份备份。只读取支持的工具，不会安装或更新。",
+                "Capture this computer or load a backup. Only supported tools are read; nothing is installed or updated.",
+            ));
+            ui.horizontal_wrapped(|ui| {
+                if primary(
+                    ui,
+                    tx("采集本机开发环境", "Capture local environment"),
+                    cfg!(any(target_os = "macos", windows)) && self.worker.is_none(),
+                ).clicked() {
+                    self.start_backup();
+                }
+                if ui.add_enabled(
                     self.worker.is_none(),
                     egui::Button::new(tx("载入备份…", "Load backup…")),
-                )
-                .clicked()
-            {
-                self.open_file(FileOperation::LoadBackup);
+                ).clicked() {
+                    self.open_file(FileOperation::LoadBackup);
+                }
+            });
+            if !cfg!(any(target_os = "macos", windows)) {
+                ui.label(tx(
+                    "当前平台可载入和查看备份；本机采集需要 macOS 或 Windows。",
+                    "This platform can load and review backups; local capture requires macOS or Windows.",
+                ));
             }
-            if ui
-                .add_enabled(
-                    self.worker.is_none() && self.backup.snapshot.is_some(),
-                    egui::Button::new(tx("保存备份…", "Save backup…")),
-                )
-                .clicked()
-            {
-                self.open_file(FileOperation::SaveBackup);
-            }
-            if ui
-                .add_enabled(
-                    self.worker.is_none() && self.backup.path.is_some(),
-                    egui::Button::new(tx("审核 Windows 映射", "Review Windows mappings")),
-                )
-                .clicked()
-                && let Err(error) = self.review_backup()
-            {
-                self.notice = Some(Notice {
-                    text: format!("{error:#}"),
-                    error: true,
-                });
-            }
+            ui.label(RichText::new(tx(
+                "取消或整体失败会保留上一次清单。个人清单只保存在本地，不会上传 GitHub。",
+                "Cancellation or an overall failure preserves the previous inventory. Personal inventories stay local and are not uploaded to GitHub.",
+            )).size(12.0).color(palette().muted));
         });
-        if ui
-            .button(tx("进入环境配置", "Configure environment"))
-            .clicked()
-        {
-            self.navigate_to(Page::Environment);
-        }
-        if !cfg!(any(target_os = "macos", windows)) {
-            ui.label(tx(
-                "当前平台可载入备份；本机采集需要 macOS 或 Windows。",
-                "This platform can load backups; local collection requires macOS or Windows.",
-            ));
-        }
-        ui.label(RichText::new(tx("采集仅在明确点击后运行本地只读命令。取消或整体失败保留上一次清单；每类来源独立显示完整、未找到或失败。", "Collection runs local read-only commands only after an explicit click. Cancellation or an overall failure preserves the previous inventory; each provider reports complete, unavailable or failed.")).size(12.0).color(palette().muted));
-        if let Some(path) = &self.backup.path {
-            ui.label(lf!("本地文件：{}", "Local file: {}", path.display()));
-        } else if self.backup.snapshot.is_some() {
-            ui.label(tx(
-                "尚未保存；保存后可审核迁移映射。",
-                "Not saved yet. Save to review migration mappings.",
-            ));
-        }
         ui.add_space(12.0);
         let Some(snapshot) = &self.backup.snapshot else {
             empty(
                 ui,
-                tx("尚无开发环境备份", "No environment backup yet"),
+                tx("尚无工具清单", "No tool inventory yet"),
                 tx(
-                    "采集本机或载入先前的 JSON 备份。清单不会上传到 GitHub。",
-                    "Capture this machine or load an earlier JSON backup. Inventories are not uploaded to GitHub.",
+                    "先采集本机或载入以前的 JSON 备份，再检查结果并保存。",
+                    "Capture this computer or load an earlier JSON backup, then review and save the result.",
                 ),
             );
             return;
         };
-        ui.label(format!(
-            "{}: {}",
-            tx("来源平台", "Source platform"),
-            snapshot.platform
-        ));
-        ui.label(lf!(
-            "采集时间：{}",
-            "Captured at: {}",
-            captured_time(&snapshot.captured_at)
-        ));
+        let summary = BackupSummary::from_snapshot(snapshot);
+        let source_platform = snapshot.platform.clone();
+        let captured = captured_time(&snapshot.captured_at);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("2  检查范围并保存", "2  Review the scope and save"));
+            ui.label(lf!(
+                "完整 {complete} 类 · 部分 {partial} 类 · 未找到 {unavailable} 类 · 失败 {failed} 类 · {packages} 个条目",
+                "{complete} complete · {partial} partial · {unavailable} unavailable · {failed} failed · {packages} entries",
+                complete = summary.complete,
+                partial = summary.partial,
+                unavailable = summary.unavailable,
+                failed = summary.failed,
+                packages = summary.packages
+            ));
+            if summary.needs_review() {
+                ui.colored_label(palette().danger, tx(
+                    "这份清单不完整。请展开下方来源查看原因；仍可保存现有记录，但不能把它当作完整环境。",
+                    "This inventory is incomplete. Expand the providers below for details. You can save the available records, but they do not represent a complete environment.",
+                ));
+            }
+            if summary.unavailable > 0 {
+                ui.label(tx(
+                    "“未找到”只表示支持的位置中未找到工具，不代表软件已经卸载。",
+                    "Unavailable means a tool was not found in supported locations; it does not prove the software is uninstalled.",
+                ));
+            }
+            ui.label(lf!("来源平台：{}", "Source platform: {}", source_platform));
+            ui.label(lf!("采集时间：{}", "Captured at: {}", captured));
+            if let Some(path) = &self.backup.path {
+                ui.label(lf!("本地文件：{}", "Local file: {}", path.display()));
+                ui.label(RichText::new(tx(
+                    "清单已关联本地文件；执行配置前还会重新核验。",
+                    "The inventory has a local file; it will be verified again before configuration.",
+                )).color(palette().muted));
+            } else {
+                ui.strong(tx(
+                    "尚未保存。检查来源后，先保存清单再继续。",
+                    "Not saved yet. Review the providers, then save the inventory before continuing.",
+                ));
+            }
+            if primary(
+                ui,
+                tx("保存备份…", "Save backup…"),
+                self.worker.is_none() && self.backup.snapshot.is_some(),
+            ).clicked() {
+                self.open_file(FileOperation::SaveBackup);
+            }
+            ui.label(RichText::new(tx(
+                "只记录工具名称和版本，不包含二进制、项目、密钥、工具配置或虚拟环境。Git 设置与 Topgrade 配置有独立页面。",
+                "Only tool identities and versions are recorded. Binaries, projects, keys, tool settings and virtual environments are excluded. Git settings and Topgrade configuration have separate panels.",
+            )).size(12.0).color(palette().muted));
+        });
+        ui.add_space(12.0);
+        ui.heading(tx("工具条目与来源详情", "Tools and provider details"));
         ui.add(
             egui::TextEdit::singleline(&mut self.backup.query)
                 .hint_text(tx("搜索包名或版本…", "Search package or version…"))
                 .desired_width(450.0),
         );
         let query = self.backup.query.to_lowercase();
+        let Some(snapshot) = &self.backup.snapshot else {
+            return;
+        };
         for provider in &snapshot.providers {
             let state = match provider.status.as_str() {
                 "complete" => tx("完整", "Complete"),
@@ -308,7 +356,67 @@ impl Studio {
                     .color(palette().muted),
             );
         }
-        ui.label(RichText::new(tx("记录的版本是本次观测值，不保证未来可重新安装完全相同的构建。迁移映射需要逐项勾选，不会自动安装或复制 macOS 环境。", "Recorded versions are observations, not a guarantee that identical builds can be reinstalled later. Review and select migration mappings individually; nothing is installed automatically.")).size(12.0).color(palette().muted));
+        ui.label(RichText::new(tx("记录的版本是本次观测值，不保证未来可重新安装完全相同的构建。", "Recorded versions are observations, not a guarantee that identical builds can be reinstalled later.")).size(12.0).color(palette().muted));
+        ui.add_space(12.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(tx("3  选择接下来的流程", "3  Choose the next workflow"));
+            let saved = self.backup.path.is_some();
+            let idle = self.worker.is_none();
+            let prefer_mac = cfg!(target_os = "macos") && source_platform == "macos";
+            if source_platform == "macos" {
+                ui.label(tx(
+                    "Mac 清单可用于选择 Homebrew 工具，也可审核到 Windows 的可信映射。载入不会自动勾选项目。",
+                    "A Mac inventory can supply Homebrew choices or trusted mappings to Windows. Loading does not select items automatically.",
+                ));
+            } else {
+                ui.label(tx(
+                    "Windows 清单先审核可信映射，再逐项加入 Windows 方案。它不会还原成 Mac 环境。",
+                    "Review trusted mappings from this Windows inventory, then add items individually to a Windows plan. It does not restore a Mac environment.",
+                ));
+            }
+            if !cfg!(windows) {
+                ui.label(RichText::new(tx(
+                    "当前设备只能预览 Windows 映射与方案；执行需要受支持的 Windows 本机。",
+                    "This device can preview Windows mappings and plans; execution requires a supported Windows host.",
+                )).color(palette().muted));
+            }
+            if !saved {
+                ui.label(tx("先在上方保存清单，再继续。", "Save the inventory above before continuing."));
+            }
+            ui.horizontal_wrapped(|ui| {
+                let mac_label = if prefer_mac {
+                    tx("进入 Mac 环境配置", "Configure this Mac")
+                } else {
+                    tx("查看环境配置", "View Environment")
+                };
+                let mac_clicked = if prefer_mac {
+                    primary(ui, mac_label, saved && idle).clicked()
+                } else {
+                    false
+                };
+                let windows_clicked = if prefer_mac {
+                    ui.add_enabled(saved && idle, egui::Button::new(tx("审核 Windows 映射", "Review Windows mappings"))).clicked()
+                } else {
+                    primary(ui, tx("审核 Windows 映射", "Review Windows mappings"), saved && idle).clicked()
+                };
+                let environment_clicked = if !prefer_mac {
+                    ui.add_enabled(saved && idle, egui::Button::new(mac_label)).clicked()
+                } else {
+                    false
+                };
+                if mac_clicked || environment_clicked {
+                    self.navigate_to(Page::Environment);
+                }
+                if windows_clicked && let Err(error) = self.review_backup() {
+                    self.notice = Some(Notice { text: format!("{error:#}"), error: true });
+                }
+            });
+            ui.label(RichText::new(tx(
+                "这里只进入审核，不会自动勾选、安装或恢复设置。",
+                "Continuing only opens review. It does not select items, install tools or restore settings.",
+            )).size(12.0).color(palette().muted));
+        });
     }
 }
 
@@ -395,5 +503,158 @@ mod tests {
             captured_time("18446744073709551615"),
             "18446744073709551615"
         );
+    }
+
+    fn fixture() -> studio_deployment::backup::Snapshot {
+        serde_json::from_slice(include_bytes!(
+            "../../../../examples/mac-development-backup.json"
+        ))
+        .expect("reviewed backup fixture")
+    }
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new() -> anyhow::Result<Self> {
+            let path = std::env::temp_dir().join(format!(
+                "studio-backup-guide-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_nanos()
+            ));
+            std::fs::create_dir(&path)?;
+            Ok(Self(path))
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn partial_failed_and_unavailable_sources_remain_distinct() {
+        let mut snapshot = fixture();
+        let provider = snapshot.providers[0].clone();
+        snapshot.providers = ["complete", "partial", "unavailable", "failed"]
+            .into_iter()
+            .map(|status| {
+                let mut provider = provider.clone();
+                provider.status = status.into();
+                provider
+            })
+            .collect();
+        let summary = BackupSummary::from_snapshot(&snapshot);
+        assert_eq!(
+            (
+                summary.complete,
+                summary.partial,
+                summary.unavailable,
+                summary.failed
+            ),
+            (1, 1, 1, 1)
+        );
+        assert_eq!(summary.packages, provider.packages.len() * 4);
+        assert!(summary.needs_review());
+
+        snapshot.providers.truncate(1);
+        assert!(!BackupSummary::from_snapshot(&snapshot).needs_review());
+        snapshot.providers[0].status = "partial".into();
+        assert!(BackupSummary::from_snapshot(&snapshot).needs_review());
+        let mut app = super::super::tests::preview();
+        assert!(app.accept_backup(snapshot.clone()).error);
+        snapshot.providers[0].status = "unavailable".into();
+        assert!(BackupSummary::from_snapshot(&snapshot).needs_review());
+    }
+
+    #[test]
+    fn new_inventories_clear_only_related_drafts_and_failed_load_preserves_them()
+    -> anyhow::Result<()> {
+        let directory = TestDir::new()?;
+        let mut app = super::super::tests::preview();
+        let snapshot = fixture();
+        let path = directory.0.join("inventory.json");
+        studio_deployment::backup::save(&snapshot, &path)?;
+        app.backup.query = "old search".into();
+        app.backup.brew_query = "old brew search".into();
+        app.backup.brew_selected.insert("old brew choice".into());
+        app.backup.brew_confirm = true;
+        app.backup.brew_review_requested = true;
+        app.selected.insert("explorer-extensions".into());
+        app.backup.bundle_report = Some(studio_deployment::environment::BundleReport {
+            requested: 1,
+            verified: true,
+            cancelled: false,
+            resolved_versions: Vec::new(),
+            detail: "Previous configuration history".into(),
+        });
+        app.backup_file_operation(FileOperation::LoadBackup, path.clone())
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(app.backup.snapshot.as_ref(), Some(&snapshot));
+        assert_eq!(app.backup.path.as_ref(), Some(&path));
+        assert!(app.backup.query.is_empty() && app.backup.brew_query.is_empty());
+        assert!(app.backup.brew_selected.is_empty());
+        assert!(!app.backup.brew_confirm && !app.backup.brew_review_requested);
+        assert_eq!(app.selected, BTreeSet::from(["explorer-extensions".into()]));
+        assert!(app.backup.bundle_report.is_some());
+
+        let invalid = directory.0.join("invalid.json");
+        std::fs::write(&invalid, b"{}")?;
+        app.backup.query = "keep search".into();
+        app.backup.brew_confirm = true;
+        assert!(
+            app.backup_file_operation(FileOperation::LoadBackup, invalid)
+                .is_err()
+        );
+        assert_eq!(app.backup.snapshot.as_ref(), Some(&snapshot));
+        assert_eq!(app.backup.path.as_ref(), Some(&path));
+        assert_eq!(app.backup.query, "keep search");
+        assert!(app.backup.brew_confirm);
+
+        app.accept_backup(snapshot);
+        assert!(app.backup.path.is_none());
+        assert!(app.backup.query.is_empty());
+        assert!(!app.backup.brew_confirm);
+        assert!(app.backup.bundle_report.is_some());
+        assert!(app.worker.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn busy_backup_operations_preserve_current_inventory_and_do_not_write() -> anyhow::Result<()> {
+        let directory = TestDir::new()?;
+        let mut app = super::super::tests::preview();
+        let snapshot = fixture();
+        let saved_path = directory.0.join("previous.json");
+        app.set_backup_snapshot(snapshot.clone(), Some(saved_path.clone()));
+        app.backup.query = "current search".into();
+        app.backup.brew_confirm = true;
+        let (_sender, receiver) = mpsc::channel();
+        app.worker = Some(Worker {
+            cancel: Arc::new(AtomicBool::new(false)),
+            receiver,
+            events: None,
+            thread: None,
+            label: "Synthetic active task",
+        });
+        let destination = directory.0.join("new.json");
+        assert!(
+            app.backup_file_operation(FileOperation::SaveBackup, destination.clone())
+                .is_err()
+        );
+        assert!(
+            app.backup_file_operation(FileOperation::LoadBackup, destination.clone())
+                .is_err()
+        );
+        assert!(app.review_backup().is_err());
+        assert!(!destination.exists());
+        assert_eq!(app.backup.snapshot.as_ref(), Some(&snapshot));
+        assert_eq!(app.backup.path.as_ref(), Some(&saved_path));
+        assert_eq!(app.backup.query, "current search");
+        assert!(app.backup.brew_confirm);
+        assert!(app.worker.is_some());
+        Ok(())
     }
 }

@@ -524,19 +524,19 @@ impl Studio {
         let origin = self.help_origin;
         let (title, steps) = match origin {
             Some(Page::Backup) => (
-                tx("备份当前开发环境", "Back up your developer environment"),
+                tx("备份工具清单", "Back up your tool inventory"),
                 [
                     tx(
-                        "点击采集，或载入已有的本地备份；先检查每类工具的采集结果。",
-                        "Capture this machine or load a local backup; check the result for each tool category.",
+                        "采集这台电脑的工具清单，或载入已有备份；先检查哪些来源完整、部分完成或未找到。",
+                        "Capture this machine's tool inventory or load a backup; check which sources are complete, partial or unavailable.",
                     ),
                     tx(
-                        "保存备份后再进入环境配置。备份清单不包含项目、凭据或完整系统。",
-                        "Save the backup before opening Environment. The inventory excludes projects, credentials and a full system image.",
+                        "将清单保存到本地；它记录工具与版本，不包含项目、工具配置、凭据或完整系统。",
+                        "Save the inventory locally. It records tools and versions, excluding projects, tool settings, credentials and a full system image.",
                     ),
                     tx(
-                        "Mac 可从清单选择工具；Windows 清单先进入迁移与映射，审核后再加入方案。",
-                        "On Mac, select tools from the inventory. For Windows, review Migration & mapping before adding items to a plan.",
+                        "按页面的平台提示继续：配置 macOS 工具，或审核 Windows 映射；仍需逐项选择并单独确认执行。",
+                        "Follow the platform guidance to configure macOS tools or review Windows mappings; select items and confirm execution separately.",
                     ),
                 ],
             ),
@@ -581,12 +581,12 @@ impl Studio {
                 tx("设置本应用使用的网络", "Set the network used by this app"),
                 [
                     tx(
-                        "选择继承、直连或明确代理，再按需填写软件源。",
-                        "Choose inherited, direct or explicit proxy settings, then enter package sources when needed.",
+                        "选择沿用当前网络、直连或手动代理；只有需要自定义软件源时才展开高级设置。",
+                        "Choose inherited settings, a direct connection or a manual proxy; open advanced sources only when you need custom package sources.",
                     ),
                     tx(
-                        "先审核并保存网络方案，再启用；后续适用任务会固定使用该方案。",
-                        "Review and save the network profile, then activate it; supported later tasks pin that profile.",
+                        "检查草稿摘要和适用范围，确认后启用；完整前后对比可展开查看，后续适用任务会固定使用该方案。",
+                        "Check the draft summary and scope, then confirm and activate. Expand the full comparison if needed; supported later tasks pin that profile.",
                     ),
                     tx(
                         "原生配置只导出为新文件。此页不修改系统代理、DNS 或 VPN。",

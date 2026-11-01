@@ -28,7 +28,9 @@ DevEnv Studio 现在是唯一维护入口。`LTSC_Tools_Backup` 的配置、映�
 
 首次使用从环境配置页的三步入口开始：保存环境备份 → 一键准备工具 → 核对后配置。Mac 基础方案只预选工具、使用补齐模式，并定位到工具审核区域；安装仍需已保存且重新核验的 Mac 清单和明确确认。Windows 继续按用途选择现有方案，再进入变更方案审核。右上角“? 使用帮助”提供当前页面的三步说明和返回入口，帮助往返保留搜索与选择；完整手册可展开查看。
 
-环境备份页在 macOS 采集 Homebrew formula/cask、Cargo、uv、NPM 全局包、VS Code 扩展；Windows 采集 Cargo、uv、NPM、一个已注册标准 CPython 可见的 Pip 分发和 VS Code 扩展。mise core 已安装运行时在环境配置页单独只读采集；可选择显示版本并保存为严格请求，作为后续重部署备份。采集使用本地有界命令，不安装、更新或引导工具。每类来源显示完整、未找到或失败；失败和取消保留上次结果，未找到不等于软件已卸载。Windows 软件全集、所有 Python 环境和项目依赖不在备份范围内。
+备份页按“获取工具清单 → 检查范围并保存 → 选择后续流程”引导，持续显示完整、部分、未找到、失败的来源数；清单不完整时仍可保存已有记录。成功换一份清单会清除旧搜索与相关待审选择，载入失败或任务忙碌时保留原工作。后续入口按本机和清单平台提示 Mac 配置或 Windows 映射，载入与进入审核都不自动安装。
+
+环境备份页在 macOS 采集 Homebrew formula/cask、Cargo、uv、NPM 全局包、VS Code 扩展；Windows 采集 Cargo、uv、NPM、一个已注册标准 CPython 可见的 Pip 分发、VS Code 扩展及 Scoop 清单。mise core 已安装运行时在环境配置页单独只读采集；可选择显示版本并保存为严格请求，作为后续重部署备份。采集使用本地有界命令，不安装、更新或引导工具。每类来源显示完整、未找到或失败；失败和取消保留上次结果，未找到不等于软件已卸载。Windows 软件全集、所有 Python 环境和项目依赖不在备份范围内。
 
 环境配置页提供 macOS 基础工具一键预选和 Windows 用途方案入口；它们只准备待审选择，不会跳过变更计划的核对与确认。采集后可搜索、保存新 JSON 备份、重新载入，再进入环境配置：Mac 选择基础工具或备份中的 Homebrew 项目，审核生成的 Brewfile，导出或明确在本机配置；mise 可在 macOS/Windows 安装选中的核心运行时。Windows 从备份审核可信任务，也可选择现有混合组合和软件目录；迁移初始不勾选。mise 安装不会修改 Shell 激活或项目/全局配置，完成后导出的固定版 mise.toml 与锁文件需一并审核和放入目标项目。只有完整采集的来源参与映射；包版本保留为观测信息，不被偷换成 Windows 版本锁定。备份只包含工具清单和版本，不复制二进制、项目、密钥、配置文件或虚拟环境，也不是一键精确还原。文件保留在本地，不上传 GitHub。Mac 执行前需保存并审核 Homebrew 清单，使用私有生成的 Brewfile，先 Bundle install --no-upgrade，再独立 check；依赖仍可能改变，没有自动回滚。Cargo 可在 Mac 按审核目录选择滚动版、精确版本或固定上游 Git HEAD 重部署；VS Code 扩展可从完整 Mac 清单逐项选取，精确版本或 Marketplace 当前版本重部署并回读默认稳定版配置文件。扩展具有与 VS Code 相同的权限且无法自动回滚；扩展部署本身不恢复编辑器设置或账号。另有独立的编辑器设置档案：支持 VS Code 稳定版、Insiders 与 Cursor 的默认用户配置，覆盖 macOS/Windows/Linux 的 21 项通用白名单 JSONC 合并，由用户逐项审核；不迁移工作区/命名 Profile、扩展账号、密钥或代理。NPM 可从已保存的 Mac 清单逐项恢复精确版本或自选 dist-tag；安装脚本关闭并回读核验。可单独导出选中 Windows 软件的原生 WinGet JSON，跨工具档案继续保留其他提供程序。完整范围见[环境备份说明](docs/MAC_BACKUP.md)与[成熟项目接入契约](docs/ENVIRONMENT_SOURCES.md)。
 
@@ -53,6 +55,8 @@ Python 工具区新增 macOS/Windows 共用的 uv 命令行工具重部署：读
 ## 开发网络环境
 
 新增网络环境页，可为下一次 GUI 部署保存“继承代理环境／直连／明确 HTTP 代理”和 npm、Python、Cargo 软件源。代理不含认证信息，软件源仅接受受限 HTTPS；启用前对照已启用内容与草稿，保存原值、记录历史并独立回读。支持 JSON 保存/载入、旧档案恢复，以及 Git、Cargo、npm、Pip、uv 原生配置导出；导出不覆盖用户现有工具配置。
+
+网络页先选择连接方式，再核对并启用；软件源位于高级折叠区，草稿摘要和真实适用范围保持可见。启用前会在写锁内检查已启用方案是否仍与审核时一致；其他实例或外部工具改变有效设置后，本次启用会停止，需重新读取、审核和确认，避免旧草稿覆盖较新的设置。
 
 网络方案实际接入本应用的 Homebrew、rustup、mise、uv、macOS Cargo，以及 Windows Cargo/npm/Pip/uv 部署。每次任务固定一份配置，传入真实参数与子进程环境，并写入部署证据；保持 npm 禁脚本、Pip wheel-only 等既有保护。它不修改系统代理、DNS、VPN、SSH、WinGet、DISM 或 VS Code 网络，也不提供网络隔离。官方 Cargo 请求仍可能受已有本地 source 配置影响；自定义 mirror 使用明确 source replacement。详见[网络配置范围与原生契约](docs/NETWORK.md)。
 

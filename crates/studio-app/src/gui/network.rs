@@ -60,10 +60,38 @@ impl Studio {
     }
 
     fn activate_network_profile(&mut self) {
+        self.activate_network_profile_with(|draft, expected_current| {
+            let history = native::apply_current(draft, expected_current)?;
+            Ok((native::load_current()?, history))
+        });
+    }
+
+    fn activate_network_profile_with(
+        &mut self,
+        activate: impl FnOnce(
+            &NetworkProfile,
+            &NetworkProfile,
+        ) -> anyhow::Result<(NetworkProfile, PathBuf)>,
+    ) {
         if self.worker.is_some() || !self.network.confirmed {
             return;
         }
         self.network.confirmed = false;
+        let expected_current = match &self.network.active {
+            Ok(active) => active,
+            Err(_) => {
+                self.notice = Some(Notice {
+                    text: tx(
+                        "当前网络方案无法读取。请先重新读取已启用档案，再核对并启用草稿。",
+                        "The current network profile is unreadable. Reload the active profile, then review and activate the draft.",
+                    )
+                    .into(),
+                    error: true,
+                });
+                self.last_operation = self.notice.clone();
+                return;
+            }
+        };
         if let Err(error) = native::validate(&self.network.draft) {
             self.notice = Some(Notice {
                 text: error.to_string(),
@@ -72,16 +100,16 @@ impl Studio {
             self.last_operation = self.notice.clone();
             return;
         }
-        let result = native::apply_current(&self.network.draft).and_then(|history| {
-            let active = native::load_current()?;
-            anyhow::ensure!(
-                active == self.network.draft,
-                "Network profile readback differs from the reviewed draft"
-            );
-            self.network.active = Ok(active);
-            self.network.last_history = Some(history.clone());
-            Ok(history)
-        });
+        let result =
+            activate(&self.network.draft, expected_current).and_then(|(active, history)| {
+                anyhow::ensure!(
+                    active == self.network.draft,
+                    "Network profile readback differs from the reviewed draft"
+                );
+                self.network.active = Ok(active);
+                self.network.last_history = Some(history.clone());
+                Ok(history)
+            });
         self.notice = Some(match result {
             Ok(history) => Notice {
                 text: lf!(
@@ -107,15 +135,23 @@ impl Studio {
     pub(super) fn network_page(&mut self, ui: &mut egui::Ui) {
         ui.heading(tx("开发网络环境", "Developer network environment"));
         ui.label(tx(
-            "为本程序的开发工具任务保存代理与软件源，并导出可复用的原生配置。修改草稿后，审核并启用才会用于后续任务。",
-            "Save proxy and package sources for developer tasks started by this app, and export reusable native configuration. Review and activate draft changes before subsequent tasks use them.",
+            "先选择连接方式，再核对并启用。通常可以沿用现有代理和官方软件源；高级设置只在需要时修改。草稿不会自动生效。",
+            "Choose a connection, then review and activate it. Usually you can keep the inherited proxy and official package sources; change advanced settings only when needed. Draft changes are not applied automatically.",
         ));
         ui.add_space(10.0);
         match &self.network.active {
             Ok(active) => {
                 ui.horizontal_wrapped(|ui| {
-                    badge(ui, tx("已启用", "Active"), palette().wash, palette().accent);
+                    badge(
+                        ui,
+                        tx("任务当前使用", "Used by tasks"),
+                        palette().wash,
+                        palette().accent,
+                    );
                     ui.label(proxy_label(active.mode));
+                    if active.mode == ProxyMode::Manual {
+                        ui.label(&active.proxy_url);
+                    }
                     if active != &self.network.draft {
                         ui.label(
                             RichText::new(tx("草稿有待启用的修改", "Draft has pending changes"))
@@ -160,7 +196,7 @@ impl Studio {
         });
         ui.separator();
         let before = self.network.draft.clone();
-        ui.heading(tx("连接方式", "Connection"));
+        ui.heading(tx("1. 选择连接方式", "1. Choose a connection"));
         ui.horizontal_wrapped(|ui| {
             for mode in [ProxyMode::Inherit, ProxyMode::Direct, ProxyMode::Manual] {
                 ui.selectable_value(&mut self.network.draft.mode, mode, proxy_label(mode));
@@ -192,34 +228,42 @@ impl Studio {
             }
         }
         ui.add_space(10.0);
-        ui.heading(tx("软件源", "Package sources"));
-        ui.label(RichText::new(tx("源地址需要 HTTPS；Cargo 稀疏索引使用 sparse+https://…/。自定义源可提供不同的软件内容，请审核服务方。", "Sources require HTTPS; Cargo sparse indexes use sparse+https://…/. Custom sources can serve different packages; review the operator.")).size(12.0).color(palette().muted));
-        network_field(ui, "npm registry", &mut self.network.draft.npm_registry);
-        network_field(
-            ui,
-            tx(
-                "Python 默认索引 · Pip / uv",
-                "Python default index · Pip / uv",
-            ),
-            &mut self.network.draft.python_index,
-        );
-        network_field(
-            ui,
-            tx("Cargo crates.io 索引", "Cargo crates.io index"),
-            &mut self.network.draft.cargo_index,
-        );
-        if ui
-            .button(tx(
-                "草稿恢复官方软件源",
-                "Restore official sources in draft",
-            ))
-            .clicked()
-        {
-            let official = NetworkProfile::default();
-            self.network.draft.npm_registry = official.npm_registry;
-            self.network.draft.python_index = official.python_index;
-            self.network.draft.cargo_index = official.cargo_index;
-        }
+        let official_sources = uses_official_sources(&self.network.draft);
+        ui.label(tx(
+            if official_sources {
+                "草稿软件源：官方默认地址"
+            } else {
+                "草稿软件源：包含自定义地址，请展开核对服务方"
+            },
+            if official_sources {
+                "Draft package sources: official defaults"
+            } else {
+                "Draft package sources: custom addresses; expand to review the operator"
+            },
+        ));
+        egui::CollapsingHeader::new(tx("高级设置：软件源", "Advanced: package sources"))
+            .id_salt("network-package-sources")
+            .default_open(!official_sources)
+            .show(ui, |ui| {
+                ui.label(RichText::new(tx("源地址需要 HTTPS；Cargo 稀疏索引使用 sparse+https://…/。自定义源可提供不同的软件内容，请审核服务方。", "Sources require HTTPS; Cargo sparse indexes use sparse+https://…/. Custom sources can serve different packages; review the operator.")).size(12.0).color(palette().muted));
+                network_field(ui, "npm registry", &mut self.network.draft.npm_registry);
+                network_field(
+                    ui,
+                    tx("Python 软件源 · Pip / uv", "Python package index · Pip / uv"),
+                    &mut self.network.draft.python_index,
+                );
+                network_field(
+                    ui,
+                    tx("Rust 软件源 · Cargo", "Rust package index · Cargo"),
+                    &mut self.network.draft.cargo_index,
+                );
+                if ui.button(tx("草稿恢复官方软件源", "Restore official sources in draft")).clicked() {
+                    let official = NetworkProfile::default();
+                    self.network.draft.npm_registry = official.npm_registry;
+                    self.network.draft.python_index = official.python_index;
+                    self.network.draft.cargo_index = official.cargo_index;
+                }
+            });
         if self.network.draft != before {
             self.network.confirmed = false;
         }
@@ -228,8 +272,10 @@ impl Studio {
             ui.colored_label(palette().danger, error.to_string());
         }
         ui.add_space(10.0);
-        egui::CollapsingHeader::new(tx("审核已启用内容与草稿", "Review active profile and draft"))
-            .default_open(true)
+        ui.heading(tx("2. 核对并启用", "2. Review and activate"));
+        egui::CollapsingHeader::new(tx("查看当前方案与草稿的完整对比", "Compare the current profile and draft"))
+            .id_salt("network-review-details")
+            .default_open(false)
             .show(ui, |ui| {
                 if let Ok(active) = &self.network.active {
                     egui::Grid::new("network-review").num_columns(3).max_col_width((ui.available_width() / 3.0 - 12.0).max(100.0)).striped(true).show(ui, |ui| {
@@ -254,6 +300,7 @@ impl Studio {
                     ui.label(tx("请先重新读取档案。如文件损坏，先修复文件或将原文件保留到其他位置，再启用有效草稿；本程序不会覆盖损坏档案。", "Reload the profile first. If the file is malformed, correct it or preserve it elsewhere before activating a valid draft; this app will not overwrite a malformed profile."));
                 }
             });
+        ui.label(RichText::new(tx("仅影响本应用随后启动的 Homebrew、rustup、mise、Cargo、npm、Pip、uv 的受支持 HTTP(S) 操作。不会修改系统代理、DNS 或 VPN；WinGet、DISM、VS Code、SSH 也不受此页控制，不提供网络隔离。", "Applies only to supported HTTP(S) operations in Homebrew, rustup, mise, Cargo, npm, Pip and uv subsequently started by this app. It does not change the system proxy, DNS or VPN, or control WinGet, DISM, VS Code or SSH, and does not provide network isolation.")).size(12.0).color(palette().muted));
         ui.checkbox(
             &mut self.network.confirmed,
             tx(
@@ -264,8 +311,11 @@ impl Studio {
         ui.horizontal_wrapped(|ui| {
             if primary(
                 ui,
-                tx("保存并启用档案", "Save and activate profile"),
-                self.worker.is_none() && validation.is_ok() && self.network.confirmed,
+                tx("保存并启用此方案", "Save and activate this profile"),
+                self.worker.is_none()
+                    && self.network.active.is_ok()
+                    && validation.is_ok()
+                    && self.network.confirmed,
             )
             .clicked()
             {
@@ -310,8 +360,6 @@ impl Studio {
                 }
                 ui.label(RichText::new(tx("导出仅创建新文件，不覆盖全局配置。uv.toml 保存索引；代理仍通过进程环境使用。", "Export creates a new file without replacing global settings. uv.toml contains indexes; proxy settings still use the process environment.")).size(12.0).color(palette().muted));
             });
-        ui.add_space(10.0);
-        ui.label(RichText::new(tx("适用范围：本程序随后启动的 Homebrew、rustup、Cargo、npm、Pip、uv 的受支持 HTTP(S) 操作。WinGet、DISM、VS Code、SSH、系统代理、DNS、VPN 不受此页控制；这不提供网络隔离。", "Scope: supported HTTP(S) operations in Homebrew, rustup, Cargo, npm, Pip and uv subsequently started by this app. This page does not control WinGet, DISM, VS Code, SSH, system proxy, DNS or VPN, and does not provide network isolation.")).size(12.0).color(palette().muted));
     }
 }
 
@@ -320,11 +368,18 @@ fn network_field(ui: &mut egui::Ui, label: &str, value: &mut String) {
     ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY));
 }
 
+fn uses_official_sources(profile: &NetworkProfile) -> bool {
+    let official = NetworkProfile::default();
+    profile.npm_registry == official.npm_registry
+        && profile.python_index == official.python_index
+        && profile.cargo_index == official.cargo_index
+}
+
 fn proxy_label(mode: ProxyMode) -> &'static str {
     match mode {
-        ProxyMode::Inherit => tx("继承代理环境", "Inherit proxy environment"),
-        ProxyMode::Direct => tx("直连", "Direct"),
-        ProxyMode::Manual => tx("明确 HTTP 代理", "Explicit HTTP proxy"),
+        ProxyMode::Inherit => tx("沿用现有代理", "Keep inherited proxy"),
+        ProxyMode::Direct => tx("直接连接", "Connect directly"),
+        ProxyMode::Manual => tx("填写 HTTP 代理", "Set an HTTP proxy"),
     }
 }
 
@@ -349,5 +404,65 @@ mod tests {
         assert_eq!(state.active.as_ref().ok(), Some(&state.draft));
         assert!(state.last_history.is_none());
         assert!(native::validate(&state.draft).is_ok());
+    }
+
+    #[test]
+    fn custom_source_summary_checks_every_source_without_changing_the_proxy() {
+        let mut profile = NetworkProfile {
+            mode: ProxyMode::Manual,
+            proxy_url: "http://127.0.0.1:7890".into(),
+            ..NetworkProfile::default()
+        };
+        assert!(uses_official_sources(&profile));
+        for source in ["npm", "python", "cargo"] {
+            let mut custom = profile.clone();
+            match source {
+                "npm" => custom.npm_registry = "https://packages.example/npm/".into(),
+                "python" => custom.python_index = "https://packages.example/simple/".into(),
+                "cargo" => custom.cargo_index = "sparse+https://packages.example/index/".into(),
+                _ => unreachable!(),
+            }
+            assert!(!uses_official_sources(&custom));
+        }
+        profile.mode = ProxyMode::Direct;
+        profile.proxy_url.clear();
+        assert!(uses_official_sources(&profile));
+    }
+
+    #[test]
+    fn unreadable_active_profile_consumes_confirmation_without_attempting_activation() {
+        let mut app = super::super::tests::preview();
+        app.network.active = Err("Synthetic unreadable profile".into());
+        app.network.draft = NetworkProfile {
+            mode: ProxyMode::Manual,
+            proxy_url: "http://127.0.0.1:7890".into(),
+            ..NetworkProfile::default()
+        };
+        app.network.confirmed = true;
+        let draft = app.network.draft.clone();
+        let attempts = std::cell::Cell::new(0);
+        app.activate_network_profile_with(|_, _| {
+            attempts.set(attempts.get() + 1);
+            anyhow::bail!("Unexpected activation attempt");
+        });
+        assert_eq!(attempts.get(), 0);
+        assert!(!app.network.confirmed);
+        assert_eq!(app.network.draft, draft);
+        assert_eq!(
+            app.network.active.as_ref().err().map(String::as_str),
+            Some("Synthetic unreadable profile")
+        );
+        assert!(app.network.last_history.is_none());
+        assert!(app.worker.is_none());
+        let notice = app.notice.as_ref().unwrap();
+        assert!(notice.error);
+        assert_eq!(
+            notice.text,
+            tx(
+                "当前网络方案无法读取。请先重新读取已启用档案，再核对并启用草稿。",
+                "The current network profile is unreadable. Reload the active profile, then review and activate the draft.",
+            )
+        );
+        assert!(app.last_operation.as_ref().is_some_and(|last| last.error));
     }
 }

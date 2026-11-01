@@ -333,18 +333,27 @@ fn load_current_at(path: &Path) -> Result<NetworkProfile> {
     }
 }
 static APPLY_LOCK: Mutex<()> = Mutex::new(());
-/// Replaces only DevEnv Studio's profile, after preserving the previous exact bytes.
-pub fn apply_current(profile: &NetworkProfile) -> Result<PathBuf> {
+/// Replaces only DevEnv Studio's profile if it still matches the reviewed state, preserving prior bytes.
+pub fn apply_current(
+    profile: &NetworkProfile,
+    expected_current: &NetworkProfile,
+) -> Result<PathBuf> {
     let _lock = APPLY_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("Network profile writer is unavailable"))?;
     apply_at(
         &studio_platform::data_directory()?.join("network-profile.json"),
         profile,
+        expected_current,
     )
 }
-fn apply_at(path: &Path, profile: &NetworkProfile) -> Result<PathBuf> {
+fn apply_at(
+    path: &Path,
+    profile: &NetworkProfile,
+    expected_current: &NetworkProfile,
+) -> Result<PathBuf> {
     validate(profile)?;
+    validate(expected_current)?;
     let directory = path
         .parent()
         .context("Network profile has no parent directory")?;
@@ -352,21 +361,23 @@ fn apply_at(path: &Path, profile: &NetworkProfile) -> Result<PathBuf> {
     let previous = match fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
         Err(error) => return Err(error).context("Inspect previous network profile"),
-        Ok(_) => {
-            let bytes = read_bytes(path)?;
-            decode(&bytes)?;
-            Some(bytes)
-        }
+        Ok(_) => Some(read_bytes(path)?),
     };
+    let current = previous
+        .as_deref()
+        .map(decode)
+        .transpose()?
+        .unwrap_or_default();
+    ensure!(
+        current == *expected_current,
+        "Current network profile changed since review; reload the active profile before applying"
+    );
     let history = crate::environment::create_history(directory)?;
     let before = history.join("before.json");
-    match &previous {
-        Some(bytes) => {
-            write_private(&history.join("before.raw"), bytes)?;
-            save(&decode(bytes)?, &before)?;
-        }
-        None => save(&NetworkProfile::default(), &before)?,
+    if let Some(bytes) = &previous {
+        write_private(&history.join("before.raw"), bytes)?;
     }
+    save(&current, &before)?;
     studio_core::export_document(
         &serde_json::json!({"existed":previous.is_some()}),
         &history.join("beforemeta.json"),
@@ -702,7 +713,7 @@ mod tests {
             NetworkProfile::default()
         );
         let first = NetworkProfile::default();
-        let history = apply_at(&directory.file(), &first).unwrap();
+        let history = apply_at(&directory.file(), &first, &first).unwrap();
         assert_eq!(
             load(&history.join("before.json")).unwrap(),
             NetworkProfile::default()
@@ -715,7 +726,7 @@ mod tests {
         let before = fs::read(directory.file()).unwrap();
         let mut second = first.clone();
         second.mode = ProxyMode::Direct;
-        let history = apply_at(&directory.file(), &second).unwrap();
+        let history = apply_at(&directory.file(), &second, &first).unwrap();
         assert_eq!(fs::read(history.join("before.raw")).unwrap(), before);
         assert_eq!(load(&history.join("before.json")).unwrap(), first);
         assert_eq!(load(&history.join("request.json")).unwrap(), second);
@@ -729,7 +740,7 @@ mod tests {
         assert_eq!(load(&history.join("network.json")).unwrap(), second);
         fs::write(directory.file(), b"{broken").unwrap();
         assert!(load_current_at(&directory.file()).is_err());
-        assert!(apply_at(&directory.file(), &first).is_err());
+        assert!(apply_at(&directory.file(), &first, &first).is_err());
         assert_eq!(fs::read(directory.file()).unwrap(), b"{broken");
         #[cfg(unix)]
         {
@@ -744,20 +755,67 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn stale_review_never_overwrites_an_external_profile_or_creates_history() {
+        let directory = Directory::new();
+        let reviewed = load_current_at(&directory.file()).unwrap();
+        let external = NetworkProfile {
+            mode: ProxyMode::Direct,
+            ..reviewed.clone()
+        };
+        save(&external, &directory.file()).unwrap();
+        let before = fs::read(directory.file()).unwrap();
+        let result = apply_at(&directory.file(), &reviewed, &reviewed);
+        assert!(
+            result.is_err(),
+            "A stale review must not overwrite external settings"
+        );
+        assert_eq!(fs::read(directory.file()).unwrap(), before);
+        assert!(!directory.0.join("environment-history").exists());
+
+        fs::remove_file(directory.file()).unwrap();
+        let result = apply_at(&directory.file(), &reviewed, &external);
+        assert!(
+            result.is_err(),
+            "Removing a reviewed profile also invalidates the review"
+        );
+        assert!(!directory.file().exists());
+        assert!(!directory.0.join("environment-history").exists());
+    }
     #[test]
     fn another_writer_or_linked_lock_stops_before_replacing_profile() {
         let directory = Directory::new();
         let _writer = lock_directory(&directory.0).unwrap();
-        assert!(apply_at(&directory.file(), &NetworkProfile::default()).is_err());
+        assert!(
+            apply_at(
+                &directory.file(),
+                &NetworkProfile::default(),
+                &NetworkProfile::default()
+            )
+            .is_err()
+        );
         assert!(!directory.file().exists());
         drop(_writer);
-        apply_at(&directory.file(), &NetworkProfile::default()).unwrap();
+        apply_at(
+            &directory.file(),
+            &NetworkProfile::default(),
+            &NetworkProfile::default(),
+        )
+        .unwrap();
         #[cfg(unix)]
         {
             let lock = directory.0.join("network-profile.lock");
             fs::remove_file(&lock).unwrap();
             std::os::unix::fs::symlink(directory.file(), &lock).unwrap();
-            assert!(apply_at(&directory.file(), &NetworkProfile::default()).is_err());
+            assert!(
+                apply_at(
+                    &directory.file(),
+                    &NetworkProfile::default(),
+                    &NetworkProfile::default()
+                )
+                .is_err()
+            );
         }
     }
     #[test]
@@ -776,7 +834,14 @@ mod tests {
         let directory = Directory::new();
         fs::create_dir(directory.file()).unwrap();
         assert!(load_current_at(&directory.file()).is_err());
-        assert!(apply_at(&directory.file(), &NetworkProfile::default()).is_err());
+        assert!(
+            apply_at(
+                &directory.file(),
+                &NetworkProfile::default(),
+                &NetworkProfile::default()
+            )
+            .is_err()
+        );
         #[cfg(unix)]
         {
             fs::remove_dir(directory.file()).unwrap();
@@ -784,11 +849,25 @@ mod tests {
             fs::write(&target, b"sentinel").unwrap();
             std::os::unix::fs::symlink(&target, directory.file()).unwrap();
             assert!(load_current_at(&directory.file()).is_err());
-            assert!(apply_at(&directory.file(), &NetworkProfile::default()).is_err());
+            assert!(
+                apply_at(
+                    &directory.file(),
+                    &NetworkProfile::default(),
+                    &NetworkProfile::default()
+                )
+                .is_err()
+            );
             assert_eq!(fs::read(&target).unwrap(), b"sentinel");
             fs::remove_file(directory.file()).unwrap();
             std::os::unix::fs::symlink(directory.0.join("missing"), directory.file()).unwrap();
-            assert!(apply_at(&directory.file(), &NetworkProfile::default()).is_err());
+            assert!(
+                apply_at(
+                    &directory.file(),
+                    &NetworkProfile::default(),
+                    &NetworkProfile::default()
+                )
+                .is_err()
+            );
         }
     }
 }

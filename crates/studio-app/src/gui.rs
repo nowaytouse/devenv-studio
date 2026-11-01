@@ -1746,11 +1746,6 @@ impl Studio {
                 return;
             }
         };
-        let display_catalog = studio_deployment::Catalog {
-            revision: catalog.revision.clone(),
-            tasks: catalog.tasks.iter().map(localized_task).collect(),
-        };
-        let catalog = &display_catalog;
         let query = self.query.trim().to_lowercase();
         let tasks: Vec<_> = catalog
             .tasks
@@ -1760,17 +1755,16 @@ impl Studio {
                     && (self.page != Page::Developer
                         || self.hybrid.developer_filter.is_empty()
                         || task.kind == self.hybrid.developer_filter)
-                    && (query.is_empty()
-                        || format!(
-                            "{} {} {} {:?} {:?}",
-                            task.title,
-                            task.description,
-                            task.id,
-                            task.package_id,
-                            task.feature_name
-                        )
-                        .to_lowercase()
-                        .contains(&query))
+            })
+            .map(localized_task)
+            .filter(|task| {
+                query.is_empty()
+                    || format!(
+                        "{} {} {} {:?} {:?}",
+                        task.title, task.description, task.id, task.package_id, task.feature_name
+                    )
+                    .to_lowercase()
+                    .contains(&query)
             })
             .collect();
         ui.label(lf!(
@@ -3064,7 +3058,7 @@ fn logo(ui: &mut egui::Ui, size: f32) {
 mod tests {
     use super::*;
 
-    fn preview() -> Studio {
+    pub(super) fn preview() -> Studio {
         Studio {
             compatibility: compatibility::UiState::default(),
             hybrid: hybrid::HybridState::default(),
@@ -3470,6 +3464,154 @@ mod tests {
                             .unwrap();
                     assert_eq!(plan.tasks, vec![original.clone()]);
                 }
+            }
+        }
+        i18n::set_language(Language::ZhCn);
+    }
+
+    #[test]
+    fn deployment_filters_keep_localized_search_and_provider_boundaries() {
+        fn labels(app: &mut Studio) -> Vec<(bool, String)> {
+            let context = egui::Context::default();
+            context.enable_accesskit();
+            let mut output = context.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(980.0, 1600.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| app.deployment_page(ui));
+                },
+            );
+            output.textures_delta.clear();
+            output
+                .platform_output
+                .accesskit_update
+                .unwrap()
+                .nodes
+                .into_iter()
+                .filter_map(|(_, node)| {
+                    node.label().or_else(|| node.value()).map(|text| {
+                        (
+                            node.role() == egui::accesskit::Role::CheckBox,
+                            text.to_owned(),
+                        )
+                    })
+                })
+                .collect()
+        }
+
+        let catalog = studio_deployment::catalog().unwrap();
+        for language in [Language::ZhCn, Language::EnUs] {
+            i18n::set_language(language);
+            let mut app = preview();
+            app.preferences.language = language;
+            app.deployment_catalog = Ok(catalog.clone());
+            app.deployment_selected.insert(catalog.tasks[0].id.clone());
+            let selection = app.deployment_selected.clone();
+            for (page, category, provider) in [
+                (Page::Maintenance, "maintenance", ""),
+                (Page::Storage, "storage", ""),
+                (Page::Features, "features", ""),
+                (Page::Developer, "developer", "cargo"),
+            ] {
+                let task = catalog
+                    .tasks
+                    .iter()
+                    .find(|task| {
+                        task.category == category && (provider.is_empty() || task.kind == provider)
+                    })
+                    .unwrap();
+                let title = localized_task(task).title;
+                app.page = page;
+                app.hybrid.developer_filter = provider.into();
+                app.query = title.to_uppercase();
+                assert!(
+                    labels(&mut app)
+                        .iter()
+                        .any(|(checkbox, label)| *checkbox && label == &title)
+                );
+                if page == Page::Developer {
+                    app.hybrid.developer_filter = "uv".into();
+                    let empty = labels(&mut app);
+                    assert!(
+                        !empty
+                            .iter()
+                            .any(|(checkbox, label)| *checkbox && label == &title)
+                    );
+                    assert!(empty.iter().any(|(_, label)| label == t("没有匹配的项目")));
+                }
+                app.page = Page::Software;
+                let empty = labels(&mut app);
+                assert!(
+                    !empty
+                        .iter()
+                        .any(|(checkbox, label)| *checkbox && label == &title)
+                );
+                assert!(empty.iter().any(|(_, label)| label == t("没有匹配的项目")));
+            }
+            assert_eq!(app.deployment_selected, selection);
+            assert_eq!(app.deployment_catalog.as_ref().unwrap(), &catalog);
+            assert!(app.worker.is_none() && app.dialog.is_none());
+        }
+        i18n::set_language(Language::ZhCn);
+    }
+
+    #[test]
+    #[ignore = "manual bounded localization preparation profile; no UI latency assertion"]
+    fn deployment_localization_preparation_profile() {
+        fn median_ns(mut prepare: impl FnMut() -> (Vec<studio_deployment::Task>, usize)) -> u128 {
+            for _ in 0..3 {
+                std::hint::black_box(prepare());
+            }
+            let mut samples = Vec::new();
+            for _ in 0..5 {
+                let start = std::time::Instant::now();
+                for _ in 0..10 {
+                    std::hint::black_box(prepare());
+                }
+                samples.push(start.elapsed().as_nanos() / 10);
+            }
+            samples.sort_unstable();
+            samples[2]
+        }
+
+        let catalog = studio_deployment::catalog().unwrap();
+        for language in [Language::ZhCn, Language::EnUs] {
+            i18n::set_language(language);
+            for (category, provider) in [
+                ("software", ""),
+                ("features", ""),
+                ("maintenance", ""),
+                ("storage", ""),
+                ("developer", "cargo"),
+            ] {
+                let matches = |task: &&studio_deployment::Task| {
+                    task.category == category && (provider.is_empty() || task.kind == provider)
+                };
+                let needed = catalog.tasks.iter().filter(matches).count();
+                let before = median_ns(|| {
+                    let tasks: Vec<_> = catalog.tasks.iter().map(localized_task).collect();
+                    let count = tasks.iter().filter(matches).count();
+                    (tasks, count)
+                });
+                let after = median_ns(|| {
+                    let tasks: Vec<_> = catalog
+                        .tasks
+                        .iter()
+                        .filter(matches)
+                        .map(localized_task)
+                        .collect();
+                    let count = tasks.len();
+                    (tasks, count)
+                });
+                println!(
+                    "{language:?} {category}/{provider}: localized {} -> {needed}; median preparation {before} -> {after} ns/call (5 rounds x 10 calls)",
+                    catalog.tasks.len()
+                );
             }
         }
         i18n::set_language(Language::ZhCn);

@@ -1,5 +1,13 @@
 # DevEnv Studio — design record
 
+## Unreleased — inventory guidance and guarded network review
+
+The backup page reuses the existing capture, file picker, migration and environment workflows in three steps: acquire an inventory, review its coverage and save it, then choose the next platform workflow. Provider details stay expandable and large package lists remain virtualized. Persistent counts distinguish complete, partial, unavailable and failed sources; incomplete records can be saved without being presented as a complete environment. Accepting a new inventory clears only related filters, selections and confirmation, while invalid imports and busy operations preserve the current work.
+
+Networking presents a connection choice and draft summary first. Custom package sources and the full comparison use existing expandable sections; the actual application scope sits immediately before confirmation. Activation passes the displayed active profile as its review baseline. Under the existing writer lock, the backend rejects a changed profile before creating history or replacing it; unreadable baselines cannot activate. The comparison concerns effective profile values: a missing file equals the default profile and JSON formatting alone is not a configuration change. Exact prior bytes, publication checks and readback remain required.
+
+Catalog pages filter category and developer provider before cloning and localizing task display fields. Localized text search, task order, stable identities and executable payloads retain their existing behavior. A bounded manual profile measures only this preparation stage, not end-to-end frame time or native user-perceived latency. No cache, additional installer or dependency is introduced.
+
 ## Unreleased — guided preparation and contextual help
 
 The environment landing page leads with backup, preparation and review. On macOS the existing Homebrew workbench follows immediately; starter preparation adds the reviewed defaults, chooses missing-only policy, clears filters and prior confirmation/result state, and requests a single scroll to review. Active workers disable draft edits at both the UI and helper boundaries. The saved-inventory readback, host checks and explicit execution approval remain in the existing backend path. No additional installer or setup engine is introduced; Homebrew Bundle remains the native execution contract ([official behavior](https://docs.brew.sh/Brew-Bundle-and-Brewfile)). Other provider workflows and Windows recipe selection remain available.
