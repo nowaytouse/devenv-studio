@@ -40,9 +40,63 @@ tree = replaceOnce(tree, "const data = await response.json();", "const data = aw
 source = source.slice(0, treeStart) + tree + source.slice(treeEnd);
 source = replaceOnce(source,
   "\tif (_rateLimitedThisSession) return fetchTreeWithAvailableAuth(ownerRepo, branches, getToken);",
-  "\tif (ownerRepo.toLowerCase() === 'builderio/agent-native' && getGitHubHost() === 'github.com' && getToken?.()) " +
+  "\tif (getGitHubHost() === 'github.com' && getToken?.()) " +
   "return fetchTreeWithAvailableAuth(ownerRepo, branches, getToken);\n" +
   "\tif (_rateLimitedThisSession) return fetchTreeWithAvailableAuth(ownerRepo, branches, getToken);");
+
+// A known large repository is usually checked for only one installed path.
+async function fetchBuilderLockedTree(ref, token, paths) {
+  if (!token || paths.length !== 1 || typeof paths[0] !== "string") return null;
+  const parts = paths[0].split("/");
+  if (parts.length > 5 || parts.some((part) => !part || part === "." || part === "..")) return null;
+  if (parts.at(-1) !== "SKILL.md") return null;
+  const isSha = (value) => typeof value === "string" && /^[0-9a-f]{40}$/.test(value);
+  const signal = AbortSignal.timeout(12_000);
+  const headers = { Accept: "application/vnd.github+json", Authorization: "Bearer " + token, "User-Agent": "skills-cli" };
+  const fetchTree = async (id) => {
+    const response = await fetch(
+      "https://api.github.com/repos/BuilderIO/agent-native/git/trees/" + encodeURIComponent(id),
+      { headers, signal, redirect: "error" },
+    );
+    if (!response.ok) throw new Error("GitHub tree unavailable");
+    const data = await response.json();
+    if (data.truncated || !isSha(data.sha) || !Array.isArray(data.tree)) throw new Error("Incomplete GitHub tree");
+    return data;
+  };
+  try {
+    const root = await fetchTree(ref || "HEAD");
+    let current = root;
+    const tree = [];
+    for (const [index, part] of parts.entries()) {
+      const type = index + 1 === parts.length ? "blob" : "tree";
+      const child = current.tree.find((item) => item.path === part && item.type === type);
+      if (!child || !isSha(child.sha)) return null;
+      tree.push({ ...child, path: parts.slice(0, index + 1).join("/") });
+      if (type === "tree") {
+        current = await fetchTree(child.sha);
+        if (current.sha !== child.sha) return null;
+      }
+    }
+    return { sha: root.sha, branch: ref || "HEAD", tree };
+  } catch {
+    // A missing or relocated path still uses the upstream full-tree/clone resolution.
+    return null;
+  }
+}
+source = replaceOnce(source, "async function fetchGlobalSource(entry, lockedSkillPaths) {",
+  fetchBuilderLockedTree.toString() + "\nasync function fetchGlobalSource(entry, lockedSkillPaths) {");
+source = replaceOnce(source, "\t\t\tconst tree = await fetchRepoTree(entry.source, entry.ref, getGitHubToken);",
+  "\t\t\tconst sparse = entry.source.toLowerCase() === 'builderio/agent-native' && getGitHubHost() === 'github.com' " +
+  "? await fetchBuilderLockedTree(entry.ref, getGitHubToken(), lockedSkillPaths) : null;\n" +
+  "\t\t\tconst tree = sparse ?? await fetchRepoTree(entry.source, entry.ref, getGitHubToken);");
+
+// This caller consumes only the names; agent-location enumeration is unnecessary.
+source = replaceOnce(source, "\t\t\tconst skillKey = `${scopeKey}:${skill.name}`;",
+  "\t\t\tconst skillKey = `${scopeKey}:${skill.name}`;\n" +
+  "\t\t\tif (options.namesOnly) { skillsMap.set(skillKey, { name: skill.name }); continue; }");
+source = replaceOnce(source,
+  "(await listInstalledSkills({ global })).map((skill) => skill.name)",
+  "(await listInstalledSkills({ global, namesOnly: global })).map((skill) => skill.name)");
 
 const globalStart = source.indexOf("async function updateGlobalSkills(");
 const globalEnd = source.indexOf("async function updateProjectSkills(", globalStart);
@@ -86,7 +140,7 @@ global = global.slice(0, fetchStart) + [
   "\t\t}",
   "\t\tconsole.log(progress + source + ' — Git checkout ready; verifying paths next');",
   "\t\treturn checkout;",
-  "\t});",
+  "\t}, 8);",
   "\tfor (const [index, itemsForSource] of groups.entries()) {",
   "\t\tconst firstEntry = itemsForSource[0].entry;",
   "\t\tconst source = firstEntry.source;",

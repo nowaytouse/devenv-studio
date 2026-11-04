@@ -227,7 +227,17 @@ fn cursor_equivalent(native: &Path, shared: &Path, name: &str) -> Result<bool> {
         && name_matches(native, name)?)
 }
 
-fn lean_ctx_mirror(canonical: &Path, mirror: &Path) -> Result<bool> {
+pub(in crate::studio) fn lean_ctx_mirror_path(home: &Path, path: &Path) -> bool {
+    [
+        ".cursor/skills/lean-ctx",
+        ".copilot/skills/lean-ctx",
+        ".config/opencode/skills/lean-ctx",
+    ]
+    .iter()
+    .any(|relative| path == home.join(relative))
+}
+
+pub(in crate::studio) fn lean_ctx_mirror(canonical: &Path, mirror: &Path) -> Result<bool> {
     let reviewed = |path: &Path| -> Result<_> {
         let mut files = tree(path)?;
         files.remove(Path::new("SKILL.md.bak"));
@@ -300,16 +310,7 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
         let registered = lock.npx_registered(name);
         if row.path == canonical && registered && name_matches(&row.path, name)? {
             delegated.npx += 1;
-        } else if name == "lean-ctx"
-            && registered
-            && [
-                ".cursor/skills/lean-ctx",
-                ".copilot/skills/lean-ctx",
-                ".config/opencode/skills/lean-ctx",
-            ]
-            .iter()
-            .any(|root| row.path == home.join(root))
-        {
+        } else if name == "lean-ctx" && registered && lean_ctx_mirror_path(home, &row.path) {
             ensure!(
                 lean_ctx_mirror(&canonical, &row.path)?,
                 "Registered LeanCTX copy differs from its canonical owner: {}",

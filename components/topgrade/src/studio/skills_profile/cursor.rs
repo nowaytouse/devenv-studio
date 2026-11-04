@@ -1,5 +1,10 @@
 use super::*;
-use crate::studio::github_skills::ownership::{CURSOR_NAMES, USER_CONFIG, name_matches, repository};
+use crate::studio::{
+    github_skills::ownership::{
+        CURSOR_NAMES, USER_CONFIG, lean_ctx_mirror, lean_ctx_mirror_path, name_matches, repository,
+    },
+    is_hex,
+};
 use chrono::Utc;
 use regex::Regex;
 use serde_json::json;
@@ -218,6 +223,22 @@ fn npx_owned(home: &Path, row: &Row, entry: &Value) -> bool {
             .is_ok_and(|actual| in_root(&actual) && open_file(&actual.join("SKILL.md"), false, DATA_LIMIT).is_ok())
 }
 
+fn npx_lean_ctx_mirror(home: &Path, row: &Row, entry: &Value) -> Result<bool> {
+    if row.skill_name != "lean-ctx"
+        || !lean_ctx_mirror_path(home, &row.path)
+        || entry["sourceType"] != "github"
+        || entry["source"] != "yvgude/lean-ctx"
+        || entry["skillPath"] != "skills/lean-ctx/SKILL.md"
+        || !entry["sourceUrl"]
+            .as_str()
+            .is_some_and(|url| repository(url).is_ok_and(|repo| repo == "yvgude/lean-ctx"))
+        || !entry["skillFolderHash"].as_str().is_some_and(|hash| is_hex(hash, 40))
+    {
+        return Ok(false);
+    }
+    lean_ctx_mirror(&home.join(SHARED).join("lean-ctx"), &row.path)
+}
+
 fn normalized_origin(url: &str) -> String {
     url.trim_end_matches('/').trim_end_matches(".git").to_ascii_lowercase()
 }
@@ -272,7 +293,12 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
         let name = &row.skill_name;
         let source = row.source_url.as_deref().filter(|source| !source.is_empty());
         let entry = entries.get(name).unwrap_or(&Value::Null);
-        let npx = npx_owned(home, row, entry);
+        let mirror = source.is_none() && !row.pinned && npx_lean_ctx_mirror(home, row, entry)?;
+        let npx = if source.is_none() && lean_ctx_mirror_path(home, &row.path) {
+            mirror
+        } else {
+            npx_owned(home, row, entry)
+        };
         if source.is_none() {
             *untracked.entry(name.as_str()).or_insert(0usize) += 1;
         }
@@ -288,6 +314,8 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
             "PINNED_NOT_LATEST"
         } else if source.is_some() {
             "GH_TRACKED"
+        } else if mirror {
+            "NPX_MIRROR_VERIFIED"
         } else if npx {
             "NPX_TRACKED"
         } else if CURSOR_NAMES.contains(&name.as_str()) && row.path == shared.join(name) {
@@ -441,6 +469,47 @@ fn mirror_keeps_configuration_and_archives_previous_tree() -> Result<()> {
     assert!(String::from_utf8(bytes(&shared.join("design/SKILL.md"), MAX_FILE)?)?.ends_with("new\n"));
     assert!(String::from_utf8(bytes(&backup.join("design/SKILL.md"), MAX_FILE)?)?.ends_with("old\n"));
     assert_eq!(mirror(&native, &shared, "design", &backup)?, "CURRENT");
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn coverage_requires_exact_lean_ctx_mirror_and_owner() -> Result<()> {
+    let fixture = tempfile::tempdir()?;
+    let home = fixture.path().canonicalize()?;
+    let canonical = directory(&home, Path::new(".agents/skills/lean-ctx"), true)?;
+    let entry = json!({
+        "sourceType": "github",
+        "source": "yvgude/lean-ctx",
+        "sourceUrl": "https://github.com/yvgude/lean-ctx.git",
+        "skillPath": "skills/lean-ctx/SKILL.md",
+        "skillFolderHash": "a".repeat(40),
+    });
+    let skill = b"---\nname: lean-ctx\n---\nVerified content\n";
+    fs::write(canonical.join("SKILL.md"), skill)?;
+    for relative in [
+        ".cursor/skills/lean-ctx",
+        ".copilot/skills/lean-ctx",
+        ".config/opencode/skills/lean-ctx",
+    ] {
+        let mirror = directory(&home, Path::new(relative), true)?;
+        let row = Row {
+            skill_name: "lean-ctx".to_owned(),
+            source_url: None,
+            path: mirror.clone(),
+            pinned: false,
+        };
+        fs::write(mirror.join("SKILL.md"), skill)?;
+        fs::write(mirror.join("SKILL.md.bak"), "Local backup")?;
+        assert!(npx_lean_ctx_mirror(&home, &row, &entry)?);
+        let mut foreign = entry.clone();
+        foreign["sourceUrl"] = json!("https://github.com/other/lean-ctx");
+        assert!(!npx_lean_ctx_mirror(&home, &row, &foreign)?);
+        fs::write(mirror.join("SKILL.md"), "Drift")?;
+        assert!(!npx_lean_ctx_mirror(&home, &row, &entry)?);
+        fs::write(mirror.join("SKILL.md.v4-migration.lock"), "Unexpected")?;
+        assert!(npx_lean_ctx_mirror(&home, &row, &entry).is_err());
+    }
     Ok(())
 }
 

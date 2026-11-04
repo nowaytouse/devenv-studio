@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- macOS Skills 更新只读取所需的已安装名称，使用有界并发和认证 GitHub 查询。BuilderIO 优先验证已锁定目录，路径缺失时保留完整查询和迁移检查。
+- HEAD-sync 在升级配对 keg 前预检两份公式。覆盖审计核验指定的 LeanCTX 镜像，Cursor 更新报告子进程输出中的失败并限制单次执行时长。
+
 - macOS 技能更新校验固定 NPX 包后即时报告逐源结果，为 GitHub 树查询提供有界长超时，并以失败状态报告未核验的来源。
 
 - macOS 无人值守技能更新实时转发 NPX 的 stdout 和 stderr，先脱敏再显示，仍核验逐源失败及更新后的技能锁。

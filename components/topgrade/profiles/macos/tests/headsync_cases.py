@@ -56,6 +56,10 @@ elif args[:1] == ["upgrade"]:
  target = args[-1] if args[-1] in ("ggml", "llama.cpp") else "bulk"
  for f in (root/"core/Formula/g/ggml.rb",root/"core/Formula/l/llama.cpp.rb"):
   if os.environ["TEST_SHA"] not in f.read_text(): print("formula revision mismatch",file=sys.stderr); sys.exit(33)
+ if "--dry-run" in args:
+  if os.environ.get("TEST_FAIL_PREFLIGHT") == "1":
+   print("Pinned LLVM cannot satisfy llama.cpp",file=sys.stderr); sys.exit(44)
+  sys.exit(0)
  if os.environ.get("TEST_PAUSE_UPGRADE") == target:
   (root/"upgrade-paused").touch()
   for attempt in range(750):
@@ -254,7 +258,7 @@ def idempotent(f):
         assert result.returncode == 0, result.stdout
         assert "HEAD sync transaction: OK" in result.stdout
         f.assert_restored()
-    upgrades = [line for line in f.events() if line.startswith("brew upgrade")]
+    upgrades = [line for line in f.events() if line.startswith("brew upgrade") and "--dry-run" not in line]
     assert len(upgrades) == 6 and all("topgrade" not in line for line in upgrades), upgrades
 
 
@@ -311,6 +315,14 @@ def mismatched_pair_stops_remaining(f):
     events = f.events()
     assert "brew upgrade --formula --fetch-HEAD llama.cpp" in events, events
     assert not any(line.startswith("brew outdated ") for line in events), events
+
+
+def blocked_pair_does_not_upgrade(f):
+    result = f.run(TEST_FAIL_PREFLIGHT="1")
+    assert result.returncode != 0 and "preflight failed before either keg was upgraded" in result.stdout, result.stdout
+    upgrades = [line for line in f.events() if line.startswith("brew upgrade ")]
+    assert upgrades == ["brew upgrade --dry-run --formula --fetch-HEAD ggml llama.cpp"], upgrades
+    f.assert_restored()
 
 
 def pin_scan_exclusions(f):
@@ -537,6 +549,7 @@ cases = [
 ]
 if native:
     cases += [
+        ("pinned dependency failure stops both keg upgrades", blocked_pair_does_not_upgrade),
         ("mismatched active pair stops before remaining enumeration", mismatched_pair_stops_remaining),
         ("tap-qualified formula name survives the exact scan and upgrade", exact_tap_name),
         ("restored formulae retain original mode and nanosecond mtime", preserve_formula_metadata),

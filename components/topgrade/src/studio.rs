@@ -589,7 +589,7 @@ fn wait_until(child: &mut Child, deadline: Instant) -> Result<Option<ExitStatus>
     }
 }
 
-fn terminate_group(child: &mut Child, pgid: i32) -> Result<()> {
+pub(crate) fn terminate_group(child: &mut Child, pgid: i32) -> Result<()> {
     for signal in [Signal::SIGTERM, Signal::SIGKILL] {
         signal_group(pgid, Some(signal))?;
         let deadline = Instant::now() + GRACE;

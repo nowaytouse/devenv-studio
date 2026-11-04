@@ -41,6 +41,9 @@ use crate::{
     terminal::print_warning,
 };
 
+#[cfg(target_os = "macos")]
+mod cursor_update;
+
 #[cfg(target_os = "linux")]
 pub static IS_WSL: LazyLock<bool> = LazyLock::new(|| {
     let output = std::fs::read_to_string("/proc/version").unwrap_or_default();
@@ -882,7 +885,8 @@ fn run_vscode_compatible(variant: VSCodeVariant, ctx: &ExecutionContext) -> Resu
 
     print_separator(variant.display_name());
 
-    ctx.execute(bin)
+    let mut command = ctx.execute(bin);
+    command
         .args_if_some(
             // If the variant supports profiles and we have configured use of a profile
             if variant.supports_profiles() {
@@ -893,8 +897,15 @@ fn run_vscode_compatible(variant: VSCodeVariant, ctx: &ExecutionContext) -> Resu
             // Add the profile argument
             |profile| ["--profile", profile],
         )
-        .arg("--update-extensions")
-        .status_checked()?;
+        .arg("--update-extensions");
+    #[cfg(target_os = "macos")]
+    if matches!(variant, VSCodeVariant::Cursor) {
+        cursor_update::run(&mut command, std::time::Duration::from_secs(360))?;
+    } else {
+        command.status_checked()?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    command.status_checked()?;
 
     if !ctx.config().vscode_cleanup_obsolete_extensions() {
         return Ok(());

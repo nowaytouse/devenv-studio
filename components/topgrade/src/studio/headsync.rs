@@ -145,6 +145,9 @@ impl Headsync {
             status(self.command("ruby").arg("-c").arg(file).stdout(Stdio::null()))
         })?;
         println!("HEAD-sync transaction prepared and applied");
+        println!("\n== Check upgrade requirements for both synchronized formulae ==");
+        status(self.brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"]).args(PAIR))
+            .wrap_err("Synchronized formula preflight failed before either keg was upgraded; inspect the requirements above and preserve the LLVM pin")?;
         for formula in PAIR {
             println!("\n== Upgrade {formula} at {revision} ==");
             status(&mut self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula]))?;
