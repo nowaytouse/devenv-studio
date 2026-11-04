@@ -38,7 +38,7 @@ Mac 还可按 Rust、Python、Web 用途准备基础依赖，按钮说明列出�
 
 ## Topgrade 环境迁移
 
-在 Apple Silicon macOS 上，「更新中心」读取 Topgrade 引擎自己的步骤目录。六项可在 GUI 审核后直接执行，其余步骤和本机托管任务可搜索或复制终端预演命令。GitHub CLI Skills、Helm、Homebrew 链接审计和 CLI 版本报告使用 Rust 实现。详细运行和回退说明见 [Topgrade 更新中心](docs/TOPGRADE_MAINTENANCE.md)。
+在 Apple Silicon macOS 上，「更新中心」读取 Topgrade 引擎自己的步骤目录。六项可在 GUI 审核后直接执行，其余步骤和本机托管任务可搜索或复制终端预演命令。Homebrew 本机清单可查看已安装的 Formula、Cask、链接及固定版本。执行记录独立可查。详细运行和回退说明见 [Topgrade 更新中心](docs/TOPGRADE_MAINTENANCE.md)。
 
 环境配置页可独立备份 Topgrade 主配置、`topgrade.d/*.toml` 及明确添加的本地主目录内脚本/依赖文本文件。迁移包保留原文字节、相对目录和原可执行标记；载入后先查看原文，再逐文件选择并确认还原到一个全新目录。现有配置不会被覆盖，导入和还原不执行任何命令，Unix 上不恢复脚本执行位。包内可能包含本机路径与自定义命令，应保存在私人位置。此功能与软件清单备份独立，不会自动打包二进制、项目工作区、外部 include 或全部工具依赖。
 

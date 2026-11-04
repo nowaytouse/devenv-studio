@@ -322,6 +322,33 @@ pub(crate) fn run_bounded(
 ) -> Result<Output> {
     run_configured(invocation, cancel, timeout, |_| {})
 }
+#[cfg(target_os = "macos")]
+pub(crate) fn run_brew_inventory(
+    invocation: &Invocation,
+    cancel: &Arc<AtomicBool>,
+) -> Result<Output> {
+    ensure!(
+        matches!(
+            invocation.program.to_str(),
+            Some("/opt/homebrew/bin/brew" | "/usr/local/bin/brew")
+        ) && invocation.args == ["list", "--versions", "--json"],
+        "Homebrew inventory requires the supported local list command"
+    );
+    let home = crate::maintenance::account_home()?;
+    run_configured(invocation, cancel, Duration::from_secs(15), |command| {
+        command
+            .env_clear()
+            .current_dir("/")
+            .env("HOME", home)
+            .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+            .env("LC_ALL", "C")
+            .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+            .env("HOMEBREW_NO_ANALYTICS", "1")
+            .env("HOMEBREW_NO_INSTALL_CLEANUP", "1")
+            .env("HOMEBREW_NO_ENV_HINTS", "1")
+            .env("HOMEBREW_NO_INSTALL_FROM_API", "1");
+    })
+}
 #[cfg(any(windows, test))]
 pub(crate) fn run_inventory(
     invocation: &Invocation,

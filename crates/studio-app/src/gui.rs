@@ -265,6 +265,8 @@ enum WorkerResult {
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
     TopgradeCapture(studio_deployment::topgrade::Profile),
     UpdateCheck(Result<maintenance::Check, String>, updates::History),
+    BrewInventory(updates::BrewInventory),
+    UpdateHistory(updates::History),
     UpdateReview(Result<maintenance::Review, String>),
     UpdateRun(Result<maintenance::Report, String>, updates::History),
     GitConfigCapture(studio_deployment::git_config::Profile),
@@ -459,12 +461,16 @@ impl Studio {
                 &result,
                 Ok(WorkerResult::RustInventory(_)
                     | WorkerResult::PythonToolsInventory(_)
-                    | WorkerResult::MiseRuntimeInventory(_))
+                    | WorkerResult::MiseRuntimeInventory(_)
+                    | WorkerResult::BrewInventory(Ok(_))
+                    | WorkerResult::UpdateHistory(Ok(_)))
             );
             let migration_result = matches!(&result, Ok(WorkerResult::Migration { .. }));
             let update_result = matches!(
                 &result,
                 Ok(WorkerResult::UpdateCheck(..)
+                    | WorkerResult::BrewInventory(_)
+                    | WorkerResult::UpdateHistory(_)
                     | WorkerResult::UpdateReview(_)
                     | WorkerResult::UpdateRun(..))
             );
@@ -680,6 +686,12 @@ impl Studio {
                 },
                 Ok(WorkerResult::UpdateCheck(check, history)) => {
                     self.updates.accept_check(check, history, cancelled)
+                }
+                Ok(WorkerResult::BrewInventory(inventory)) => {
+                    self.updates.accept_brew(inventory, cancelled)
+                }
+                Ok(WorkerResult::UpdateHistory(history)) => {
+                    self.updates.accept_history(history, cancelled)
                 }
                 Ok(WorkerResult::UpdateReview(review)) => {
                     self.updates.accept_review(review, cancelled)

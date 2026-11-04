@@ -1,9 +1,22 @@
 use super::*;
+use maintenance::brew_inventory;
+
+mod brew;
 
 pub(super) type History = Result<Vec<maintenance::Report>, String>;
+pub(super) type BrewInventory = Result<brew_inventory::Inventory, String>;
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Section {
+    #[default]
+    Tasks,
+    Homebrew,
+    History,
+}
 
 #[derive(Default)]
 pub(super) struct UiState {
+    section: Section,
     check: Option<maintenance::Check>,
     selected: BTreeSet<String>,
     catalog_query: String,
@@ -11,6 +24,8 @@ pub(super) struct UiState {
     confirmed: bool,
     latest: Option<maintenance::Report>,
     history: Option<History>,
+    focus_result: bool,
+    brew: brew::View,
 }
 
 impl UiState {
@@ -141,6 +156,8 @@ impl UiState {
         self.history = Some(history);
         match report {
             Ok(report) => {
+                self.section = Section::History;
+                self.focus_result = true;
                 let notice = Notice {
                     text: run_status_label(&report.status).into(),
                     error: !matches!(report.status, maintenance::RunStatus::Verified),
@@ -153,6 +170,31 @@ impl UiState {
                 error: true,
             },
         }
+    }
+
+    pub(super) fn accept_history(&mut self, history: History, cancelled: bool) -> Notice {
+        if cancelled {
+            return cancelled_notice();
+        }
+        let notice = match &history {
+            Ok(_) => Notice {
+                text: tx("已读取本地执行记录。", "Local run history loaded.").into(),
+                error: false,
+            },
+            Err(error) => Notice {
+                text: error.clone(),
+                error: true,
+            },
+        };
+        self.history = Some(history);
+        notice
+    }
+
+    pub(super) fn accept_brew(&mut self, inventory: BrewInventory, cancelled: bool) -> Notice {
+        if cancelled {
+            return cancelled_notice();
+        }
+        self.brew.accept(inventory)
     }
 }
 
@@ -211,7 +253,6 @@ impl Studio {
     }
 
     pub(super) fn updates_page(&mut self, ui: &mut egui::Ui) {
-        ui.heading(tx("更新本机开发工具", "Update local developer tools"));
         if !cfg!(target_os = "macos") {
             ui.label(tx(
                 "更新中心仅在 macOS 本机可用。",
@@ -221,6 +262,58 @@ impl Studio {
         }
 
         let busy = self.worker.is_some();
+        if std::mem::take(&mut self.updates.focus_result) {
+            ui.scroll_to_cursor(Some(egui::Align::Min));
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.selectable_value(
+                &mut self.updates.section,
+                Section::Tasks,
+                tx("更新任务", "Update tasks"),
+            );
+            ui.selectable_value(
+                &mut self.updates.section,
+                Section::Homebrew,
+                tx("Homebrew 已安装", "Homebrew installed"),
+            );
+            ui.selectable_value(
+                &mut self.updates.section,
+                Section::History,
+                tx("执行记录", "Run history"),
+            );
+        });
+        ui.add_space(8.0);
+        match self.updates.section {
+            Section::Tasks => self.update_tasks_view(ui, busy),
+            Section::Homebrew => {
+                if self.updates.brew.show(ui, busy) {
+                    self.start_worker(
+                        tx("正在读取 Homebrew 清单", "Reading Homebrew inventory"),
+                        |cancel| {
+                            let result =
+                                brew_inventory::read(cancel).map_err(|error| format!("{error:#}"));
+                            Ok(WorkerResult::BrewInventory(result))
+                        },
+                    );
+                }
+            }
+            Section::History => {
+                if ui
+                    .add_enabled(!busy, egui::Button::new(tx("刷新记录", "Refresh history")))
+                    .clicked()
+                {
+                    self.start_worker(
+                        tx("正在读取执行记录", "Reading run history"),
+                        |_| Ok(WorkerResult::UpdateHistory(read_history())),
+                    );
+                }
+                self.updates.history_view(ui);
+            }
+        }
+    }
+
+    fn update_tasks_view(&mut self, ui: &mut egui::Ui, busy: bool) {
+        ui.heading(tx("更新本机开发工具", "Update local developer tools"));
         ui.label(tx(
             "检查本机 Topgrade，再选择、审核和确认更新。检查只读取本地状态。",
             "Check the local Topgrade, then select, review, and confirm updates. The check reads local state.",
@@ -236,7 +329,14 @@ impl Studio {
         }
         let mut selection_change = None;
         if let Some(check) = &self.updates.check {
-            ui.label(&check.detail);
+            if check.available {
+                ui.label(tx(
+                    "已核验本机 Topgrade 引擎和配置。",
+                    "Local Topgrade engine and profile verified.",
+                ));
+            } else {
+                ui.colored_label(palette().danger, &check.detail);
+            }
             if !check.steps.is_empty() {
                 ui.heading(tx("可在 Studio 执行", "Run in Studio"));
             }
@@ -264,13 +364,16 @@ impl Studio {
             self.updates.select_step(&id, selected);
         }
 
-        if primary(
-            ui,
-            tx("审核所选更新", "Review selected updates"),
-            self.updates.can_review(busy),
-        )
-        .clicked()
-        {
+        let review_title = if self.updates.selected.is_empty() {
+            tx("审核所选更新", "Review selected updates").to_owned()
+        } else {
+            lf!(
+                "审核所选 {} 项",
+                "Review {} selected",
+                self.updates.selected.len()
+            )
+        };
+        if primary(ui, &review_title, self.updates.can_review(busy)).clicked() {
             self.start_update_review();
         }
         let mut run = false;
@@ -281,8 +384,14 @@ impl Studio {
                 ui.set_width(ui.available_width());
                 ui.heading(tx("即将执行的步骤", "Steps to run"));
                 for step in &review.steps {
-                    ui.label(step_label(&step.id, &step.label));
+                    ui.strong(step_label(&step.id, &step.label));
                     ui.label(RichText::new(step_detail(step)).color(palette().muted));
+                    ui.label(
+                        RichText::new(operation_detail(&step.id))
+                            .monospace()
+                            .color(palette().muted),
+                    );
+                    ui.add_space(4.0);
                 }
                 ui.label(tx(
                     "取消后，已完成的变更会保留。",
@@ -335,7 +444,6 @@ impl Studio {
                 ui.ctx().copy_text(maintenance::TERMINAL_COMMAND.to_owned());
             }
         }
-        self.updates.history_view(ui);
     }
 }
 
@@ -350,8 +458,8 @@ impl UiState {
         match &self.history {
             None => {
                 ui.label(tx(
-                    "检查后显示本地执行记录。",
-                    "Check to read local run history.",
+                    "刷新后显示本地执行记录。",
+                    "Refresh to read local run history.",
                 ));
             }
             Some(Err(error)) => {
@@ -362,6 +470,13 @@ impl UiState {
             }
             Some(Ok(reports)) => {
                 for report in reports {
+                    if self
+                        .latest
+                        .as_ref()
+                        .is_some_and(|latest| latest.run_id == report.run_id)
+                    {
+                        continue;
+                    }
                     egui::CollapsingHeader::new(format!(
                         "{} · {}",
                         run_status_label(&report.status),
@@ -497,6 +612,27 @@ fn step_detail(step: &maintenance::Step) -> &str {
             "刷新本机 TLDR 手册缓存。",
             "Refresh the local TLDR command reference cache.",
         ),
+        _ => "",
+    }
+}
+
+fn operation_detail(id: &str) -> &'static str {
+    match id {
+        "brew_linkage_audit" => "brew linkage",
+        "cli_versions" => tx(
+            "读取工具的版本和 Homebrew 活跃 keg",
+            "Probe tool versions and active Homebrew kegs",
+        ),
+        "github_cli_extensions" => "gh extension upgrade --all",
+        "github_cli_skills" => tx(
+            "gh skill list · gh api · 有可安全应用的更新时运行 gh skill update",
+            "gh skill list · gh api · gh skill update when safe updates are available",
+        ),
+        "helm" => tx(
+            "helm repo list · 校验缓存 · 必要时运行 helm repo update",
+            "helm repo list · verify cache · helm repo update when needed",
+        ),
+        "tldr" => "tldr --update",
         _ => "",
     }
 }

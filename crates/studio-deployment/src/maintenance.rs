@@ -9,6 +9,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool, mpsc::Sender},
 };
 
+pub mod brew_inventory;
 #[cfg(target_os = "macos")]
 mod native;
 #[cfg(any(target_os = "macos", test))]
