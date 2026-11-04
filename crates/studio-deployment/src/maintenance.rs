@@ -1,4 +1,4 @@
-//! Reviewed macOS Topgrade maintenance. Local history is execution evidence.
+//! Reviewed update center and platform inventories. Local history is execution evidence.
 use crate::DeploymentEvent;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,8 @@ pub mod brew_inventory;
 mod native;
 #[cfg(any(target_os = "macos", test))]
 mod protocol;
+pub mod windows_inventory;
+pub mod windows_updates;
 
 pub const TERMINAL_COMMAND: &str = "\"$HOME/.local/bin/topgrade\"";
 

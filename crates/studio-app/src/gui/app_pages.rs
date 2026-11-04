@@ -602,6 +602,26 @@ impl Studio {
                     ),
                 ],
             ),
+            Some(Page::Updates) if cfg!(windows) => (
+                tx(
+                    "核对 Windows 已安装软件",
+                    "Review installed Windows software",
+                ),
+                [
+                    tx(
+                        "读取 WinGet 清单，搜索软件包和导出版本。这里显示的是 WinGet 可匹配的范围。",
+                        "Read the WinGet inventory and search package IDs and exported versions. The view covers packages matched by WinGet.",
+                    ),
+                    tx(
+                        "选择来源明确的社区包，先把核对命令复制到终端，再决定是否升级。",
+                        "Select a package with a confirmed community source, copy its check command to Terminal, and decide whether to upgrade.",
+                    ),
+                    tx(
+                        "通过更新任务进入软件部署、配置或维护的审核流程，在执行记录查看 Studio 的部署结果。",
+                        "Open software deployment, configuration, or maintenance from Update tasks and review Studio deployment results in Run history.",
+                    ),
+                ],
+            ),
             Some(Page::Updates) => (
                 tx("更新本机开发工具", "Update local developer tools"),
                 [

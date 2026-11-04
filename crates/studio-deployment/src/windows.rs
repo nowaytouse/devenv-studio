@@ -63,7 +63,7 @@ unsafe extern "system" {
         overlapped: *mut c_void,
     ) -> i32;
 }
-fn local_app_data() -> Result<PathBuf> {
+pub(crate) fn local_app_data() -> Result<PathBuf> {
     const LOCAL: Guid = Guid {
         a: 0xf1b32785,
         b: 0x6fba,
@@ -209,7 +209,7 @@ fn program_files() -> Result<PathBuf> {
     ensure!(path.is_absolute(), "ProgramFilesDir must be absolute");
     Ok(path)
 }
-fn winget_path() -> Result<PathBuf> {
+pub(crate) fn winget_path() -> Result<PathBuf> {
     let alias = local_app_data()?.join(r"Microsoft\WindowsApps\winget.exe");
     // Open the reparse point itself. An ordinary executable at this user-writable
     // path is rejected; the OS AppExecLink must identify Microsoft's App Installer.

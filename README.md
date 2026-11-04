@@ -36,9 +36,11 @@ Mac 还可按 Rust、Python、Web 用途准备基础依赖，按钮说明列出�
 
 环境配置页提供 macOS 基础工具一键预选和 Windows 用途方案入口；它们只准备待审选择，不会跳过变更计划的核对与确认。采集后可搜索、保存新 JSON 备份、重新载入，再进入环境配置：Mac 选择基础工具或备份中的 Homebrew 项目，审核生成的 Brewfile，导出或明确在本机配置；mise 可在 macOS/Windows 安装选中的核心运行时。Windows 从备份审核可信任务，也可选择现有混合组合和软件目录；迁移初始不勾选。mise 安装不会修改 Shell 激活或项目/全局配置，完成后导出的固定版 mise.toml 与锁文件需一并审核和放入目标项目。只有完整采集的来源参与映射；包版本保留为观测信息，不被偷换成 Windows 版本锁定。备份只包含工具清单和版本，不复制二进制、项目、密钥、配置文件或虚拟环境，也不是一键精确还原。文件保留在本地，不上传 GitHub。Mac 执行前需保存并审核 Homebrew 清单，使用私有生成的 Brewfile，先 Bundle install --no-upgrade，再独立 check；依赖仍可能改变，没有自动回滚。Cargo 可在 Mac 按审核目录选择滚动版、精确版本或固定上游 Git HEAD 重部署；VS Code 扩展可从完整 Mac 清单逐项选取，精确版本或 Marketplace 当前版本重部署并回读默认稳定版配置文件。扩展具有与 VS Code 相同的权限且无法自动回滚；扩展部署本身不恢复编辑器设置或账号。另有独立的编辑器设置档案：支持 VS Code 稳定版、Insiders 与 Cursor 的默认用户配置，覆盖 macOS/Windows/Linux 的 21 项通用白名单 JSONC 合并，由用户逐项审核；不迁移工作区/命名 Profile、扩展账号、密钥或代理。NPM 可从已保存的 Mac 清单逐项恢复精确版本或自选 dist-tag；安装脚本关闭并回读核验。可单独导出选中 Windows 软件的原生 WinGet JSON，跨工具档案继续保留其他提供程序。完整范围见[环境备份说明](docs/MAC_BACKUP.md)与[成熟项目接入契约](docs/ENVIRONMENT_SOURCES.md)。
 
-## Topgrade 环境迁移
+## 更新中心与 Topgrade 环境迁移
 
 在 Apple Silicon macOS 上，「更新中心」读取 Topgrade 引擎自己的步骤目录。六项可在 GUI 审核后直接执行，其余步骤和本机托管任务可搜索或复制终端预演命令。Homebrew 本机清单可查看已安装的 Formula、Cask、链接及固定版本。执行记录独立可查。详细运行和回退说明见 [Topgrade 更新中心](docs/TOPGRADE_MAINTENANCE.md)。
+
+Windows 的同一入口可读取和搜索 WinGet 导出的本机软件、来源和版本。对身份明确的官方社区包提供单包核对和终端升级命令。软件部署、系统配置、维护与执行记录沿用原有的审核流程。WinGet 匹配清单的范围及 Windows LTSC 的设备验收要求见 [跨平台更新中心](docs/TOPGRADE_MAINTENANCE.md)。
 
 环境配置页可独立备份 Topgrade 主配置、`topgrade.d/*.toml` 及明确添加的本地主目录内脚本/依赖文本文件。迁移包保留原文字节、相对目录和原可执行标记；载入后先查看原文，再逐文件选择并确认还原到一个全新目录。现有配置不会被覆盖，导入和还原不执行任何命令，Unix 上不恢复脚本执行位。包内可能包含本机路径与自定义命令，应保存在私人位置。此功能与软件清单备份独立，不会自动打包二进制、项目工作区、外部 include 或全部工具依赖。
 

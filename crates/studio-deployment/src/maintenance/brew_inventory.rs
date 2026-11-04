@@ -2,8 +2,10 @@
 use anyhow::Result;
 use std::sync::{Arc, atomic::AtomicBool};
 
+#[cfg(target_os = "macos")]
+use anyhow::Context;
 #[cfg(any(target_os = "macos", test))]
-use anyhow::{Context, ensure};
+use anyhow::ensure;
 #[cfg(any(target_os = "macos", test))]
 use serde::Deserialize;
 

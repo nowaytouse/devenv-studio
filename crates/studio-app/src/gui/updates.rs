@@ -1,17 +1,28 @@
 use super::*;
-use maintenance::brew_inventory;
+use maintenance::{brew_inventory, windows_inventory};
 
 mod brew;
+mod windows;
 
 pub(super) type History = Result<Vec<maintenance::Report>, String>;
 pub(super) type BrewInventory = Result<brew_inventory::Inventory, String>;
+pub(super) type WindowsInventory = Result<windows_inventory::Inventory, String>;
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Section {
-    #[default]
     Tasks,
-    Homebrew,
+    Installed,
     History,
+}
+
+impl Default for Section {
+    fn default() -> Self {
+        if cfg!(windows) {
+            Self::Installed
+        } else {
+            Self::Tasks
+        }
+    }
 }
 
 #[derive(Default)]
@@ -26,6 +37,7 @@ pub(super) struct UiState {
     history: Option<History>,
     focus_result: bool,
     brew: brew::View,
+    windows: windows::View,
 }
 
 impl UiState {
@@ -196,6 +208,19 @@ impl UiState {
         }
         self.brew.accept(inventory)
     }
+
+    pub(super) fn accept_windows(
+        &mut self,
+        inventory: WindowsInventory,
+        cancelled: bool,
+    ) -> Notice {
+        if cancelled {
+            let notice = cancelled_notice();
+            self.windows.accept(Err(notice.text.clone()));
+            return notice;
+        }
+        self.windows.accept(inventory)
+    }
 }
 
 impl Studio {
@@ -253,10 +278,10 @@ impl Studio {
     }
 
     pub(super) fn updates_page(&mut self, ui: &mut egui::Ui) {
-        if !cfg!(target_os = "macos") {
+        if !cfg!(any(target_os = "macos", windows)) {
             ui.label(tx(
-                "更新中心仅在 macOS 本机可用。",
-                "The update center is available on macOS.",
+                "更新中心在 macOS 或 Windows 本机可用。",
+                "The update center is available on macOS and Windows.",
             ));
             return;
         }
@@ -273,8 +298,12 @@ impl Studio {
             );
             ui.selectable_value(
                 &mut self.updates.section,
-                Section::Homebrew,
-                tx("Homebrew 已安装", "Homebrew installed"),
+                Section::Installed,
+                if cfg!(windows) {
+                    tx("Windows 已安装", "Windows installed")
+                } else {
+                    tx("Homebrew 已安装", "Homebrew installed")
+                },
             );
             ui.selectable_value(
                 &mut self.updates.section,
@@ -284,8 +313,21 @@ impl Studio {
         });
         ui.add_space(8.0);
         match self.updates.section {
+            Section::Tasks if cfg!(windows) => self.windows_tasks_view(ui, busy),
             Section::Tasks => self.update_tasks_view(ui, busy),
-            Section::Homebrew => {
+            Section::Installed if cfg!(windows) => {
+                if self.updates.windows.show(ui, busy) {
+                    self.start_worker(
+                        tx("正在读取 WinGet 清单", "Reading WinGet inventory"),
+                        |cancel| {
+                            let result = windows_inventory::read(cancel)
+                                .map_err(|error| format!("{error:#}"));
+                            Ok(WorkerResult::WindowsInventory(result))
+                        },
+                    );
+                }
+            }
+            Section::Installed => {
                 if self.updates.brew.show(ui, busy) {
                     self.start_worker(
                         tx("正在读取 Homebrew 清单", "Reading Homebrew inventory"),
@@ -296,6 +338,15 @@ impl Studio {
                         },
                     );
                 }
+            }
+            Section::History if cfg!(windows) => {
+                if ui
+                    .add_enabled(!busy, egui::Button::new(tx("刷新记录", "Refresh history")))
+                    .clicked()
+                {
+                    self.refresh_recovery();
+                }
+                self.history_view(ui);
             }
             Section::History => {
                 if ui
@@ -310,6 +361,42 @@ impl Studio {
                 self.updates.history_view(ui);
             }
         }
+    }
+
+    fn windows_tasks_view(&mut self, ui: &mut egui::Ui, busy: bool) {
+        ui.heading(tx("配置与维护 Windows", "Configure and maintain Windows"));
+        ui.label(tx(
+            "从已安装清单核对软件版本及单包升级命令。系统设置、软件部署和维护使用各自的审核方案。",
+            "Review installed versions and per-package update commands in the inventory. Settings, software deployment, and maintenance use their own reviewed plans.",
+        ));
+        ui.add_space(8.0);
+        surface_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(lf!("方案目标 · {}", "Plan target · {}", self.target.label()));
+            ui.label(if self.host.can_apply && self.host.target == Some(self.target) {
+                tx(
+                    "本机与方案目标匹配。应用前仍需分别审核及确认。",
+                    "This host matches the plan target. Review and confirm changes before applying.",
+                )
+            } else {
+                tx(
+                    "当前主机与方案目标不匹配或不支持执行。仍可预览和导出。",
+                    "The selected target is unsupported or does not match this host. Preview and export remain available.",
+                )
+            });
+        });
+        ui.add_space(8.0);
+        ui.horizontal_wrapped(|ui| {
+            for (page, label) in [
+                (Page::Software, tx("软件部署", "Software deployment")),
+                (Page::Workbench, tx("配置工作台", "Configuration workbench")),
+                (Page::Maintenance, tx("系统维护", "System maintenance")),
+            ] {
+                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                    self.navigate_to(page);
+                }
+            }
+        });
     }
 
     fn update_tasks_view(&mut self, ui: &mut egui::Ui, busy: bool) {

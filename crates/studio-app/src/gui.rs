@@ -266,6 +266,7 @@ enum WorkerResult {
     TopgradeCapture(studio_deployment::topgrade::Profile),
     UpdateCheck(Result<maintenance::Check, String>, updates::History),
     BrewInventory(updates::BrewInventory),
+    WindowsInventory(updates::WindowsInventory),
     UpdateHistory(updates::History),
     UpdateReview(Result<maintenance::Review, String>),
     UpdateRun(Result<maintenance::Report, String>, updates::History),
@@ -457,19 +458,22 @@ impl Studio {
                     "Environment collection cancelled; the previous inventory and saved path were preserved.",
                 ).into());
             }
-            let quiet_inventory_success = matches!(
-                &result,
-                Ok(WorkerResult::RustInventory(_)
-                    | WorkerResult::PythonToolsInventory(_)
-                    | WorkerResult::MiseRuntimeInventory(_)
-                    | WorkerResult::BrewInventory(Ok(_))
-                    | WorkerResult::UpdateHistory(Ok(_)))
-            );
+            let quiet_inventory_success = !cancelled
+                && matches!(
+                    &result,
+                    Ok(WorkerResult::RustInventory(_)
+                        | WorkerResult::PythonToolsInventory(_)
+                        | WorkerResult::MiseRuntimeInventory(_)
+                        | WorkerResult::BrewInventory(Ok(_))
+                        | WorkerResult::WindowsInventory(Ok(_))
+                        | WorkerResult::UpdateHistory(Ok(_)))
+                );
             let migration_result = matches!(&result, Ok(WorkerResult::Migration { .. }));
             let update_result = matches!(
                 &result,
                 Ok(WorkerResult::UpdateCheck(..)
                     | WorkerResult::BrewInventory(_)
+                    | WorkerResult::WindowsInventory(_)
                     | WorkerResult::UpdateHistory(_)
                     | WorkerResult::UpdateReview(_)
                     | WorkerResult::UpdateRun(..))
@@ -689,6 +693,9 @@ impl Studio {
                 }
                 Ok(WorkerResult::BrewInventory(inventory)) => {
                     self.updates.accept_brew(inventory, cancelled)
+                }
+                Ok(WorkerResult::WindowsInventory(inventory)) => {
+                    self.updates.accept_windows(inventory, cancelled)
                 }
                 Ok(WorkerResult::UpdateHistory(history)) => {
                     self.updates.accept_history(history, cancelled)
@@ -1201,7 +1208,9 @@ impl Studio {
                             if self.navigation_groups[index] {
                                 ui.add_space(2.0);
                                 for (page, title) in pages {
-                                    if page == Page::Updates && !cfg!(target_os = "macos") {
+                                    if page == Page::Updates
+                                        && !cfg!(any(target_os = "macos", windows))
+                                    {
                                         continue;
                                     }
                                     if navigation_button(

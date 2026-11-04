@@ -1,4 +1,15 @@
-# Topgrade 更新中心
+# 跨平台更新中心
+
+| 平台 | 清单与更新 | 配置和记录 |
+| --- | --- | --- |
+| Apple Silicon macOS | 查看 Homebrew 已安装清单，审核后执行受控 Topgrade 步骤，其他步骤在终端预演 | 受管 profile 事务、引擎回退和 Studio 更新记录 |
+| Windows | 读取 WinGet 匹配的已安装清单，为明确的社区源软件提供单包核对与升级命令 | 进入已有的系统配置、软件部署和维护审核，查看 Studio 部署记录 |
+
+Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来匹配软件。清单显示导出范围和可获得的版本，升级可用性由终端的核对命令确定。只有官方社区源且 ID 唯一的行提供可复制命令。升级在终端处理，Studio 的部署记录涵盖由 Studio 执行的任务。Windows LTSC 2021 和 2024 仍按各自的目标和主机检查控制配置写入。 [WinGet 导出](https://learn.microsoft.com/en-us/windows/package-manager/winget/export) · [WinGet 核对与升级](https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade)
+
+## macOS Topgrade
+
+当前组件已同步上游 [v17.15.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.15.0)，上游提交为 `155a490a35261382def837b572c306dd55590d39`。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。
 
 「更新中心」从已核验的 Topgrade 引擎读取步骤目录。GitHub CLI 技能和扩展、Helm、TLDR、Homebrew 链接审计和 CLI 工具版本可以在 GUI 内审核后执行。默认零选中，重跑前需重新检查。其余引擎步骤及本机 profile 的定制任务有可搜索的终端入口。预演读取正常 Topgrade 配置，前后置命令及配置中的 `misc.only` 也会参与；以预演结果核对实际范围。配置迁移包仍是独立的备份和提取入口。
 
