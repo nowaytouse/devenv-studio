@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS Cursor 扩展超时立即显示原因。Claude 插件市场批量刷新仅在已知市场单独失败时执行一次官方定向复查，并验证目标及结果。
+
 - macOS Skills 更新只读取所需的已安装名称，使用有界并发和认证 GitHub 查询。BuilderIO 优先验证已锁定目录，路径缺失时保留完整查询和迁移检查。
 - HEAD-sync 在升级配对 keg 前预检两份公式。覆盖审计核验指定的 LeanCTX 镜像，Cursor 更新报告子进程输出中的失败并限制单次执行时长。
 

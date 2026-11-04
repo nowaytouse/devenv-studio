@@ -900,7 +900,8 @@ fn run_vscode_compatible(variant: VSCodeVariant, ctx: &ExecutionContext) -> Resu
         .arg("--update-extensions");
     #[cfg(target_os = "macos")]
     if matches!(variant, VSCodeVariant::Cursor) {
-        cursor_update::run(&mut command, std::time::Duration::from_secs(360))?;
+        cursor_update::run(&mut command, std::time::Duration::from_secs(360))
+            .inspect_err(|error| eprintln!("Cursor extensions: {error:#}"))?;
     } else {
         command.status_checked()?;
     }
@@ -2951,6 +2952,9 @@ pub fn run_claude_code(ctx: &ExecutionContext) -> Result<()> {
     ctx.execute(&claude).arg("update").status_checked()
 }
 
+#[cfg(target_os = "macos")]
+mod claude_marketplace;
+
 pub fn run_claude_code_plugins(ctx: &ExecutionContext) -> Result<()> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -2970,6 +2974,9 @@ pub fn run_claude_code_plugins(ctx: &ExecutionContext) -> Result<()> {
 
     print_separator("Claude Code Plugins");
 
+    #[cfg(target_os = "macos")]
+    claude_marketplace::refresh(ctx, &claude)?;
+    #[cfg(not(target_os = "macos"))]
     ctx.execute(&claude)
         .args(["plugin", "marketplace", "update"])
         .status_checked()?;
