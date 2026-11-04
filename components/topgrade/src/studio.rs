@@ -25,8 +25,11 @@ use crate::execution_context::RunType;
 
 mod diagnostics;
 mod github_skills;
+mod gradle;
+mod headsync;
 mod helm;
 mod inventory;
+mod sqlite;
 mod terminal_profile;
 #[cfg(test)]
 mod tests;

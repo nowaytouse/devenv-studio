@@ -3495,6 +3495,7 @@ dependencies = [
  "wildmatch",
  "windows",
  "windows-registry 0.100.0",
+ "zip",
 ]
 
 [[package]]

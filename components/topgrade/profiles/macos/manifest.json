@@ -186,7 +186,7 @@
     {
       "source": "config/topgrade.d/90-brew-headsync.toml",
       "destination": ".config/topgrade.d/90-brew-headsync.toml",
-      "sha256": "e3e5a4bb5ee5248b5dd63fe030f995c6d9f6c4b0d2cf3968960785101980c27c",
+      "sha256": "62b867073af4e28e5e3f2f7cf1e2309c0d81fb671ee39116d2c154d2f65ee36e",
       "mode": 420,
       "adoptSha256": "587839465816ef080bc93c3804e12d59a48423bad88fe7d493247355378fd1c1"
     },
@@ -214,7 +214,7 @@
     {
       "source": "config/topgrade.toml",
       "destination": ".config/topgrade.toml",
-      "sha256": "7c82b580ba2f65d3a553383fba38dd67333f34c1956befb2dc6b18d14d171014",
+      "sha256": "3ccc5558a9ef9eab77d56f913f85963826689520650ba1aa320cd23fdbb9d9bc",
       "mode": 384,
       "adoptSha256": "27bdb0f36bd9172ac626e2f96ca19051e6327206e6e13fd734513262608d58ba"
     },

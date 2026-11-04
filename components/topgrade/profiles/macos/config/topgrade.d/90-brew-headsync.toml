@@ -2,4 +2,4 @@
 disable = ["brew_formula"]
 
 [commands]
-"Homebrew Formulae (HEAD-synced)" = "$HOME/.local/bin/brew-headsync-upgrade"
+"Homebrew Formulae (HEAD-synced)" = "@studio:brew_headsync"

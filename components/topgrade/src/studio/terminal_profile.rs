@@ -1,5 +1,5 @@
 //! Native managed-profile operations that keep terminal authorization semantics.
-use super::xcode;
+use super::{gradle, headsync, sqlite, xcode};
 use crate::{command::CommandExt, execution_context::RunType, executor::ExecutorOutput, utils::require};
 use color_eyre::eyre::{Result, WrapErr, bail, ensure};
 use serde::Deserialize;
@@ -11,8 +11,12 @@ const START: &str = "Beginning update. This process may take several minutes.";
 
 pub(super) fn run(id: &str, mode: RunType) -> Result<()> {
     let action: fn() -> Result<()> = match id {
+        "brew_headsync" => headsync::run,
         "gcloud_verified" => gcloud,
+        "gradle_nightly" => gradle::run,
         "mas_verified" => mas,
+        "sqlite_trunk" => || sqlite::run(false),
+        "sqlite_python_trunk" => || sqlite::run(true),
         "xcode_select_beta" => xcode::run,
         _ => bail!("Unknown native profile operation: {id}"),
     };

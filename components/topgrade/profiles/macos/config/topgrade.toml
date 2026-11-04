@@ -11,8 +11,8 @@ disable = ["mamba", "conda", "gcloud", "mas"]
 [commands]
 "Mac App Store (verified)" = "@studio:mas_verified"
 "gcloud (verified)" = "@studio:gcloud_verified"
-"SQLite Python trunk" = "$HOME/.local/bin/update-python-sqlite-trunk"
-"SQLite trunk" = "$HOME/.local/bin/update-sqlite-trunk"
+"SQLite Python trunk" = "@studio:sqlite_python_trunk"
+"SQLite trunk" = "@studio:sqlite_trunk"
 "TourBox Beta Update" = "$HOME/.local/bin/update-tourbox-beta --apply"
 "Xcode Beta Update" = "$HOME/.local/bin/update-preview-extras --xcode"
 
@@ -22,7 +22,7 @@ disable = ["mamba", "conda", "gcloud", "mas"]
 "Conda frozen base" = "conda self update --yes"
 "Conda default" = "conda update --all -n default --yes"
 
-"Gradle Nightly Toolchain" = "~/.local/bin/proxy-auto-run ~/.local/bin/update-gradle-nightly"
+"Gradle Nightly Toolchain" = "@studio:gradle_nightly"
 "Rolling Project Dependencies" = "~/.local/bin/proxy-auto-run ~/.local/bin/update-project-deps --topgrade"
 "Homebrew Linkage Audit" = "@studio:brew_linkage_audit"
 "CLI Tool Versions" = "@studio:cli_versions"

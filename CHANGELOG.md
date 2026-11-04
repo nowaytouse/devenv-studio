@@ -3,6 +3,7 @@
 ## Unreleased
 
 - 更新中心分为更新任务、Homebrew 已安装和执行记录。读取本机 Formula、Cask、版本、链接和固定状态，显示读取命令；审核步骤展示运行方式，完成后进入执行记录。
+- macOS profile 的 Homebrew HEAD-sync、SQLite CLI、Python 3.15 SQLite 和 Gradle Nightly 改由 Rust 运行。保留成对公式恢复、SQLite 发布回退、Gradle 下载校验及旧版回退资产。
 
 - 更新中心读取 Topgrade 引擎的步骤目录，支持六个受控步骤、可搜索的终端预演和本地输出查看。Rust 接管 GitHub Skills、Helm、链接审计、版本报告及终端的 gcloud、MAS、Xcode Beta 选择逻辑，保留原有核验与回退。
 

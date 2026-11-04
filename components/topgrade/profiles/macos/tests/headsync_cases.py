@@ -1,17 +1,23 @@
 #!/usr/bin/env python3.15
 """Exercise a HEAD-sync script using only synthetic formulae and fake commands."""
 
+import fcntl
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 
-if len(sys.argv) != 2:
-    raise SystemExit("usage: verify-headsync-recovery.py HEADSYNC_SCRIPT")
-
-script = Path(sys.argv[1]).resolve(strict=True)
+native = len(sys.argv) >= 3 and sys.argv[1] == "--native"
+if native:
+    command = [str(Path(sys.argv[2]).resolve(strict=True)), *sys.argv[3:]]
+elif len(sys.argv) == 2:
+    command = ["/bin/zsh", str(Path(sys.argv[1]).resolve(strict=True))]
+else:
+    raise SystemExit("usage: headsync_cases.py HEADSYNC_SCRIPT | --native EXECUTABLE [ARGS...]")
 sha = "0123456789abcdef0123456789abcdef01234567"
 ggml = '''class Ggml
   head "https://github.com/ggml-org/ggml.git", branch: "master"
@@ -50,6 +56,11 @@ elif args[:1] == ["upgrade"]:
  target = args[-1] if args[-1] in ("ggml", "llama.cpp") else "bulk"
  for f in (root/"core/Formula/g/ggml.rb",root/"core/Formula/l/llama.cpp.rb"):
   if os.environ["TEST_SHA"] not in f.read_text(): print("formula revision mismatch",file=sys.stderr); sys.exit(33)
+ if os.environ.get("TEST_PAUSE_UPGRADE") == target:
+  (root/"upgrade-paused").touch()
+  for attempt in range(750):
+   if (root/"upgrade-release").exists(): break
+   __import__("time").sleep(.02)
  if os.environ.get("TEST_FAIL") == target: print("injected upgrade failure",file=sys.stderr); sys.exit(34)
 elif args[:1] == ["outdated"]:
  eligible={name.rsplit("/",1)[-1]:name for name in args[1:] if not name.startswith("--")}
@@ -60,7 +71,7 @@ elif args[:1] == ["outdated"]:
  if mode == "one-empty": print('{"formulae": [], "casks": []}'); sys.exit(1)
  if mode == "operational": print("simulated outdated transport failure",file=sys.stderr); sys.exit(2)
  if "--json=v2" in args:
-  entries=[{"name":name.rsplit("/",1)[-1],"pinned":mode == "newly-pinned"} for name in found]
+  entries=[{"name":name,"pinned":mode == "newly-pinned"} for name in found]
   if mode == "unselected": entries=[{"name":"not-a-candidate","pinned":False}]
   if mode == "duplicate" and entries: entries.append(dict(entries[0]))
   print(__import__("json").dumps({"formulae":entries,"casks":[]}))
@@ -155,7 +166,9 @@ class Fixture:
 
     def run(self, **overrides):
         env = self.env | overrides
-        result = subprocess.run(["/bin/zsh", str(script)], env=env, text=True,
+        if native:
+            env["TEST_HEADSYNC_NATIVE_CHILD"] = "1"
+        result = subprocess.run(command, env=env, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
         assert "unexpected engine update" not in self.events(), result.stdout
         return result
@@ -383,6 +396,106 @@ def pinned_list_failure(f):
     list_failure_propagates(f, "pinned")
 
 
+def exact_tap_name(f):
+    target = "example/tools/libsndfile"
+    result = f.run(TEST_INSTALLED=f"llvm\n{target}", TEST_OUTDATED="libsndfile")
+    assert result.returncode == 0, result.stdout
+    assert f"brew upgrade --formula --fetch-HEAD {target}" in f.events(), f.events()
+    f.assert_restored()
+
+
+def preserve_formula_metadata(f):
+    for path in f.original:
+        path.chmod(0o640)
+        os.utime(path, ns=(1_570_000_000_000_000_000, 1_570_000_000_123_456_789))
+    before = [(p.stat().st_mode, p.stat().st_mtime_ns) for p in f.original]
+    result = f.run(TEST_FAIL="llama.cpp")
+    assert result.returncode != 0 and "injected upgrade failure" in result.stdout, result.stdout
+    f.assert_restored()
+    assert [(p.stat().st_mode, p.stat().st_mtime_ns) for p in f.original] == before
+
+
+def refuses_posix_lock_contention(f):
+    with (f.state / "lock").open("a") as lock:
+        fcntl.lockf(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        result = f.run()
+    assert result.returncode != 0 and "HEAD-sync lock" in result.stdout, result.stdout
+    assert not f.events(), f.events()
+    f.assert_restored()
+
+
+def refuses_symlinked_journal(f):
+    f.journal()
+    journal = f.state / "active"
+    relocated = f.root / "outside-journal"
+    journal.rename(relocated)
+    journal.symlink_to(relocated)
+    before = [p.read_bytes() for p in f.original]
+    result = f.run()
+    assert result.returncode != 0 and "unsafe transaction journal" in result.stdout, result.stdout
+    assert journal.is_symlink() and [p.read_bytes() for p in f.original] == before
+    assert "brew update" not in f.events(), f.events()
+
+
+def refuses_pinned_pair(f):
+    result = f.run(TEST_PINNED="llvm\nllama.cpp")
+    assert result.returncode != 0 and "cannot be upgraded while either formula is pinned" in result.stdout, result.stdout
+    assert "brew update" not in f.events(), f.events()
+    f.assert_restored()
+
+
+def paused_upgrade(f):
+    env = f.env | {"TEST_HEADSYNC_NATIVE_CHILD": "1", "TEST_PAUSE_UPGRADE": "ggml"}
+    return subprocess.Popen(command, env=env, text=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+
+
+def wait_for_paused_upgrade(f, child):
+    deadline = time.monotonic() + 10
+    while child.poll() is None and not (f.root / "upgrade-paused").exists() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert (f.root / "upgrade-paused").exists(), "mock upgrade never reached the paired transaction"
+
+
+def terminate_group(child):
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    child.communicate(timeout=5)
+
+
+def hard_interruption_recovers(f):
+    with paused_upgrade(f) as child:
+        try:
+            wait_for_paused_upgrade(f, child)
+        finally:
+            terminate_group(child)
+    journal = f.state / "active"
+    assert journal.is_dir() and all(sha in p.read_text() for p in f.original)
+    result = f.run(TEST_FAIL="update")
+    assert result.returncode != 0 and "HEAD-sync transaction recovered" in result.stdout, result.stdout
+    f.assert_restored()
+
+
+def deferred_parent_signal(f, sig):
+    with paused_upgrade(f) as child:
+        try:
+            wait_for_paused_upgrade(f, child)
+            os.kill(child.pid, sig)
+            competing = f.run()
+            assert competing.returncode != 0 and "HEAD-sync lock" in competing.stdout, competing.stdout
+            assert child.poll() is None and all(sha in p.read_text() for p in f.original)
+            (f.root / "upgrade-release").touch()
+            output, _ = child.communicate(timeout=5)
+            assert child.returncode == 128 + sig and "HEAD-sync transaction recovered" in output, output
+            assert "brew upgrade --formula --fetch-HEAD llama.cpp" not in f.events()
+        except Exception:
+            terminate_group(child)
+            raise
+    f.assert_restored()
+
+
 cases = [
     ("dirty core stops before brew update", lambda f: clean_guard(f, "dirty")),
     ("failed git status stops before brew update", lambda f: clean_guard(f, "fail")),
@@ -415,5 +528,16 @@ cases = [
     ("installed formula enumeration error propagates", updated_list_failure),
     ("pinned formula enumeration error propagates", pinned_list_failure),
 ]
+if native:
+    cases += [
+        ("tap-qualified formula name survives the exact scan and upgrade", exact_tap_name),
+        ("restored formulae retain original mode and nanosecond mtime", preserve_formula_metadata),
+        ("legacy POSIX lock excludes the Rust updater", refuses_posix_lock_contention),
+        ("symlinked journal is preserved without following it", refuses_symlinked_journal),
+        ("pinned synchronized pair stops before updates", refuses_pinned_pair),
+        ("SIGKILL after both formulae were patched replays the journal", hard_interruption_recovers),
+        ("parent-only SIGTERM waits for brew and restores both formulae", lambda f: deferred_parent_signal(f, signal.SIGTERM)),
+        ("parent-only SIGHUP waits for brew and restores both formulae", lambda f: deferred_parent_signal(f, signal.SIGHUP)),
+    ]
 results = [case(name, callback) for name, callback in cases]
 raise SystemExit(0 if all(results) else 1)

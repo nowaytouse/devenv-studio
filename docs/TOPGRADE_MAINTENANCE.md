@@ -16,7 +16,10 @@ Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受�
 | Homebrew 链接审计、CLI 版本报告 | Rust 审计与版本探测 | 可审核执行 |
 | GitHub CLI 扩展、TLDR | Topgrade 自身步骤 | 可审核执行 |
 | gcloud、MAS、Xcode Beta 选择 | Rust 保留重试、核验或回退边界 | 终端入口 |
-| HEAD-sync、SQLite、Preview/Beta 应用安装、Gradle、项目滚动依赖、NPX/设计包和 npm 安全修复 | 继续使用受管脚本 | 终端入口 |
+| Homebrew HEAD-sync | Rust 保留兼容事务日志、固定 LLVM、成对完整 SHA 校验和恢复 | 终端入口 |
+| SQLite CLI、Python 3.15 SQLite | Rust 共享源码版本与更新锁，保留事务和运行时验证 | 终端入口 |
+| Gradle Nightly | Rust 核对下载和安全解包，验证运行时后切换启动器 | 终端入口 |
+| Preview/Beta 应用安装、项目滚动依赖、NPX/设计包和 npm 安全修复 | 继续使用受管脚本 | 终端入口 |
 
 旧验证器文件仍随 profile 保存，用于兼容及回退。新引擎的六个受控步骤不调用这些 Python 或 Shell 验证器。Profile 安装器和上表剩余任务继续依赖原有运行时。
 
@@ -32,7 +35,9 @@ devenv-studio topgrade-engine prepare /absolute/studio-checkout FULL_STUDIO_SHA
 devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 ```
 
-`prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 验证已有启动器、应用并回读 profile，然后原子切换到准备好的二进制。相同组件树复用引擎。软件更新使用已部署的引擎，引擎维护由上述命令显式启动。旧 Homebrew HEAD-sync journal 和工具链固定策略仍由原脚本处理。
+`prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 验证已有启动器、应用并回读 profile，然后原子切换到准备好的二进制。相同组件树复用引擎。软件更新使用已部署的引擎，引擎维护由上述命令显式启动。
+
+原有 Homebrew HEAD-sync 日志仍可由 Rust 入口恢复。收到 TERM 或 HUP 时，更新器持锁等待正在运行的子进程，随后恢复两份公式并以相应的退出状态结束。如果只有父进程被强制杀死，请先确认原来的 Homebrew 和构建子进程均已退出，再运行恢复。
 
 回退同一次部署时，使用相同 checkout 和 SHA，把 `install` 换成 `rollback`。命令从激活记录找到原二进制和独立的 profile 回滚事务，若较新的修改使回滚不安全则停止。若过程报告 pending 激活，请保留文件、启动器和 profile 事务，核对实际生效版本后再恢复。私人记录在 `~/.local/share/topgrade-rustup-head` 和 `~/.local/state/topgrade-macos-profile`。
 

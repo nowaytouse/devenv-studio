@@ -20,7 +20,7 @@ fn probe(executable: &Path, args: &[&str]) -> Result<Output> {
         .wrap_err_with(|| format!("Run {}", executable.display()))
 }
 
-fn linkage_failed(output: &Output) -> bool {
+pub(super) fn linkage_failed(output: &Output) -> bool {
     !output.status.success()
         || [&output.stdout, &output.stderr].into_iter().any(|stream| {
             String::from_utf8_lossy(stream).lines().any(|line| {
