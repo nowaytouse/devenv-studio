@@ -16,6 +16,7 @@ mod engine;
 pub mod environment;
 pub mod git_config;
 mod history;
+pub mod maintenance;
 pub mod mise_tools;
 pub mod network;
 pub mod npm_tools;

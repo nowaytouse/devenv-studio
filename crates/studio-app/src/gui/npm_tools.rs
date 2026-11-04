@@ -76,7 +76,7 @@ impl Studio {
             Ok(request) => {
                 self.backup.npm_tools.confirmed = false;
                 self.backup.npm_tools.report = None;
-                self.start_worker(
+                self.start_mutating_worker(
                     tx("正在重部署 NPM 全局包", "Redeploying npm global packages"),
                     move |cancel| native::configure(request, cancel).map(WorkerResult::NpmTools),
                 );

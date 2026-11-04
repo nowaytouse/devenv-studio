@@ -81,7 +81,7 @@
     {
       "source": "bin/topgrade-rustup-headsync",
       "destination": ".local/bin/topgrade-rustup-headsync",
-      "sha256": "0391e5e1dce6e5f34407a40193fb36b10a2a070a76fc26ee3685d2779cc74f13",
+      "sha256": "0d6d18642ee48225c9eccf1e89d4da96672535beb0f4b76a80069f538557dc73",
       "mode": 448,
       "adoptSha256": "80187478567b1625e1be033feee1c9278118e3b2c8f5afad785ff52fa0b24bec"
     },

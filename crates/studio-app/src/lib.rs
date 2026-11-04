@@ -6,6 +6,7 @@ mod migration_locale;
 mod prefs;
 mod solutions;
 mod topgrade_cli;
+mod topgrade_engine;
 mod workspace_io;
 
 use anyhow::{Context, Result, bail};
@@ -29,10 +30,11 @@ Preview JSON plan: devenv-studio plan --target win11-ltsc-2024 --select explorer
 Write new plan file: devenv-studio plan --target win10-ltsc-2021 --select explorer-extensions --output plan.json
 Preview saved profile: devenv-studio plan --profile profile.json
 Capture native preview: devenv-studio --screenshot preview.png
+Apple Silicon Topgrade engine: devenv-studio topgrade-engine <plan|prepare|install|rollback> <absolute checkout> <full commit>
 
 Compatibility command: ltsc-studio (same implementation as devenv-studio).
 Targets for Windows system configuration: win10-ltsc-2021, win11-ltsc-2024
-All changes are opt-in. CLI commands only inspect/export; apply and recovery use the desktop review flow.
+All changes are opt-in. Windows apply and recovery use the desktop review flow.
 An existing output file is never overwritten.");
 
 #[derive(Debug, PartialEq, Eq)]
@@ -213,6 +215,7 @@ fn execute(args: &[String]) -> Result<()> {
             }
         }
         "topgrade-backup" | "topgrade-extract" => topgrade_cli::execute(args)?,
+        "topgrade-engine" => topgrade_engine::execute(&args[1..])?,
         "backup" if args.len() == 3 && args[1] == "--output" => {
             let path = PathBuf::from(&args[2]);
             anyhow::ensure!(path.is_absolute(), "Backup output must be an absolute path");

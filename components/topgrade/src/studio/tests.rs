@@ -15,6 +15,9 @@ fn studio_shared_lock_refuses_contention_and_linked_files() {
     let state = temp.path().canonicalize().unwrap();
     let first = lock(&state).unwrap();
     assert!(lock(&state).is_err());
+    // Parallel tests spawn processes. A fork can briefly inherit the descriptor
+    // before close-on-exec, so explicitly unlock before asserting reacquisition.
+    first.unlock().unwrap();
     drop(first);
     drop(lock(&state).unwrap());
 
@@ -25,6 +28,25 @@ fn studio_shared_lock_refuses_contention_and_linked_files() {
     symlink(&target, &lock_path).unwrap();
     assert!(lock(&state).is_err());
     assert_eq!(fs::read(target).unwrap(), b"preserve");
+}
+
+#[test]
+fn studio_pending_activation_blocks_admission() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().canonicalize().unwrap();
+    let state = state_dir(&home).unwrap();
+    let _lock = lock(&state).unwrap();
+    check_admission(&home, &state).unwrap();
+
+    let pending = home.join(ACTIVATION_PENDING);
+    fs::create_dir_all(pending.parent().unwrap()).unwrap();
+    private_file(&pending, b"preserve");
+    assert!(check_admission(&home, &state).is_err());
+    assert_eq!(fs::read(&pending).unwrap(), b"preserve");
+
+    fs::remove_file(&pending).unwrap();
+    symlink(home.join("absent"), &pending).unwrap();
+    assert!(check_admission(&home, &state).is_err());
 }
 
 #[test]
@@ -108,11 +130,11 @@ fn studio_clean_child_exit_clears_marker_but_signal_retains_it() {
         run_step(&dir, &dir, &dir, "clean", Step::Helm, &interpreter).unwrap(),
         Outcome::Success
     );
-    check_interruption(&dir).unwrap();
+    check_admission(&dir, &dir).unwrap();
 
     fs::write(&interpreter, b"#!/bin/sh\nkill -TERM $$\n").unwrap();
     assert!(run_step(&dir, &dir, &dir, "interrupted", Step::Helm, &interpreter).is_err());
-    assert!(check_interruption(&dir).is_err());
+    assert!(check_admission(&dir, &dir).is_err());
     let marker: Interruption = serde_json::from_slice(&fs::read(dir.join(MARKER)).unwrap()).unwrap();
     assert_eq!(marker.run_id, "interrupted");
     assert!(!signal_group(marker.child_pgid.unwrap(), None).unwrap());

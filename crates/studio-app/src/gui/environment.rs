@@ -68,10 +68,13 @@ impl Studio {
                 self.backup.bundle_report = None;
                 self.backup.brew_confirm = false;
                 let policy = self.backup.brew_policy;
-                self.start_network_worker("正在配置 macOS 开发环境", move |cancel| {
-                    native::configure_brew_with_policy(entries, policy, cancel)
-                        .map(WorkerResult::Bundle)
-                });
+                self.start_network_mutating_worker(
+                    "正在配置 macOS 开发环境",
+                    move |cancel| {
+                        native::configure_brew_with_policy(entries, policy, cancel)
+                            .map(WorkerResult::Bundle)
+                    },
+                );
             }
             Err(error) => {
                 self.notice = Some(Notice {
@@ -656,6 +659,7 @@ mod tests {
 
     fn preview() -> Studio {
         Studio {
+            updates: updates::UiState::default(),
             compatibility: compatibility::UiState::default(),
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),

@@ -31,3 +31,19 @@ jobs:
         run: cargo +stable test --workspace --locked
       - name: Clippy
         run: cargo +stable clippy --workspace --all-targets --locked -- -D warnings
+      - name: Topgrade component
+        if: runner.os == 'macOS'
+        working-directory: components/topgrade
+        run: |
+          cargo +stable fmt --all -- --check
+          cargo +stable test --locked
+          cargo +stable clippy --all-targets --locked -- -D warnings
+      - name: Topgrade profile
+        if: runner.os == 'macOS'
+        working-directory: components/topgrade
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          brew install python@3.15
+          "$(brew --prefix python@3.15)/bin/python3.15" -m unittest discover -s profiles/macos/tests

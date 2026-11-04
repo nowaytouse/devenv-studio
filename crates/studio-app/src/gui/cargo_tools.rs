@@ -116,9 +116,10 @@ impl Studio {
             Ok(request) => {
                 self.backup.cargo_tools.confirmed = false;
                 self.backup.cargo_tools.report = None;
-                self.start_network_worker("正在重部署 Cargo 命令行工具", move |cancel| {
-                    native::configure(request, cancel).map(WorkerResult::CargoTools)
-                });
+                self.start_network_mutating_worker(
+                    "正在重部署 Cargo 命令行工具",
+                    move |cancel| native::configure(request, cancel).map(WorkerResult::CargoTools),
+                );
             }
             Err(error) => {
                 self.notice = Some(Notice {

@@ -27,6 +27,7 @@ const SCHEMA: u32 = 1;
 const STATE: &str = "Library/Application Support/LTSC Studio";
 const MARKER: &str = "maintenance-active.json";
 const RELEASES: &str = ".local/share/topgrade-rustup-head/releases";
+const ACTIVATION_PENDING: &str = ".local/share/topgrade-rustup-head/studio-activation.pending.json";
 const PYTHON: &str = "/opt/homebrew/opt/python@3.15/bin/python3.15";
 const TOOLS_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
 const SKILLS: &str = ".local/bin/topgrade-gh-skills-verified";
@@ -244,18 +245,25 @@ fn exists(path: &Path) -> Result<bool> {
     }
 }
 
-fn check_interruption(state: &Path) -> Result<()> {
+fn check_admission(home: &Path, state: &Path) -> Result<()> {
     ensure!(
         !exists(&state.join(MARKER))?,
         "Previous Studio maintenance needs review. Inspect its logs and affected state, then run topgrade --studio-acknowledge-interruption."
+    );
+    let pending = home.join(ACTIVATION_PENDING);
+    ensure!(
+        !exists(&pending)?,
+        "Pending Topgrade activation needs review before maintenance: {}",
+        pending.display()
     );
     Ok(())
 }
 
 pub fn lock_cli_run() -> Result<File> {
-    let state = state_dir(&account_home()?)?;
+    let home = account_home()?;
+    let state = state_dir(&home)?;
     let lock = lock(&state)?;
-    check_interruption(&state)?;
+    check_admission(&home, &state)?;
     Ok(lock)
 }
 
@@ -519,7 +527,7 @@ fn execute(dir: &Path, request: &Request, events: &mut Events<'_>) -> Result<Out
     let home = account_home()?;
     let state = state_dir(&home)?;
     let _lock = lock(&state)?;
-    check_interruption(&state)?;
+    check_admission(&home, &state)?;
     let receipt = verify_release(&home, &env::current_exe()?.canonicalize()?, &request.review_digest)?;
     let interpreter = python()?;
     for (index, &step) in request.steps.iter().enumerate() {

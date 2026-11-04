@@ -183,7 +183,7 @@ impl Studio {
             Ok(request) => {
                 self.backup.vscode_tools.confirmed = false;
                 self.backup.vscode_tools.report = None;
-                self.start_worker("正在重部署 VS Code 扩展", move |cancel| {
+                self.start_mutating_worker("正在重部署 VS Code 扩展", move |cancel| {
                     native::configure(request, cancel).map(WorkerResult::VSCodeTools)
                 });
             }
@@ -221,7 +221,7 @@ impl Studio {
         let selected = state.selected.clone();
         self.backup.vscode_tools.settings.confirmed = false;
         self.backup.vscode_tools.settings.report = None;
-        self.start_worker("Applying reviewed editor settings", move |cancel| {
+        self.start_mutating_worker("Applying reviewed editor settings", move |cancel| {
             studio_deployment::vscode_settings::apply_settings(
                 &profile, &selected, &current, &cancel,
             )

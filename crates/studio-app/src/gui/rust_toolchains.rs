@@ -72,7 +72,7 @@ impl Studio {
         }
         self.backup.rust.confirmed = false;
         self.backup.rust.report = None;
-        self.start_network_worker("正在重部署 Rust 工具链", move |cancel| {
+        self.start_network_mutating_worker("正在重部署 Rust 工具链", move |cancel| {
             native::configure(request, cancel).map(WorkerResult::Rust)
         });
     }

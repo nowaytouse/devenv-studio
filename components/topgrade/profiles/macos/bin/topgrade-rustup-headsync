@@ -200,6 +200,11 @@ if [[ "$MODE" != --dry-run ]]; then
         die "unexpected Topgrade lock file at $BASE/lock"
     exec 9>>"$BASE/lock" || die "cannot open Topgrade lock file"
     /usr/bin/lockf -s -t 0 9 || die "cannot acquire Topgrade lock; another update or rollback may be running"
+    # An activation may have switched owners before this lock was acquired.
+    read_active_target
+    if [[ -n "$ACTIVE_TARGET" && -e "${ACTIVE_TARGET%/bin/topgrade}/studio-engine.json" ]]; then
+        die "This engine is managed by DevEnv Studio. Use devenv-studio topgrade-engine for installation or rollback."
+    fi
 fi
 
 if [[ "$MODE" == rollback ]]; then

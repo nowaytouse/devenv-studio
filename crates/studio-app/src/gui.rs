@@ -1,4 +1,4 @@
-//! Native desktop workbench. Every mutation goes through the platform journal engine.
+//! Native desktop workbench. Platform and maintenance backends own system mutations.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -10,6 +10,7 @@ use std::time::Duration;
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 use image::ImageEncoder;
 use studio_core::{Catalog, Hive, Target};
+use studio_deployment::maintenance;
 use studio_platform::{HostInfo, RecoveryPoint, RunReport};
 
 use crate::prefs::{Accent, Appearance, Density, Language, Preferences};
@@ -33,6 +34,7 @@ mod scoop_tools;
 mod storage;
 mod theme;
 mod topgrade;
+mod updates;
 mod vscode_tools;
 
 use theme::palette;
@@ -66,6 +68,7 @@ enum Page {
     Backup,
     Environment,
     Network,
+    Updates,
     Migration,
     Developer,
     Workbench,
@@ -87,7 +90,7 @@ const DEFAULT_NAVIGATION_GROUPS: [bool; 3] = [true, cfg!(target_os = "windows"),
 impl Page {
     fn navigation_group(self) -> Option<usize> {
         match self {
-            Self::Environment | Self::Backup | Self::Network => Some(0),
+            Self::Environment | Self::Backup | Self::Network | Self::Updates => Some(0),
             Self::Recipes
             | Self::Developer
             | Self::Migration
@@ -261,6 +264,9 @@ enum WorkerResult {
     MiseRuntime(studio_deployment::mise_tools::Report),
     MiseRuntimeInventory(Vec<studio_deployment::mise_tools::InstalledRuntime>),
     TopgradeCapture(studio_deployment::topgrade::Profile),
+    UpdateCheck(Result<maintenance::Check, String>, updates::History),
+    UpdateReview(Result<maintenance::Review, String>),
+    UpdateRun(Result<maintenance::Report, String>, updates::History),
     GitConfigCapture(studio_deployment::git_config::Profile),
     GitConfigRefresh(studio_deployment::git_config::Profile),
     GitConfigApply(studio_deployment::git_config::ApplyReport),
@@ -279,6 +285,7 @@ struct Notice {
 }
 
 struct Studio {
+    updates: updates::UiState,
     compatibility: compatibility::UiState,
     hybrid: hybrid::HybridState,
     backup: backup::BackupUiState,
@@ -325,6 +332,7 @@ impl Studio {
             Err(error) => (Preferences::default(), Some(format!("{error:#}"))),
         };
         let mut app = Self {
+            updates: updates::UiState::default(),
             compatibility: compatibility::UiState::default(),
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
@@ -454,6 +462,12 @@ impl Studio {
                     | WorkerResult::MiseRuntimeInventory(_))
             );
             let migration_result = matches!(&result, Ok(WorkerResult::Migration { .. }));
+            let update_result = matches!(
+                &result,
+                Ok(WorkerResult::UpdateCheck(..)
+                    | WorkerResult::UpdateReview(_)
+                    | WorkerResult::UpdateRun(..))
+            );
             let notice = match result {
                 Ok(WorkerResult::Registry(report) | WorkerResult::Power(report)) => Notice {
                     text: lf!(
@@ -664,6 +678,15 @@ impl Studio {
                     ),
                     error: report.cancelled || report.failed > 0,
                 },
+                Ok(WorkerResult::UpdateCheck(check, history)) => {
+                    self.updates.accept_check(check, history, cancelled)
+                }
+                Ok(WorkerResult::UpdateReview(review)) => {
+                    self.updates.accept_review(review, cancelled)
+                }
+                Ok(WorkerResult::UpdateRun(report, history)) => {
+                    self.updates.accept_run(report, history)
+                }
                 Ok(WorkerResult::TopgradeCapture(profile)) => {
                     let count = profile.files.len();
                     self.backup.topgrade.accept(profile);
@@ -757,7 +780,7 @@ impl Studio {
             self.last_operation = Some(notice.clone());
             self.notice = (!(quiet_inventory_success || (migration_result && !notice.error)))
                 .then_some(notice);
-            if !migration_result {
+            if !(migration_result || update_result) {
                 self.refresh_recovery();
             }
         }
@@ -867,6 +890,22 @@ impl Studio {
         self.start_worker(label, move |cancel| {
             studio_deployment::network::with_profile(&profile, || operation(cancel))
         });
+    }
+
+    fn start_mutating_worker<F>(&mut self, label: &'static str, operation: F)
+    where
+        F: FnOnce(Arc<AtomicBool>) -> anyhow::Result<WorkerResult> + Send + 'static,
+    {
+        self.updates.invalidate_check();
+        self.start_worker(label, with_macos_mutation_lock(operation));
+    }
+
+    fn start_network_mutating_worker<F>(&mut self, label: &'static str, operation: F)
+    where
+        F: FnOnce(Arc<AtomicBool>) -> anyhow::Result<WorkerResult> + Send + 'static,
+    {
+        self.updates.invalidate_check();
+        self.start_network_worker(label, with_macos_mutation_lock(operation));
     }
 
     fn start_worker<F>(&mut self, label: &'static str, operation: F)
@@ -1099,6 +1138,7 @@ impl Studio {
                                     ),
                                     (Page::Backup, tx("环境备份", "Environment backup")),
                                     (Page::Network, tx("网络环境", "Network environment")),
+                                    (Page::Updates, tx("更新中心", "Update center")),
                                 ],
                             ),
                             (
@@ -1149,6 +1189,9 @@ impl Studio {
                             if self.navigation_groups[index] {
                                 ui.add_space(2.0);
                                 for (page, title) in pages {
+                                    if page == Page::Updates && !cfg!(target_os = "macos") {
+                                        continue;
+                                    }
                                     if navigation_button(
                                         ui,
                                         title,
@@ -1174,6 +1217,7 @@ impl Studio {
                 | Page::Environment
                 | Page::Backup
                 | Page::Network
+                | Page::Updates
                 | Page::Settings
                 | Page::Help
                 | Page::About
@@ -1244,6 +1288,7 @@ impl Studio {
                     Page::Backup => tx("环境备份", "Environment backup"),
                     Page::Environment => tx("环境配置", "Environment configuration"),
                     Page::Network => tx("网络环境", "Network environment"),
+                    Page::Updates => tx("更新中心", "Update center"),
                     Page::Migration => tx("迁移与映射", "Migration & mapping"),
                     Page::Compatibility => tx("扩展部署", "Extended deployment"),
                     Page::Developer => tx("开发环境", "Developer tools"),
@@ -1276,7 +1321,11 @@ impl Studio {
                         },
                         if matches!(
                             self.page,
-                            Page::Backup | Page::Environment | Page::Network | Page::Status
+                            Page::Backup
+                                | Page::Environment
+                                | Page::Network
+                                | Page::Updates
+                                | Page::Status
                         ) && cfg!(any(target_os = "macos", windows))
                         {
                             tx("本机开发环境", "Local developer environment")
@@ -2607,6 +2656,7 @@ impl eframe::App for Studio {
                             Page::Backup => self.backup_page(ui),
                             Page::Environment => self.environment_page(ui),
                             Page::Network => self.network_page(ui),
+                            Page::Updates => self.updates_page(ui),
                             Page::Migration => self.migration_page(ui),
                             Page::Compatibility => self.compatibility_page(ui),
                             Page::Workbench => self.workbench(ui),
@@ -2681,6 +2731,26 @@ impl Drop for Studio {
                 );
             }
         }
+    }
+}
+
+fn with_macos_mutation_lock<F>(
+    operation: F,
+) -> impl FnOnce(Arc<AtomicBool>) -> anyhow::Result<WorkerResult>
+where
+    F: FnOnce(Arc<AtomicBool>) -> anyhow::Result<WorkerResult>,
+{
+    move |cancel| {
+        let _lock = if cfg!(target_os = "macos") {
+            anyhow::ensure!(
+                !cancel.load(Ordering::Acquire),
+                "Operation cancelled before acquiring the macOS maintenance lock"
+            );
+            Some(maintenance::acquire_mutation_lock()?)
+        } else {
+            None
+        };
+        operation(cancel)
     }
 }
 
@@ -3082,6 +3152,7 @@ mod tests {
 
     pub(super) fn preview() -> Studio {
         Studio {
+            updates: updates::UiState::default(),
             compatibility: compatibility::UiState::default(),
             hybrid: hybrid::HybridState::default(),
             backup: backup::BackupUiState::default(),
@@ -3825,6 +3896,7 @@ mod tests {
             Page::Backup,
             Page::Environment,
             Page::Network,
+            Page::Updates,
             Page::Migration,
             Page::Developer,
             Page::Workbench,
@@ -3912,6 +3984,7 @@ mod tests {
                                     Page::Backup => app.backup_page(ui),
                                     Page::Environment => app.environment_page(ui),
                                     Page::Network => app.network_page(ui),
+                                    Page::Updates => app.updates_page(ui),
                                     Page::Migration => app.migration_page(ui),
                                     Page::Compatibility => app.compatibility_page(ui),
                                     Page::Workbench => app.workbench(ui),

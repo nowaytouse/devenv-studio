@@ -56,7 +56,7 @@ impl Studio {
             return;
         };
         let selected = state.selected.clone();
-        self.start_worker("Git configuration apply", move |cancel| {
+        self.start_mutating_worker("Git configuration apply", move |cancel| {
             let report =
                 studio_deployment::git_config::apply(&profile, &selected, &current, &cancel)?;
             Ok(WorkerResult::GitConfigApply(report))

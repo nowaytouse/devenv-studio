@@ -97,7 +97,7 @@ impl Studio {
         }
         self.backup.python_tools.confirmed = false;
         self.backup.python_tools.report = None;
-        self.start_network_worker("正在重部署所选 Python 工具", move |cancel| {
+        self.start_network_mutating_worker("正在重部署所选 Python 工具", move |cancel| {
             native::configure(request, cancel).map(WorkerResult::PythonTools)
         });
     }

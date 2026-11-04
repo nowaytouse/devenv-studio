@@ -38,6 +38,8 @@ Mac 还可按 Rust、Python、Web 用途准备基础依赖，按钮说明列出�
 
 ## Topgrade 环境迁移
 
+在 Apple Silicon macOS 上，「环境更新」提供已审核的 GitHub CLI Skills 和 Helm 更新。Studio 调用独立构建的 Topgrade 引擎，先检查引擎及脚本，再按选择审核、执行和保存记录。完整本机配置和需要交互的操作由终端入口处理。安装、回退和执行边界见 [Topgrade 更新中心](docs/TOPGRADE_MAINTENANCE.md)。
+
 环境配置页可独立备份 Topgrade 主配置、`topgrade.d/*.toml` 及明确添加的本地主目录内脚本/依赖文本文件。迁移包保留原文字节、相对目录和原可执行标记；载入后先查看原文，再逐文件选择并确认还原到一个全新目录。现有配置不会被覆盖，导入和还原不执行任何命令，Unix 上不恢复脚本执行位。包内可能包含本机路径与自定义命令，应保存在私人位置。此功能与软件清单备份独立，不会自动打包二进制、项目工作区、外部 include 或全部工具依赖。
 
 命令行支持 `devenv-studio topgrade-backup --output /absolute/topgrade.json --include /absolute/script`（`--include` 可重复），以及 `devenv-studio topgrade-extract --input /absolute/topgrade.json --output /absolute/new-directory --all`；也可用重复的 `--file` 精选文件。新目录和新档案均拒绝覆盖。目标设备的 Topgrade、工具安装、主目录路径和自定义命令须另行审核，详见[重部署范围](docs/REDEPLOYMENT.md#topgrade-配置与脚本迁移包)。

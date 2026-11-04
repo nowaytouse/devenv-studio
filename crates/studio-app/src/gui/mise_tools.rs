@@ -165,7 +165,7 @@ impl Studio {
         }
         self.backup.mise_tools.confirmed = false;
         self.backup.mise_tools.report = None;
-        self.start_network_worker("正在重部署所选 mise 运行时", move |cancel| {
+        self.start_network_mutating_worker("正在重部署所选 mise 运行时", move |cancel| {
             native::configure(request, cancel).map(WorkerResult::MiseRuntime)
         });
     }
