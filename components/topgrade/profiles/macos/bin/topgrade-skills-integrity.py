@@ -83,13 +83,19 @@ def same_repo_origin(gh_source, npx_entry):
 
 
 def classify(rows, lock, skip_reasons):
+    # GH reports one failed discovery per repository, not per installed copy.
+    failed_sources = {
+        row['sourceURL'].rstrip('/').removesuffix('.git').lower(): skip_reasons[row['skillName']]
+        for row in rows if row.get('sourceURL') and row.get('skillName') in skip_reasons
+    }
     statuses = []
     for row in rows:
         name = row.get('skillName', '')
         source = row.get('sourceURL') or ''
         entry = lock.get(name)
         npx = owner_from_npx(row, entry)
-        if name in skip_reasons:
+        reason = failed_sources.get(source.rstrip('/').removesuffix('.git').lower()) if source else None
+        if reason is not None:
             status = ('NPX_OVERLAP_SOURCE_UNDISCOVERABLE' if npx and same_repo_origin(source, entry)
                       else 'GH_SOURCE_UNDISCOVERABLE')
         elif row.get('pinned'):
@@ -104,7 +110,7 @@ def classify(rows, lock, skip_reasons):
             'skill': name, 'path': row.get('path'), 'status': status,
             'gh_source': source or None,
             'npx_source': entry.get('source') if npx else None,
-            'reason': skip_reasons.get(name),
+            'reason': reason,
         })
     return statuses
 
@@ -150,6 +156,9 @@ def audit():
     unknown_warnings = Counter(missing_names) - observed_untracked
     if unknown_warnings:
         errors.append(f'gh warnings not correlated with untracked rows: {dict(unknown_warnings)}')
+    unknown_skips = skip_reasons.keys() - {row.get('skillName') for row in rows if row.get('sourceURL')}
+    if unknown_skips:
+        errors.append(f'gh skip warnings not correlated with a source-bearing row: {sorted(unknown_skips)}')
 
     report_dir = HOME / '.local/state/topgrade-skills-integrity' / dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     report_dir.mkdir(parents=True, exist_ok=False)

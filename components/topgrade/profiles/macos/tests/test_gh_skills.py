@@ -13,12 +13,16 @@ loader=importlib.machinery.SourceFileLoader("gh_skills_verified",str(PROFILE/"bi
 spec=importlib.util.spec_from_loader(loader.name,loader)
 helper=importlib.util.module_from_spec(spec)
 loader.exec_module(helper)
+audit_spec=importlib.util.spec_from_file_location("skills_integrity",PROFILE/"bin/topgrade-skills-integrity.py")
+audit=importlib.util.module_from_spec(audit_spec)
+audit_spec.loader.exec_module(audit)
 OLD="1"*40
 NEW="2"*40
 ROOT_SHA="3"*40
 BLOB="4"*40
 COMMIT="5"*40
 TAG="6"*40
+SKILLS_SHA="7"*40
 
 def skill(path,name,github=False,tree=OLD,directory=None):
     path.mkdir(parents=True,exist_ok=True)
@@ -33,11 +37,9 @@ class FakeGH:
     def __init__(self,rows):
         self.rows=rows
         self.calls=[]
-        self.entries=[]
         self.output=None
         self.failure=0
         self.write=True
-        self.truncated=False
         self.api_failure=False
         self.release_status=404
         self.release={"tag_name":"v1"}
@@ -47,14 +49,15 @@ class FakeGH:
         self.record_write=True
         self.clobber_lock=False
         self.mutate_dry_lock=False
-        for row in rows:
-            if row["sourceURL"]:
-                name=Path(row["path"]).name
-                self.entries.extend([
-                    {"path":"skills/"+name,"type":"tree","sha":NEW,"mode":"040000"},
-                    {"path":"skills/"+name+"/SKILL.md","type":"blob","sha":BLOB,"mode":"100644"}])
-
-        self.entries=list({entry["path"]:entry for entry in self.entries}.values())
+        names=sorted({Path(row["path"]).name for row in rows if row["sourceURL"]})
+        self.trees={
+            COMMIT: {"sha":ROOT_SHA,"truncated":False,"tree":[
+                {"path":"skills","type":"tree","sha":SKILLS_SHA,"mode":"040000"}]},
+            SKILLS_SHA: {"sha":SKILLS_SHA,"truncated":False,"tree":[
+                {"path":name,"type":"tree","sha":NEW,"mode":"040000"} for name in names]},
+            NEW: {"sha":NEW,"truncated":False,"tree":[
+                {"path":"SKILL.md","type":"blob","sha":BLOB,"mode":"100644"}]},
+        }
 
     def __call__(self,args,**kwargs):
         self.calls.append(args)
@@ -81,8 +84,9 @@ class FakeGH:
                     assert route.endswith(TAG)
                     value={"object":{"sha":COMMIT,"type":"commit"}}
                 else:
-                    assert route.endswith("/git/trees/"+COMMIT+"?recursive=1"),route
-                    value={"sha":ROOT_SHA,"tree":self.entries,"truncated":self.truncated}
+                    tree_sha=route.removeprefix("repos/example/skills/git/trees/")
+                    assert tree_sha in self.trees,route
+                    value=self.trees[tree_sha]
                 body=f"HTTP/2.0 {status} status\r\n\r\n"+json.dumps(value)
                 code=int(status!=200)
         elif args[1:3]==["skill","update"]:
@@ -194,7 +198,7 @@ class GhSkillsTests(unittest.TestCase):
         result=self.run_helper(fake)
         self.assertEqual((result["gh"],result["npx_delegated"],result["cursor_delegated"]),(100,50,26))
         self.assertEqual(len(fake.updates()),1)
-        self.assertEqual(sum(args[1]=="api" for args in fake.calls),4)
+        self.assertEqual(sum(args[1]=="api" for args in fake.calls),6)
         self.assertTrue(all(args[2:4]==["--hostname","github.com"] for args in fake.calls if args[1]=="api"))
         self.assertEqual(len(fake.updates()[0][fake.updates()[0].index("--all")+1:]),100)
         after_lock=json.loads(lock.read_text())
@@ -246,6 +250,28 @@ class GhSkillsTests(unittest.TestCase):
         skill(copy,"lean-ctx")
         self.row(copy,"lean-ctx")
         self.write_lock()
+        (copy/"SKILL.md.bak").write_text("local migration backup")
+        lock=copy/"SKILL.md.v4-migration.lock"
+        lock.touch()
+        (canonical/"install.sh").write_text("verified")
+        (copy/"install.sh").write_text("verified")
+        self.assertEqual(self.run_helper(FakeGH(self.rows))["npx_delegated"],2)
+        (canonical/"SKILL.md.bak").write_text("different local migration backup")
+        canonical_lock=canonical/lock.name
+        canonical_lock.touch()
+        self.assertEqual(self.run_helper(FakeGH(self.rows))["npx_delegated"],2)
+        lock.write_text("unexpected")
+        with self.assertRaisesRegex(RuntimeError,"Nonempty LeanCTX migration lock"):
+            self.run_helper(FakeGH(self.rows))
+        lock.write_text("")
+        canonical_lock.write_text("unexpected")
+        with self.assertRaisesRegex(RuntimeError,"Nonempty LeanCTX migration lock"):
+            self.run_helper(FakeGH(self.rows))
+        canonical_lock.write_text("")
+        (copy/"install.sh").write_text("stale")
+        with self.assertRaisesRegex(RuntimeError,"copy differs"):
+            self.run_helper(FakeGH(self.rows))
+        (copy/"install.sh").write_text("verified")
         (copy/"extra").write_text("foreign")
         with self.assertRaisesRegex(RuntimeError,"copy differs"):
             self.run_helper(FakeGH(self.rows))
@@ -271,9 +297,9 @@ class GhSkillsTests(unittest.TestCase):
         for mode in ("missing","truncated","file-as-directory"):
             fake=FakeGH(self.rows)
             if mode=="missing":
-                fake.entries=[]
+                fake.trees[COMMIT]["tree"]=[]
             elif mode=="truncated":
-                fake.truncated=True
+                fake.trees[NEW]["truncated"]=True
             else:
                 text=(self.shared/"managed/SKILL.md").read_text()
                 (self.shared/"managed/SKILL.md").write_text(text.replace("github-path: skills/managed\n","github-path: skills/managed/SKILL.md\n"))
@@ -284,10 +310,36 @@ class GhSkillsTests(unittest.TestCase):
                 self.assertIn("skills/managed/SKILL.md",str(error.exception))
                 self.assertIn("skills/another/SKILL.md",str(error.exception))
 
+    def test_remote_tree_walk_skips_unrelated_branches_and_reuses_tree_sha(self):
+        self.github(tree=NEW)
+        self.github("another",tree=NEW)
+        fake=FakeGH(self.rows)
+        fake.trees[COMMIT]["tree"].append(
+            {"path":"unrelated","type":"tree","sha":TAG,"mode":"040000"})
+        fake.write=False
+        self.assertEqual(self.run_helper(fake)["current_at_preflight"],2)
+        tree_calls=[args[-1].rsplit("/",1)[-1] for args in fake.calls
+                    if args[1]=="api" and "/git/trees/" in args[-1]]
+        self.assertEqual(tree_calls,[COMMIT,SKILLS_SHA,NEW])
+
+    def test_invalid_remote_subtrees_or_symlink_skill_stop_before_updates(self):
+        self.github()
+        for mode in ("symlink","wrong-tree-sha","invalid-blob-sha"):
+            fake=FakeGH(self.rows)
+            if mode=="symlink":
+                fake.trees[NEW]["tree"][0]["mode"]="120000"
+            elif mode=="wrong-tree-sha":
+                fake.trees[NEW]["sha"]=TAG
+            else:
+                fake.trees[NEW]["tree"][0]["sha"]="invalid"
+            with self.subTest(mode=mode),self.assertRaises(RuntimeError):
+                self.run_helper(fake)
+            self.assertEqual(fake.updates(),[])
+
     def test_root_skill_uses_verified_root_tree_sha(self):
         path=self.github(directory=".")
         fake=FakeGH(self.rows)
-        fake.entries=[{"path":"SKILL.md","type":"blob","sha":BLOB,"mode":"100644"}]
+        fake.trees[COMMIT]["tree"]=[{"path":"SKILL.md","type":"blob","sha":BLOB,"mode":"100644"}]
         self.run_helper(fake)
         self.assertIn(ROOT_SHA,(path/"SKILL.md").read_text())
 
@@ -320,7 +372,7 @@ class GhSkillsTests(unittest.TestCase):
         self.assertEqual(file.read_bytes(),before)
         routes=[args[-1] for args in fake.calls if args[1]=="api"]
         self.assertIn("repos/example/skills/git/ref/tags/v1",routes)
-        self.assertIn("repos/example/skills/git/trees/"+COMMIT+"?recursive=1",routes)
+        self.assertIn("repos/example/skills/git/trees/"+COMMIT,routes)
         self.assertNotIn("repos/example/skills",routes)
         self.assertFalse(any("HEAD" in route for route in routes))
 
@@ -395,7 +447,7 @@ class GhSkillsTests(unittest.TestCase):
         self.npx("unrelated")
         path=self.write_lock()
         baseline=json.loads(path.read_text())
-        for mode in ("unknown-top","unknown-entry","null-entry","bool-version","invalid-dismissed","pinned","foreign","corrupt"):
+        for mode in ("unknown-top","unknown-entry","null-entry","bool-version","invalid-dismissed","invalid-agents","invalid-plugin","pinned","foreign","corrupt"):
             value=json.loads(json.dumps(baseline))
             if mode=="unknown-top":
                 value["unknown"]="PRIVATE_LOCK_SENTINEL"
@@ -407,6 +459,10 @@ class GhSkillsTests(unittest.TestCase):
                 value["version"]=True
             elif mode=="invalid-dismissed":
                 value["dismissed"]={"choice":0}
+            elif mode=="invalid-agents":
+                value["lastSelectedAgents"]=["codex", False]
+            elif mode=="invalid-plugin":
+                value["skills"]["unrelated"]["pluginName"]=""
             elif mode in ("pinned","foreign"):
                 record=dict(value["skills"]["unrelated"])
                 record["skillPath"]="skills/managed/SKILL.md"
@@ -424,6 +480,47 @@ class GhSkillsTests(unittest.TestCase):
             self.assertEqual(fake.updates(),[])
             self.assertEqual(path.read_bytes(),before)
             self.assertNotIn("PRIVATE_LOCK_SENTINEL",str(error.exception))
+
+    def test_npx_extensions_are_preserved_when_remote_trees_are_current(self):
+        self.github(tree=NEW)
+        self.npx("unrelated")
+        self.records["unrelated"]["pluginName"]="example-pack"
+        self.records["unrelated"]["skillPath"]="SKILL.md"
+        path=self.write_lock()
+        value=json.loads(path.read_text())
+        value["lastSelectedAgents"]=["codex","cursor"]
+        path.write_text(json.dumps(value))
+        before=path.read_bytes()
+        fake=FakeGH(self.rows)
+        result=self.run_helper(fake)
+        self.assertEqual((result["status"],result["planned"]),("VERIFIED",0))
+        self.assertEqual(fake.updates(),[])
+        self.assertEqual(path.read_bytes(),before)
+
+    def test_coverage_keeps_npx_row_separate_from_failed_gh_repository(self):
+        self.npx("unrelated")
+        source="https://github.com/other/publisher"
+        gh=dict(self.rows[-1],sourceURL=source)
+        sibling=dict(gh,skillName="another-skill",sourceURL=source+".git/")
+        from unittest.mock import patch
+        with patch.object(audit,"HOME",self.home):
+            rows=audit.classify([self.rows[-1],gh,sibling],self.records,{"unrelated":"discovery failed"})
+        self.assertEqual([row["status"] for row in rows],
+                         ["NPX_TRACKED","GH_SOURCE_UNDISCOVERABLE","GH_SOURCE_UNDISCOVERABLE"])
+
+    def test_npx_extensions_block_native_writes_but_allow_a_real_dry_run(self):
+        self.github()
+        self.npx("unrelated")
+        self.records["unrelated"]["pluginName"]="example-pack"
+        path=self.write_lock()
+        before=path.read_bytes()
+        fake=FakeGH(self.rows)
+        with self.assertRaisesRegex(RuntimeError,"1 GH skill update.*cannot preserve"):
+            self.run_helper(fake)
+        self.assertEqual(fake.updates(),[])
+        self.assertEqual(self.run_helper(fake,True)["planned"],1)
+        self.assertTrue(all("--dry-run" in args for args in fake.updates()))
+        self.assertEqual(path.read_bytes(),before)
 
     def test_native_lock_clobber_and_dry_run_mutation_fail_with_backup_guidance(self):
         self.github()

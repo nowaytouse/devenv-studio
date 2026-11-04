@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 from collections import defaultdict
+from hashlib import sha256
 import importlib.util
 import json
 from pathlib import Path, PurePosixPath
@@ -67,16 +68,18 @@ def lock_snapshot(home):
     except ValueError as error:
         raise RuntimeError("Invalid shared skill-lock JSON; no GH updates permitted") from error
     required = {"source", "sourceType", "sourceUrl", "skillFolderHash", "installedAt", "updatedAt"}
-    if (not isinstance(value, dict) or set(value) - {"version", "skills", "dismissed"} or
+    if (not isinstance(value, dict) or set(value) - {"version", "skills", "dismissed", "lastSelectedAgents"} or
             type(value.get("version")) is not int or value["version"] != 3 or
             not isinstance(value.get("skills"), dict) or not isinstance(value.get("dismissed", {}), dict) or
-            any(type(v) is not bool for v in value.get("dismissed", {}).values())):
+            any(type(v) is not bool for v in value.get("dismissed", {}).values()) or
+            not isinstance(value.get("lastSelectedAgents", []), list) or
+            any(not isinstance(v, str) or not v for v in value.get("lastSelectedAgents", []))):
         raise RuntimeError("Shared skill-lock schema cannot safely round-trip through native GH")
     for entry in value["skills"].values():
         if (not isinstance(entry, dict) or not required <= set(entry) or
-                set(entry) - required - {"skillPath", "pinnedRef"} or
+                set(entry) - required - {"skillPath", "pinnedRef", "pluginName"} or
                 any(not isinstance(v, str) for v in entry.values()) or
-                any(not entry[key] for key in ("skillPath", "pinnedRef") if key in entry)):
+                any(not entry[key] for key in ("skillPath", "pinnedRef", "pluginName") if key in entry)):
             raise RuntimeError("Shared skill-lock entry cannot safely round-trip through native GH")
     return value, raw
 
@@ -115,8 +118,9 @@ def verify_lock(before, after, group, dry_run, successful=True):
         raise RuntimeError("Native GH removed the shared skill lock")
     old = before[0] or {"version": 3, "skills": {}}
     new = after[0] or {"version": 3, "skills": {}}
-    if old["version"] != new["version"] or old.get("dismissed", {}) != new.get("dismissed", {}):
-        raise RuntimeError("Native GH changed shared lock version/dismissed choices")
+    if (old["version"] != new["version"] or old.get("dismissed", {}) != new.get("dismissed", {}) or
+            old.get("lastSelectedAgents") != new.get("lastSelectedAgents")):
+        raise RuntimeError("Native GH changed shared lock version or user preferences")
     allowed = {key: [item for item in group if key in native_keys(item)]
                for item in group for key in native_keys(item)}
     for key in old["skills"].keys() | new["skills"].keys():
@@ -147,7 +151,7 @@ def npx_registered(name, lock):
     try:
         return (repo_name(url).lower() == source.lower() and
                 bool(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source)) and
-                path.endswith("/SKILL.md") and tree_path(path) == path and
+                (path == "SKILL.md" or path.endswith("/SKILL.md")) and tree_path(path) == path and
                 isinstance(entry.get("skillFolderHash"), str) and bool(HEX.fullmatch(entry["skillFolderHash"])))
     except RuntimeError:
         return False
@@ -185,7 +189,13 @@ def preflight(rows, home, cursor, normalizer, lock):
                 home / ".config/opencode/skills/lean-ctx"}):
             regular(canonical, True)
             regular(canonical / "SKILL.md")
-            if not cursor.name_matches(canonical, name) or cursor.safe_tree(path) != cursor.safe_tree(canonical):
+            mirror, owner = cursor.safe_tree(path), cursor.safe_tree(canonical)
+            # LeanCTX creates these local migration artifacts in either tree.
+            for folder, files in ((path, mirror), (canonical, owner)):
+                files.pop("SKILL.md.bak", None)
+                if files.pop("SKILL.md.v4-migration.lock", None) not in (None, sha256(b"").hexdigest()):
+                    raise RuntimeError(f"Nonempty LeanCTX migration lock: {folder}")
+            if not cursor.name_matches(canonical, name) or mirror != owner:
                 raise RuntimeError(f"Registered lean-ctx copy differs from its canonical owner: {path}")
             delegated["npx"] += 1
         elif path == canonical and name in cursor.NAMES_SET:
@@ -253,24 +263,49 @@ def native_reference(gh, repo, run):
         raise RuntimeError(f"Invalid remote commit reference: {repo}")
     return obj["sha"]
 
-def remote_tree(gh, repo, run):
-    sha = native_reference(gh, repo, run)
-    value = github_json(gh, repo, f"/git/trees/{sha}?recursive=1", run)
+def github_tree(gh, repo, ref, run, expected_sha=None):
+    value = github_json(gh, repo, f"/git/trees/{ref}", run)
     try:
-        if (not isinstance(value, dict) or value.get("truncated") is not False or
-                not HEX.fullmatch(value.get("sha", "")) or not isinstance(value.get("tree"), list)):
+        if (value.get("truncated") is not False or not HEX.fullmatch(value.get("sha", "")) or
+                not isinstance(value.get("tree"), list) or
+                expected_sha is not None and value["sha"] != expected_sha):
             raise ValueError("invalid/truncated tree")
         entries = {}
         for entry in value["tree"]:
             path = entry["path"]
-            if (not isinstance(path, str) or not path or tree_path(path) != path or path in entries or
+            if (not isinstance(path, str) or not path or "/" in path or
+                    tree_path(path) != path or path in entries or
                     entry.get("type") not in ("blob", "tree", "commit") or
                     not HEX.fullmatch(entry.get("sha", ""))):
                 raise ValueError("invalid tree entry")
             entries[path] = entry
         return value["sha"], entries
     except (KeyError, TypeError, ValueError, RuntimeError) as error:
-        raise RuntimeError(f"Invalid or truncated remote GitHub tree: {repo}") from error
+        raise RuntimeError(f"Invalid or truncated remote GitHub tree: {repo} ({ref})") from error
+
+def remote_tree(gh, repo, directories, run):
+    commit = native_reference(gh, repo, run)
+    root_sha, root = github_tree(gh, repo, commit, run)
+    trees = {root_sha: root}
+    entries = {}
+    # Fetch only ancestors and directories used by installed skills.
+    for directory in sorted({tree_path(value) for value in directories}):
+        parent = root
+        parts = directory.split("/") if directory else []
+        for index, part in enumerate(parts):
+            entry = parent.get(part, {})
+            if entry.get("type") != "tree" or entry.get("mode") != "040000":
+                break
+            entries["/".join(parts[:index + 1])] = entry
+            sha = entry["sha"]
+            if sha not in trees:
+                _, trees[sha] = github_tree(gh, repo, sha, run, expected_sha=sha)
+            parent = trees[sha]
+        else:
+            if "SKILL.md" in parent:
+                skill_path = directory + "/SKILL.md" if directory else "SKILL.md"
+                entries[skill_path] = parent["SKILL.md"]
+    return root_sha, entries
 
 def expected_tree(repo, directory, root_sha, entries):
     directory = tree_path(directory)
@@ -309,7 +344,10 @@ def update(home, gh, run=subprocess.run, dry_run=False):
     snapshot = lock_snapshot(home)
     selected, delegated = preflight(json.loads(listing.stdout), home, cursor, normalizer,
                                     snapshot[0]["skills"] if snapshot[0] else {})
-    trees = {repo: remote_tree(gh, repo, run) for repo in sorted({item["repo"] for item in selected})}
+    directories = defaultdict(set)
+    for item in selected:
+        directories[item["repo"]].add(item["meta"]["github-path"])
+    trees = {repo: remote_tree(gh, repo, dirs, run) for repo, dirs in sorted(directories.items())}
     remote_errors = []
     for item in selected:
         try:
@@ -320,6 +358,12 @@ def update(home, gh, run=subprocess.run, dry_run=False):
         raise RuntimeError("Remote skill preflight failed before any updates:\n" + "\n".join(remote_errors))
     lock_collisions(snapshot, selected)
     planned = sum(item["meta"]["github-tree-sha"] != item["expected"] for item in selected)
+    # GH currently discards NPX's agent preferences and plugin provenance on write.
+    lock = snapshot[0] or {}
+    protected = "lastSelectedAgents" in lock or any("pluginName" in entry for entry in lock.get("skills", {}).values())
+    if protected and planned and not dry_run:
+        raise RuntimeError(f"{planned} GH skill update(s) pending; native GH cannot preserve NPX lock metadata. "
+                           "No skills or lock entries were changed; use --dry-run until a lossless writer is available.")
     groups = defaultdict(list)
     for item in selected:
         groups[item["path"].parent].append(item)
@@ -329,6 +373,8 @@ def update(home, gh, run=subprocess.run, dry_run=False):
         for item in group:
             if metadata(item["path"], normalizer) != item["meta"]:
                 raise RuntimeError(f"Skill metadata changed after preflight: {item['path']}")
+        if protected and not planned:
+            continue
         args = ["skill", "update", "--dir", str(parent), "--all"]
         if dry_run:
             args.append("--dry-run")

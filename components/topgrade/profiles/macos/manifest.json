@@ -4,7 +4,7 @@
     {
       "source": "bin/brew-headsync-upgrade",
       "destination": ".local/bin/brew-headsync-upgrade",
-      "sha256": "bdc35c6b2f9028f7c112a14570560da1304f700e48e21d25c2d92a87e08e7e1b",
+      "sha256": "1ff9234f9d5ac5153656c008e16722ded0109926af4da85fdd771f61d602e2de",
       "mode": 493,
       "adoptSha256": "03e25d54209906258318fb257df6bca0a2477ba8904d36b1436d0abc6d155aeb"
     },
@@ -53,7 +53,7 @@
     {
       "source": "bin/topgrade-gh-skills-verified",
       "destination": ".local/bin/topgrade-gh-skills-verified",
-      "sha256": "4cce56651d98b61e5c6fa0428831f48cfe9a6b89e6a558241da7a81c8c3ca886",
+      "sha256": "e943fbaa1a761fd3076ebe2b46331e9f60b1b2ca6902550a1731c250e868086a",
       "mode": 448,
       "adoptSha256": null
     },
@@ -95,7 +95,7 @@
     {
       "source": "bin/topgrade-skills-integrity.py",
       "destination": ".local/bin/topgrade-skills-integrity.py",
-      "sha256": "a0a0b7e6589346a9de0e3dad522e5724ef38ef91201ceb234c46f0145df8158e",
+      "sha256": "40d35377ce570c5effbcb2d4dce21fbfad0256d103bc7dbd41132bf37b1dda44",
       "mode": 493,
       "adoptSha256": "0099537bca58359847e4da7b1f5de841a2b454beed962dea399487b56b12adf9"
     },

@@ -366,7 +366,7 @@ echo
 echo "== Upgrade remaining formulae =="
 
 # Both temporary formulae are still fixed to TARGET_SHA here.
-# Exclude managed LLVM and Homebrew Topgrade before outdated's HEAD scan, and all pins.
+# Exclude separately managed LLVM toolchains, Homebrew Topgrade, and pins before the HEAD scan.
 typeset -a CANDIDATE_FORMULAE UPGRADE_FORMULAE
 CANDIDATE_FORMULAE=()
 UPGRADE_FORMULAE=()
@@ -375,6 +375,10 @@ for formula in ${(f)INSTALLED_FORMULAE}; do
     case "${formula##*/}" in
         llvm)
             echo "Skipping pinned Homebrew LLVM; its runtime is intentionally frozen"
+            continue
+            ;;
+        llvm-head)
+            echo "Skipping LLVM HEAD; its source builds are run separately"
             continue
             ;;
         topgrade)

@@ -290,7 +290,8 @@ def different_full_revision(f):
 
 
 def pin_scan_exclusions(f):
-    result = f.run(TEST_OUTDATED="topgrade\nz3")
+    result = f.run(TEST_INSTALLED="llvm\nnyamiiko/tools/llvm-head\ntopgrade\nz3\natuin",
+                   TEST_OUTDATED="topgrade\nz3")
     assert result.returncode == 0, result.stdout
     scan = next(line for line in f.events() if line.startswith("brew outdated "))
     assert "llvm" not in scan and "topgrade" not in scan, scan
