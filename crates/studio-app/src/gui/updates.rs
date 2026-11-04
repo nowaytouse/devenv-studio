@@ -12,6 +12,7 @@ pub(super) type WindowsInventory = Result<windows_inventory::Inventory, String>;
 enum Section {
     Tasks,
     Installed,
+    Terminal,
     History,
 }
 
@@ -328,11 +329,19 @@ impl Studio {
                 Section::History,
                 tx("执行记录", "Run history"),
             );
+            if cfg!(target_os = "macos") {
+                ui.selectable_value(
+                    &mut self.updates.section,
+                    Section::Terminal,
+                    tx("终端维护", "Terminal maintenance"),
+                );
+            }
         });
         ui.add_space(8.0);
         match self.updates.section {
             Section::Tasks if cfg!(windows) => self.windows_tasks_view(ui, busy),
             Section::Tasks => self.update_tasks_view(ui, busy),
+            Section::Terminal => self.terminal_tasks_view(ui, busy),
             Section::Installed if cfg!(windows) => {
                 if self.updates.windows.show(ui, busy) {
                     self.start_worker(
@@ -418,10 +427,10 @@ impl Studio {
     }
 
     fn update_tasks_view(&mut self, ui: &mut egui::Ui, busy: bool) {
-        ui.heading(tx("更新本机开发工具", "Update local developer tools"));
+        ui.heading(tx("软件与工具更新", "Software and tool updates"));
         ui.label(tx(
-            "检查本机 Topgrade，再选择、审核和确认更新。检查只读取本地状态。",
-            "Check the local Topgrade, then select, review, and confirm updates. The check reads local state.",
+            "先检查本机可用任务，再按需选择。检查只读取本地状态。",
+            "Check which tasks are available on this Mac, then choose what to review. This check reads local state.",
         ));
         if primary(
             ui,
@@ -437,29 +446,96 @@ impl Studio {
             if !check.available {
                 ui.colored_label(palette().danger, &check.detail);
             }
-            engine_card(ui, check, busy);
+            let title = check.engine.as_ref().map_or_else(
+                || tx("引擎与回退", "Engine and rollback").to_owned(),
+                |engine| {
+                    lf!(
+                        "引擎与回退 · Topgrade {} · {}",
+                        "Engine and rollback · Topgrade {} · {}",
+                        engine.upstream_version,
+                        short_id(&engine.binary_sha256)
+                    )
+                },
+            );
+            egui::CollapsingHeader::new(title)
+                .id_salt("update-engine")
+                .show(ui, |ui| engine_card(ui, check, busy));
             ui.add_space(12.0);
-            if !check.steps.is_empty() {
-                ui.heading(tx("可在 Studio 执行", "Run in Studio"));
-            }
-            for step in check.steps.iter().filter(|step| !step.terminal) {
-                let mut selected = self.updates.selected.contains(&step.id);
-                let label = step_label(&step.id, &step.label);
+            if check.steps.iter().any(|step| !step.terminal) {
                 ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .add_enabled(
-                            !busy && check.available && step.available && !step.terminal,
-                            egui::Checkbox::new(&mut selected, label),
-                        )
-                        .changed()
-                    {
-                        selection_change = Some((step.id.clone(), selected));
-                    }
-                    if !step.available {
-                        ui.label(tx("不可用", "Unavailable"));
-                    }
+                    ui.heading(tx("可在 Studio 执行", "Run in Studio"));
+                    let count = check
+                        .steps
+                        .iter()
+                        .filter(|step| check.available && step.available && !step.terminal)
+                        .count();
+                    badge(
+                        ui,
+                        &lf!("{} 项可审核", "{} available to review", count),
+                        palette().wash,
+                        palette().ink,
+                    );
                 });
-                ui.label(RichText::new(step_detail(step)).color(palette().muted));
+                ui.label(tx(
+                    "选择后审核。任务可用性检查不查询上游更新。",
+                    "Select tasks for review. The availability check does not query upstream updates.",
+                ));
+                for (group, diagnostics) in [
+                    (tx("工具与缓存", "Tools and caches"), false),
+                    (tx("只读诊断", "Read-only diagnostics"), true),
+                ] {
+                    let steps = check
+                        .steps
+                        .iter()
+                        .filter(|step| !step.terminal && diagnostic_step(&step.id) == diagnostics);
+                    if steps.clone().next().is_none() {
+                        continue;
+                    }
+                    surface_frame().inner_margin(12.0).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.strong(group);
+                        for (index, step) in steps.enumerate() {
+                            if index > 0 {
+                                ui.separator();
+                            }
+                            ui.push_id(&step.id, |ui| {
+                                let mut selected = self.updates.selected.contains(&step.id);
+                                ui.horizontal(|ui| {
+                                    task_mark(ui, &step.id);
+                                    ui.vertical(|ui| {
+                                        ui.horizontal_wrapped(|ui| {
+                                            if ui
+                                                .add_enabled(
+                                                    !busy && check.available && step.available,
+                                                    egui::Checkbox::new(
+                                                        &mut selected,
+                                                        step_label(&step.id, &step.label),
+                                                    ),
+                                                )
+                                                .changed()
+                                            {
+                                                selection_change =
+                                                    Some((step.id.clone(), selected));
+                                            }
+                                            if !check.available || !step.available {
+                                                badge(
+                                                    ui,
+                                                    tx("不可用", "Unavailable"),
+                                                    palette().wash,
+                                                    palette().ink,
+                                                );
+                                            }
+                                        });
+                                        ui.label(
+                                            RichText::new(step_detail(step)).color(palette().muted),
+                                        );
+                                    });
+                                });
+                            });
+                        }
+                    });
+                    ui.add_space(6.0);
+                }
             }
         }
         if self.updates.check.is_none() && !busy {
@@ -530,17 +606,14 @@ impl Studio {
         if run {
             self.start_update_run();
         }
+    }
 
-        if self
-            .updates
-            .check
-            .as_ref()
-            .is_some_and(|check| !check.steps.is_empty())
+    fn terminal_tasks_view(&mut self, ui: &mut egui::Ui, busy: bool) {
+        if let Some(check) = &self.updates.check
+            && !check.steps.is_empty()
         {
+            terminal_catalog(ui, &check.steps, &mut self.updates.catalog_query, busy);
             ui.separator();
-            if let Some(check) = &self.updates.check {
-                terminal_catalog(ui, &check.steps, &mut self.updates.catalog_query, busy);
-            }
             ui.heading(tx("在终端执行完整更新", "Run the full update in Terminal"));
             ui.label(tx(
                 "命令使用当前 Topgrade 配置，范围与上方选择独立。请在 Studio 空闲时运行，在终端核对范围并处理提示或管理员授权。",
@@ -555,8 +628,41 @@ impl Studio {
             {
                 ui.ctx().copy_text(maintenance::TERMINAL_COMMAND.to_owned());
             }
+        } else {
+            ui.heading(tx("终端维护", "Terminal maintenance"));
+            ui.label(tx(
+                "先检查本机，再查看常用任务及其预演命令。",
+                "Check this Mac to view featured tasks and their preview commands.",
+            ));
+            if primary(ui, tx("检查终端入口", "Check Terminal options"), !busy).clicked() {
+                self.start_update_check();
+            }
         }
     }
+}
+
+fn diagnostic_step(id: &str) -> bool {
+    matches!(id, "brew_linkage_audit" | "cli_versions")
+}
+
+fn task_mark(ui: &mut egui::Ui, id: &str) {
+    let mark = match id {
+        "brew_linkage_audit" => "HB",
+        "cli_versions" => "CLI",
+        "github_cli_extensions" | "github_cli_skills" => "GH",
+        "helm" => "H",
+        "tldr" => "TL",
+        _ => "TG",
+    };
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(36.0, 36.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 8, palette().wash);
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        mark,
+        egui::FontId::monospace(12.0),
+        palette().ink,
+    );
 }
 
 impl UiState {
@@ -938,6 +1044,40 @@ fn terminal_catalog(
     busy: bool,
 ) {
     let count = steps.iter().filter(|step| step.terminal).count();
+    ui.heading(tx("终端维护", "Terminal maintenance"));
+    ui.label(tx(
+        "复制命令前先核对范围。预演会使用本机配置及其前后置命令。",
+        "Review the scope before copying a command. Previews use the local configuration and its pre/post commands.",
+    ));
+    surface_frame().inner_margin(12.0).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.strong(tx("常用维护入口", "Featured maintenance"));
+        for (name, description) in [
+            (
+                "BetterDisplay Internal Update",
+                tx(
+                    "应用更新 · 先核对版本、签名与运行状态。",
+                    "App update · Check the version, signature, and running state first.",
+                ),
+            ),
+            (
+                "Homebrew Formulae (HEAD-synced)",
+                tx(
+                    "公式更新 · 核对 LLVM 固定版本、HEAD 构建范围及恢复状态。",
+                    "Formula updates · Check the LLVM pin, HEAD build scope, and recovery state.",
+                ),
+            ),
+        ] {
+            ui.push_id(name, |ui| {
+                ui.separator();
+                ui.strong(name);
+                ui.label(RichText::new(description).color(palette().muted));
+                let label = lf!("复制 {} 预演命令", "Copy {} preview command", name);
+                copy_profile_preview(ui, name, &label, busy);
+            });
+        }
+    });
+    ui.add_space(8.0);
     egui::CollapsingHeader::new(format!("{} ({count})", tx("Topgrade 步骤目录", "Topgrade step catalog")))
         .id_salt("topgrade-step-catalog")
         .show(ui, |ui| {
@@ -977,25 +1117,30 @@ fn terminal_catalog(
                 "These tasks use the local profile's checks and recovery. Preview each task in Terminal.",
             ));
             for name in [
-                "Homebrew Formulae (HEAD-synced)", "Mac App Store (verified)", "gcloud (verified)",
+                "Mac App Store (verified)", "gcloud (verified)",
                 "SQLite Python trunk", "SQLite trunk", "TourBox Beta Update", "Xcode Beta Update",
-                "BetterDisplay Internal Update", "Preview macOS Apps", "Conda frozen base",
+                "Preview macOS Apps", "Conda frozen base",
                 "Conda default", "Gradle Nightly Toolchain", "Rolling Project Dependencies",
                 "npm Bundled Dependency Security", "Topgrade Skills Coverage Gate",
             ] {
                 ui.push_id(name, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(name);
-                        if ui.add_enabled(!busy, egui::Button::new(tx("复制预演命令", "Copy preview command"))).clicked() {
-                            ui.ctx().copy_text(format!(
-                                "{} --dry-run --no-self-update --no-tmux --show-skipped --only custom_commands --custom-commands '{name}'",
-                                maintenance::TERMINAL_COMMAND
-                            ));
-                        }
+                        let label = lf!("复制 {} 预演命令", "Copy {} preview command", name);
+                        copy_profile_preview(ui, name, &label, busy);
                     });
                 });
             }
         });
+}
+
+fn copy_profile_preview(ui: &mut egui::Ui, name: &str, label: &str, busy: bool) {
+    if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+        ui.ctx().copy_text(format!(
+            "{} --dry-run --no-self-update --no-tmux --show-skipped --only custom_commands --custom-commands '{name}'",
+            maintenance::TERMINAL_COMMAND
+        ));
+    }
 }
 
 #[cfg(test)]
@@ -1017,6 +1162,44 @@ mod tests {
         assert!(rollback_command(executable, &active, &active).is_none());
         assert!(rollback_command(executable, "a; touch /tmp/example", &previous).is_none());
         assert!(rollback_command(std::path::Path::new("studio"), &active, &previous).is_none());
+    }
+
+    #[test]
+    fn featured_terminal_tasks_only_offer_preview_and_respect_busy_state() {
+        let context = egui::Context::default();
+        context.enable_accesskit();
+        let mut output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(650.0, 520.0),
+                )),
+                ..Default::default()
+            },
+            |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    terminal_catalog(ui, &[], &mut String::new(), true);
+                });
+            },
+        );
+        output.textures_delta.clear();
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        for name in [
+            "BetterDisplay Internal Update",
+            "Homebrew Formulae (HEAD-synced)",
+        ] {
+            let button = nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.role() == egui::accesskit::Role::Button
+                        && node.label().is_some_and(|label| {
+                            label.contains(name)
+                                && (label.contains("预演命令") || label.contains("preview command"))
+                        })
+                })
+                .expect("named Terminal preview button");
+            assert!(button.1.is_disabled());
+        }
     }
 
     #[test]

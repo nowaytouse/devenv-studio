@@ -1,5 +1,24 @@
 # 验证记录
 
+## Unreleased — macOS 终端任务验收与更新目录，2026-11-04
+
+| 任务 | 实机或隔离结果 |
+| --- | --- |
+| BetterDisplay | 使用现有 Sparkle CLI 按配置的官方 feed 和三个 arm64 渠道探测两轮，均退出 `4`，即无可用更新。应用 5.2.2 / 54070，Developer ID、严格签名、可执行文件与 Info.plist 摘要及进程读回一致。本机探测工具为 ad-hoc 签名。安装和回退待有候选时验收。 [Sparkle CLI](https://sparkle-project.org/documentation/sparkle-cli/) |
+| Homebrew HEAD-sync | 隔离配置预演退出 `0`。本机 ggml 与 llama.cpp 的活动收据同为 `149f5641b931aaf33697d70f9abc90c3e5300247`，ABI 声明和导出、`llama-cli --version`、依赖与链接检查通过。LLVM pin 和 opt 均为 23.1.4，homebrew/core 干净，无活动 journal。上游已前进到 `e853ec9a8c72e91e8fb0eaa68e1dfe02f3c396f0`，自定义 tap 有四项现存改动，真实源码升级待审核。 |
+| Xcode Beta 安装和自动选择 | 两项分别运行，均退出 `0` 并确认当前。活动路径与版本读回一致，仍为 27.3 Beta / 27C5020n。 |
+| SQLite CLI 和 Python 3.15 SQLite | 两项分别运行，均退出 `0`，CLI 可执行文件摘要与 Python 活动 ABI release 未变化。两边均为 3.55.0、同一完整 Fossil 源码 ID，内存数据库 `quick_check` 通过，Python FTS5 查询通过。 |
+| Gradle Nightly | 终端任务退出 `0`，启动器摘要与版本读回一致，9.10.0-20261104002831+0000 / 3ce94cbc。 |
+| TourBox Beta | 终端任务退出 `0` 并确认当前 5.12.0 Beta 10.2。安装包严格签名、Info.plist 和安装收据回读一致。 |
+| Mac App Store、gcloud、Krita | MAS 快速查询的一项候选在精确复查后为零。gcloud 本机 592.0.0 与官方版本相同，已安装组件无待更新项。Krita 官方候选与当前收据匹配。结果来自检查，安装分支待验收。 |
+| npm 捆绑依赖安全 | 只读测试首次遇到 TLS 连接失败，保留正常证书校验重跑后通过，覆盖本机 npm 12.2.1 的两个受审查叶依赖。全局 npm 更新待验收。 |
+| Conda base / default | 两个环境各自离线预演退出 `0`，本地求解无 FETCH、LINK 或 UNLINK，已安装清单摘要未变化。在线更新待验收。 |
+| 项目滚动依赖 | 隔离预演退出 `0`，覆盖 7 个仓库、19 个依赖面。写入与回退待验收。 |
+| NPX、设计包、Skills Coverage | 共享技能锁 218 项，摘要一致。设计包原生只读测试退出 `0`，验证 18 项。Cursor 26 份镜像的非配置文件匹配，旧 babysit 不在活动目录。无人值守更新与覆盖修复的写入分支待验收。 |
+
+- HEAD-sync 的 39 个原生隔离案例通过，另在临时目录模拟部分 keg 升级。新组件在批量枚举前验证活动配对，保留最终运行时复查。第一项 keg 升级成功而第二项失败时，journal 可恢复公式文件。keg 配对恢复需另行核对活动链接和收据。组件全特性测试 139 项通过，5 项按原约定忽略。组件格式、严格 Clippy 及两份实际公式的私有副本语法核验通过。新组件尚未切换到本机引擎。
+- Studio 锁定工作区 420 项测试通过，3 项按原约定忽略。本机构建和 macOS/Windows GNU 严格 Clippy 通过。原生预览实测终端维护页的两个独立预演入口、默认零选中与审核确认门禁，以及 Homebrew 已固定筛选与 LLVM 的 opt/固定版本读回。预览应用的 ad-hoc 签名通过严格校验。
+
 ## Unreleased — 更新引擎身份、回退与设备验收，2026-11-04
 
 - 同版本回归使用两份均返回 `17.15.0` 的引擎和不同 profile，验证组件、二进制和配置身份可区分。隔离回退同时恢复启动器、配置文件及安装收据。备份损坏和启动器漂移在写入前停止。历史测试覆盖旧记录和中断时已写入引擎身份的新记录。GUI 从执行前复核到保存退出结果持有引擎切换锁，定向测试与 macOS `lockf` 互斥。

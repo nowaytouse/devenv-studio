@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- macOS 更新中心把工具与缓存、只读诊断和终端维护分开呈现。BetterDisplay 和 HEAD-sync 有独立预演入口，Homebrew 清单可筛选已固定版本。
+- Topgrade 组件在枚举其余 Homebrew 更新前验证 ggml 和 llama.cpp 的活动 keg 及完整 SHA。最终运行时验证和公式事务恢复继续保留。
+
 - macOS 更新中心在检查、审核和运行记录中显示 Topgrade 构建身份，区分版本号相同的引擎；提供绑定当前与上一版组件树的终端回退入口。
 - Linux 辅助功能栈的间接依赖 `async-executor` 锁定至 1.14.1，修复 1.14.0 的释放后使用回归。
 

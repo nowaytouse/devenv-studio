@@ -7,14 +7,17 @@ enum Filter {
     All,
     Formula,
     Cask,
+    Pinned,
 }
 
 impl Filter {
-    fn includes(self, kind: &Kind) -> bool {
-        matches!(
-            (self, kind),
-            (Self::All, _) | (Self::Formula, Kind::Formula) | (Self::Cask, Kind::Cask)
-        )
+    fn includes(self, package: &Package) -> bool {
+        match self {
+            Self::All => true,
+            Self::Formula => matches!(package.kind, Kind::Formula),
+            Self::Cask => matches!(package.kind, Kind::Cask),
+            Self::Pinned => package.pinned_version.is_some(),
+        }
     }
 }
 
@@ -48,7 +51,7 @@ impl View {
     }
 
     pub(super) fn show(&mut self, ui: &mut egui::Ui, busy: bool) -> bool {
-        ui.heading(tx("Homebrew 本机清单", "Local Homebrew inventory"));
+        ui.heading(tx("已安装软件", "Installed software"));
         ui.label(tx(
             "查看已安装版本、链接和固定版本。读取清单不会更新 Homebrew 或检查上游版本。",
             "Inspect installed versions, links, and pins. Reading the inventory does not update Homebrew or check upstream versions.",
@@ -74,6 +77,11 @@ impl View {
             .filter(|row| matches!(row.kind, Kind::Formula))
             .count();
         let casks = inventory.packages.len() - formulae;
+        let pinned = inventory
+            .packages
+            .iter()
+            .filter(|row| Filter::Pinned.includes(row))
+            .count();
         let previous_filter = self.filter;
         ui.add_space(8.0);
         ui.horizontal_wrapped(|ui| {
@@ -88,6 +96,11 @@ impl View {
                 format!("Formula {formulae}"),
             );
             ui.selectable_value(&mut self.filter, Filter::Cask, format!("Cask {casks}"));
+            ui.selectable_value(
+                &mut self.filter,
+                Filter::Pinned,
+                lf!("已固定 {pinned}", "Pinned {pinned}"),
+            );
         });
         let filter_changed = ui
             .add(
@@ -105,7 +118,7 @@ impl View {
             .iter()
             .enumerate()
             .filter(|(_, row)| {
-                self.filter.includes(&row.kind) && row.name.to_ascii_lowercase().contains(&query)
+                self.filter.includes(row) && row.name.to_ascii_lowercase().contains(&query)
             })
             .collect();
         if visible.is_empty() {

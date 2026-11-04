@@ -11,9 +11,9 @@ Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来�
 
 当前组件已同步上游 [v17.15.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.15.0)，上游提交为 `155a490a35261382def837b572c306dd55590d39`。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。
 
-「更新中心」从已核验的 Topgrade 引擎读取步骤目录。GitHub CLI 技能和扩展、Helm、TLDR、Homebrew 链接审计和 CLI 工具版本可以在 GUI 内审核后执行。默认零选中，重跑前需重新检查。其余引擎步骤及本机 profile 的定制任务有可搜索的终端入口。预演读取正常 Topgrade 配置，前后置命令及配置中的 `misc.only` 也会参与；以预演结果核对实际范围。配置迁移包仍是独立的备份和提取入口。
+「更新中心」从已核验的 Topgrade 引擎读取步骤目录。「更新任务」区分工具与缓存和只读诊断，默认零选中。可审核计数来自本机工具可用性。重跑前需重新检查。「终端维护」置顶 BetterDisplay 与 Homebrew HEAD-sync，并提供其余引擎步骤搜索和本机 profile 预演。预演读取正常 Topgrade 配置，前后置命令及配置中的 `misc.only` 也会参与。以预演结果核对实际范围。配置迁移包仍是独立的备份和提取入口。
 
-「Homebrew 已安装」读取本机 Formula 与 Cask，提供搜索、已安装版本、链接、`opt` 及固定版本细节，并展示读取命令。清单使用 Homebrew 的本地 JSON 列表，读取时关闭自动更新。单包安装、升级和卸载可由 [Homebrew 官方应用](https://github.com/Homebrew/BrewUI)处理，Studio 的 Homebrew 维护继续遵循本机 Topgrade profile。
+「Homebrew 已安装」读取本机 Formula 与 Cask，提供搜索、固定版本筛选和安装、链接、`opt` 详情，并展示读取命令。清单使用 Homebrew 的本地 JSON 列表，读取时关闭自动更新。单包安装、升级和卸载可由 Homebrew 官方应用处理。 [BrewUI](https://github.com/Homebrew/BrewUI)
 
 「更新任务」的审核视图显示每项的命令或运行方式。任务结束后进入「执行记录」，可查看结果和本地输出，也可以独立刷新历史。
 
@@ -55,7 +55,7 @@ devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 
 `prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 使用 Studio 的 Rust 安装器验证资产、应用并回读 profile，然后原子切换到准备好的二进制。安装器兼容原有 v1 收据和事务日志。相同组件树复用引擎。软件更新使用已部署的引擎，引擎维护由上述命令显式启动。
 
-原有 Homebrew HEAD-sync 日志仍可由 Rust 入口恢复。收到 TERM 或 HUP 时，更新器持锁等待正在运行的子进程，随后恢复两份公式并以相应的退出状态结束。如果只有父进程被强制杀死，请先确认原来的 Homebrew 和构建子进程均已退出，再运行恢复。
+原有 Homebrew HEAD-sync 日志仍可由 Rust 入口恢复。组件在执行两项成对升级后先验证两份活动 keg 的完整 SHA，再枚举其余公式。收到 TERM 或 HUP 时，更新器持锁等待正在运行的子进程，随后恢复两份公式并以相应的退出状态结束。若第一项 keg 升级成功而第二项失败，请保留新旧 keg 和日志，核对两个 `opt` 指向与完整收据后再审阅配对恢复。若只有父进程被强制杀死，请先确认原来的 Homebrew 和构建子进程均已退出，再运行恢复。
 
 检查显示上一版时，可复制绑定两版组件树的终端回退命令。请关闭其他维护任务后运行。回退重新核对当前与上一版引擎、profile 和事务，若身份或配置发生漂移则停止。回退完成后重新检查更新中心，或用 `devenv-studio topgrade-engine verify-current FULL_COMPONENT_TREE` 核对启动器及全部受管资产。相同 checkout 和 SHA 的 `topgrade-engine rollback` 仍可用于维护入口。若过程报告 pending 激活，请保留文件、启动器和 profile 事务，核对实际生效版本后再恢复。私人记录在 `~/.local/share/topgrade-rustup-head` 和 `~/.local/state/topgrade-macos-profile`。
 

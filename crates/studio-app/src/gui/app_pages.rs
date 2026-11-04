@@ -634,8 +634,8 @@ impl Studio {
                         "Select steps supported in Studio, review their scope, then confirm separately.",
                     ),
                     tx(
-                        "在执行记录核对步骤结果和实际使用的引擎。需要交互或管理员授权的步骤请在终端处理。",
-                        "Use Run history to verify step outcomes and the engine used. Run steps requiring interaction or administrator authorization in Terminal.",
+                        "在「终端维护」查看常用任务的预演。在「执行记录」核对 Studio 的运行结果和实际引擎。",
+                        "Open Terminal maintenance for featured task previews. Use Run history to verify Studio's outcomes and the engine used.",
                     ),
                 ],
             ),
