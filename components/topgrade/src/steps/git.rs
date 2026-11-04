@@ -1,0 +1,592 @@
+use std::collections::HashSet;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::{Output, Stdio};
+
+use color_eyre::eyre::Context;
+use color_eyre::eyre::{Result, eyre};
+use console::style;
+use futures::stream::{FuturesUnordered, StreamExt, iter};
+use glob::{MatchOptions, glob_with};
+use tokio::process::Command as AsyncCommand;
+use tokio::runtime;
+use tracing::{debug, error};
+
+use crate::command::CommandExt;
+use crate::execution_context::ExecutionContext;
+use crate::step::Step;
+use crate::steps::emacs::Emacs;
+use crate::terminal::print_separator;
+use crate::utils::{PathExt, require};
+use crate::{HOME_DIR, error::SkipStep, terminal::print_warning};
+use etcetera::base_strategy::BaseStrategy;
+use rust_i18n::t;
+
+#[cfg(unix)]
+use crate::XDG_DIRS;
+
+#[cfg(windows)]
+use crate::WINDOWS_DIRS;
+
+pub fn run_git_pull_or_fetch(ctx: &ExecutionContext) -> Result<()> {
+    let mut repos = RepoStep::try_new()?;
+    let config = ctx.config();
+
+    // handle built-in repos
+    if config.use_predefined_git_repos() {
+        // should be executed on all the platforms
+        {
+            if config.should_run(Step::Emacs) {
+                let emacs = Emacs::new();
+                if !emacs.is_doom()
+                    && let Some(directory) = emacs.directory()
+                {
+                    repos.insert_if_repo(ctx, directory);
+                }
+                repos.insert_if_repo(ctx, HOME_DIR.join(".doom.d"));
+            }
+
+            if config.should_run(Step::Vim) {
+                repos.insert_if_repo(ctx, HOME_DIR.join(".vim"));
+                repos.insert_if_repo(ctx, HOME_DIR.join(".config/nvim"));
+            }
+
+            repos.insert_if_repo(ctx, HOME_DIR.join(".ideavimrc"));
+            repos.insert_if_repo(ctx, HOME_DIR.join(".intellimacs"));
+
+            if config.should_run(Step::Rcm) {
+                repos.insert_if_repo(ctx, HOME_DIR.join(".dotfiles"));
+            }
+
+            if let Some(powershell) = ctx.opt_powershell()?
+                && let Some(profile) = powershell.profile()
+            {
+                repos.insert_if_repo(ctx, profile);
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            repos.insert_if_repo(ctx, crate::steps::zsh::zshrc());
+            if config.should_run(Step::Tmux) {
+                repos.insert_if_repo(ctx, HOME_DIR.join(".tmux"));
+            }
+            repos.insert_if_repo(ctx, HOME_DIR.join(".config/fish"));
+            repos.insert_if_repo(ctx, XDG_DIRS.config_dir().join("openbox"));
+            repos.insert_if_repo(ctx, XDG_DIRS.config_dir().join("bspwm"));
+            repos.insert_if_repo(ctx, XDG_DIRS.config_dir().join("i3"));
+            repos.insert_if_repo(ctx, XDG_DIRS.config_dir().join("sway"));
+        }
+
+        #[cfg(windows)]
+        {
+            repos.insert_if_repo(
+                ctx,
+                WINDOWS_DIRS
+                    .cache_dir()
+                    .join("Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState"),
+            );
+
+            super::os::windows::insert_startup_scripts(ctx, &mut repos).ok();
+        }
+    }
+
+    // Handle user-defined repos
+    if let Some(custom_git_repos) = config.git_repos() {
+        for git_repo in custom_git_repos {
+            repos.glob_insert(ctx, &shellexpand::tilde(git_repo));
+        }
+    }
+
+    // Warn the user about the bad patterns.
+    //
+    // NOTE: this should be executed **before** skipping the Git step or the
+    // user won't receive this warning in the cases where all the paths configured
+    // are bad patterns.
+    repos.bad_patterns.iter().for_each(|pattern| {
+        print_warning(t!(
+            "Path {pattern} did not contain any git repositories",
+            pattern = pattern
+        ));
+    });
+
+    if repos.is_repos_empty() {
+        return Err(SkipStep(t!("No repositories to pull").to_string()).into());
+    }
+
+    print_separator(t!("Git repositories"));
+
+    repos.pull_or_fetch_repos(ctx)
+}
+
+#[cfg(windows)]
+static PATH_PREFIX: &str = "\\\\?\\";
+
+pub struct RepoStep {
+    git: PathBuf,
+    repos: HashSet<PathBuf>,
+    glob_match_options: MatchOptions,
+    bad_patterns: Vec<String>,
+}
+
+#[track_caller]
+fn output_checked_utf8(output: Output) -> Result<()> {
+    if !(output.status.success()) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = stderr.trim();
+        Err(eyre!("{stderr}"))
+    } else {
+        Ok(())
+    }
+}
+
+fn get_revision<P: AsRef<Path>>(ctx: &ExecutionContext, git: &Path, repo: P, revision: &str) -> Option<String> {
+    ctx.execute(git)
+        .always()
+        .stdin(Stdio::null())
+        .current_dir(repo.as_ref())
+        .args(["rev-parse", revision])
+        .output_checked_utf8()
+        .map(|output| output.stdout.trim().to_string())
+        .map_err(|e| {
+            error!("Error getting revision for {}: {e}", repo.as_ref().display(),);
+
+            e
+        })
+        .ok()
+}
+
+/// Get the current branch of `repo`, or `None` when it is in a detached HEAD state.
+fn get_current_branch<P: AsRef<Path>>(ctx: &ExecutionContext, git: &Path, repo: P) -> Option<String> {
+    ctx.execute(git)
+        .always()
+        .stdin(Stdio::null())
+        .current_dir(repo.as_ref())
+        // `--quiet` exits non-zero (instead of erroring) on a detached HEAD.
+        .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .output_checked_utf8()
+        .ok()
+        .map(|output| output.stdout.trim().to_string())
+        .filter(|branch| !branch.is_empty())
+}
+
+/// Decide whether the fallback should fetch the default branch instead of the
+/// normal pull/fetch: true when the repo is not currently on its default branch
+/// (a different branch, or a detached HEAD where `current_branch` is `None`).
+fn should_fetch_default(current_branch: Option<&str>, default_branch: &str) -> bool {
+    current_branch != Some(default_branch)
+}
+
+impl RepoStep {
+    /// Try to create a `RepoStep`, fail if `git` is not found.
+    pub fn try_new() -> Result<Self> {
+        let git = require("git")?;
+        let mut glob_match_options = MatchOptions::new();
+
+        if cfg!(windows) {
+            glob_match_options.case_sensitive = false;
+        }
+
+        Ok(Self {
+            git,
+            repos: HashSet::new(),
+            bad_patterns: Vec::new(),
+            glob_match_options,
+        })
+    }
+
+    /// Try to get the root of the repo specified in `path`.
+    pub fn get_repo_root<P: AsRef<Path>>(&self, ctx: &ExecutionContext, path: P) -> Option<PathBuf> {
+        match path.as_ref().canonicalize() {
+            Ok(mut path) => {
+                debug_assert!(path.exists());
+
+                if path.is_file() {
+                    debug!("{} is a file. Checking {}", path.display(), path.parent()?.display());
+                    path = path.parent()?.to_path_buf();
+                }
+
+                debug!("Checking if {} is a git repository", path.display());
+
+                #[cfg(windows)]
+                let path = {
+                    let mut path_string = path.into_os_string().to_string_lossy().into_owned();
+                    if path_string.starts_with(PATH_PREFIX) {
+                        path_string.replace_range(0..PATH_PREFIX.len(), "");
+                    }
+
+                    debug!("Transformed path to {}", path_string);
+
+                    path_string
+                };
+
+                let output = ctx
+                    .execute(&self.git)
+                    .always()
+                    .stdin(Stdio::null())
+                    .current_dir(path)
+                    .args(["rev-parse", "--show-toplevel"])
+                    .output_checked_utf8()
+                    .ok()
+                    // trim the last newline char
+                    .map(|output| PathBuf::from(output.stdout.trim()));
+
+                return output;
+            }
+            Err(e) => {
+                if e.kind() == io::ErrorKind::NotFound {
+                    debug!("{} does not exist", path.as_ref().display());
+                } else {
+                    error!("Error looking for {}: {e}", path.as_ref().display());
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Check if `path` is a git repo, if yes, add it to `self.repos`.
+    ///
+    /// Return the check result.
+    pub fn insert_if_repo<P: AsRef<Path>>(&mut self, ctx: &ExecutionContext, path: P) -> bool {
+        if let Some(repo) = self.get_repo_root(ctx, path) {
+            self.repos.insert(repo);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Check if `repo` has a remote.
+    fn has_remotes<P: AsRef<Path>>(&self, ctx: &ExecutionContext, repo: P) -> Option<bool> {
+        let res = ctx
+            .execute(&self.git)
+            .always()
+            .stdin(Stdio::null())
+            .current_dir(repo.as_ref())
+            .args(["remote", "-v"])
+            .output_checked_utf8();
+
+        res.map(|output| {
+            output
+                .stdout
+                .lines()
+                // remote lines always have: "<name>\t<url> (<fetch|push>)"
+                .any(|line| {
+                    // split into at least 2 fields: name + url
+                    let mut parts = line.split_whitespace();
+                    let name = parts.next();
+                    let url = parts.next();
+
+                    // Has both name AND url → configured remote
+                    name.is_some() && url.is_some()
+                })
+        })
+        .map_err(|e| {
+            error!("Error getting remotes for {}: {e}", repo.as_ref().display());
+            e
+        })
+        .ok()
+    }
+
+    /// Resolve the remote to track and its default branch for `repo`.
+    ///
+    /// The remote is taken from the repo's configured remotes, preferring
+    /// `origin`. The default branch is read from `refs/remotes/<remote>/HEAD`
+    /// when known locally, otherwise queried from the remote with `ls-remote`.
+    /// Returns `None` when neither can be determined.
+    fn resolve_default_branch<P: AsRef<Path>>(&self, ctx: &ExecutionContext, repo: P) -> Option<(String, String)> {
+        let remotes = ctx
+            .execute(&self.git)
+            .always()
+            .stdin(Stdio::null())
+            .current_dir(repo.as_ref())
+            .args(["remote"])
+            .output_checked_utf8()
+            .ok()?;
+        let remotes: Vec<&str> = remotes
+            .stdout
+            .lines()
+            .map(str::trim)
+            .filter(|r| !r.is_empty())
+            .collect();
+        let remote = remotes
+            .iter()
+            .find(|r| **r == "origin")
+            .or_else(|| remotes.first())?
+            .to_string();
+
+        // Prefer the locally-known default branch (no network access).
+        let local_head = ctx
+            .execute(&self.git)
+            .always()
+            .stdin(Stdio::null())
+            .current_dir(repo.as_ref())
+            .args(["symbolic-ref", "--short", &format!("refs/remotes/{remote}/HEAD")])
+            .output_checked_utf8()
+            .ok()
+            .and_then(|output| {
+                output
+                    .stdout
+                    .trim()
+                    .strip_prefix(&format!("{remote}/"))
+                    .map(str::to_string)
+            });
+        if let Some(default_branch) = local_head {
+            return Some((remote, default_branch));
+        }
+
+        // Fall back to asking the remote when its HEAD is not set locally.
+        let symref = ctx
+            .execute(&self.git)
+            .always()
+            .stdin(Stdio::null())
+            .current_dir(repo.as_ref())
+            .args(["ls-remote", "--symref", &remote, "HEAD"])
+            .output_checked_utf8()
+            .ok()?;
+        let default_branch = symref.stdout.lines().find_map(|line| {
+            // line: "ref: refs/heads/<branch>\tHEAD"
+            line.strip_prefix("ref: ")?
+                .split_whitespace()
+                .next()?
+                .strip_prefix("refs/heads/")
+                .map(str::to_string)
+        })?;
+
+        Some((remote, default_branch))
+    }
+
+    /// Similar to `insert_if_repo`, with glob support.
+    pub fn glob_insert(&mut self, ctx: &ExecutionContext, pattern: &str) {
+        if let Ok(glob) = glob_with(pattern, self.glob_match_options) {
+            let mut last_git_repo: Option<PathBuf> = None;
+            for entry in glob {
+                match entry {
+                    Ok(path) => {
+                        if let Some(last_git_repo) = &last_git_repo
+                            && path.is_descendant_of(last_git_repo)
+                        {
+                            debug!(
+                                "Skipping {} because it's a descendant of last known repo {}",
+                                path.display(),
+                                last_git_repo.display()
+                            );
+                            continue;
+                        }
+                        if self.insert_if_repo(ctx, &path) {
+                            last_git_repo = Some(path);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error in path {e}");
+                    }
+                }
+            }
+
+            if last_git_repo.is_none() {
+                self.bad_patterns.push(String::from(pattern));
+            }
+        } else {
+            error!("Bad glob pattern: {pattern}");
+        }
+    }
+
+    /// True if `self.repos` is empty.
+    pub fn is_repos_empty(&self) -> bool {
+        self.repos.is_empty()
+    }
+
+    /// Remove `path` from `self.repos`.
+    ///
+    // `cfg(unix)` because it is only used in the oh-my-zsh step.
+    #[cfg(unix)]
+    pub fn remove<P: AsRef<Path>>(&mut self, path: P) {
+        let _removed = self.repos.remove(path.as_ref());
+        debug_assert!(_removed);
+    }
+
+    /// Try to pull a repo, or fetch it if `fetch_only` is enabled.
+    async fn pull_or_fetch_repo<P: AsRef<Path>>(&self, ctx: &ExecutionContext<'_>, repo: P) -> Result<()> {
+        let is_fetch_only = ctx.config().git_fetch_only();
+
+        // When enabled and the repo is not on its default branch, fetch the
+        // default branch into its local ref instead of running a pull/fetch that
+        // would fail. `None` keeps the normal behavior.
+        let fallback = if ctx.config().git_fallback_to_fetch_default() {
+            self.resolve_default_branch(ctx, &repo).filter(|(_, default_branch)| {
+                let current_branch = get_current_branch(ctx, &self.git, &repo);
+                should_fetch_default(current_branch.as_deref(), default_branch)
+            })
+        } else {
+            None
+        };
+
+        // The fallback advances the default branch ref while HEAD stays put, so
+        // track that ref to report its incoming commits; otherwise track HEAD.
+        let tracked_revision = match &fallback {
+            Some((_, default_branch)) => default_branch.as_str(),
+            None => "HEAD",
+        };
+        let before_revision = get_revision(ctx, &self.git, &repo, tracked_revision);
+
+        let fetching = is_fetch_only || fallback.is_some();
+
+        if ctx.config().verbose() {
+            let action = if fetching { t!("Fetching") } else { t!("Pulling") };
+            println!("{} {}", style(action).cyan().bold(), repo.as_ref().display());
+        }
+
+        let mut command = AsyncCommand::new(&self.git);
+        command.stdin(Stdio::null()).current_dir(&repo);
+
+        if let Some((remote, default_branch)) = &fallback {
+            // `<branch>:<branch>` updates the local branch fast-forward-only, so a
+            // diverged local default fails instead of being force-overwritten.
+            let refspec = format!("{default_branch}:{default_branch}");
+            command.args(["fetch", "--recurse-submodules", remote, &refspec]);
+        } else if is_fetch_only {
+            command.args(["fetch", "--recurse-submodules"]);
+        } else {
+            command.args(["pull", "--ff-only", "--recurse-submodules"]);
+        }
+
+        if let Some(extra_arguments) = ctx.config().git_arguments() {
+            command.args(extra_arguments.split_whitespace());
+        }
+
+        let output = command.output().await?;
+        let result = output_checked_utf8(output).wrap_err_with(|| {
+            let action = if fetching { "fetch" } else { "pull" };
+            format!("Failed to {} {}", action, repo.as_ref().display())
+        });
+
+        if result.is_err() {
+            let action = if fetching { t!("fetching") } else { t!("pulling") };
+            println!(
+                "{} {} {}",
+                style(t!("Failed")).red().bold(),
+                action,
+                repo.as_ref().display()
+            );
+        } else {
+            let after_revision = get_revision(ctx, &self.git, repo.as_ref(), tracked_revision);
+
+            match (&before_revision, &after_revision) {
+                (Some(before), Some(after)) if before != after => {
+                    println!("{} {}", style(t!("Changed")).yellow().bold(), repo.as_ref().display());
+
+                    ctx.execute(&self.git)
+                        .always()
+                        .stdin(Stdio::null())
+                        .current_dir(&repo)
+                        .args([
+                            "--no-pager",
+                            "log",
+                            "--no-decorate",
+                            "--oneline",
+                            &format!("{before}..{after}"),
+                        ])
+                        .status_checked()?;
+                    println!();
+                }
+                _ => {
+                    if ctx.config().verbose() {
+                        println!("{} {}", style(t!("Up-to-date")).green().bold(), repo.as_ref().display());
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Pulls or fetches the repositories specified in `self.repos`, depending on `fetch_only`.
+    ///
+    /// # NOTE
+    /// This function will create an async runtime and do the real job so the
+    /// function itself is not async.
+    fn pull_or_fetch_repos(&self, ctx: &ExecutionContext) -> Result<()> {
+        let is_fetch_only = ctx.config().git_fetch_only();
+
+        if ctx.run_type().dry() {
+            let fallback_enabled = ctx.config().git_fallback_to_fetch_default();
+            self.repos.iter().for_each(|repo| {
+                // A repo off its default branch would be fetched, not pulled.
+                let would_fetch = is_fetch_only
+                    || (fallback_enabled
+                        && self
+                            .resolve_default_branch(ctx, repo)
+                            .is_some_and(|(_, default_branch)| {
+                                let current_branch = get_current_branch(ctx, &self.git, repo);
+                                should_fetch_default(current_branch.as_deref(), &default_branch)
+                            }));
+                let message = if would_fetch {
+                    t!("Would fetch {repo}", repo = repo.display())
+                } else {
+                    t!("Would pull {repo}", repo = repo.display())
+                };
+                println!("{}", message);
+            });
+
+            return Ok(());
+        }
+
+        if !ctx.config().verbose() {
+            println!(
+                "\n{} {}\n",
+                style(t!("Only")).green().bold(),
+                t!("updated repositories will be shown...")
+            );
+        }
+
+        let futures_iterator = self
+            .repos
+            .iter()
+            .filter(|repo| match self.has_remotes(ctx, repo) {
+                Some(false) => {
+                    println!(
+                        "{} {} {}",
+                        style(t!("Skipping")).yellow().bold(),
+                        repo.display(),
+                        t!("because it has no remotes")
+                    );
+                    false
+                }
+                _ => true, // repo has remotes or command to check for remotes has failed. proceed to pull anyway.
+            })
+            .map(|repo| self.pull_or_fetch_repo(ctx, repo));
+
+        let stream_of_futures = if let Some(limit) = ctx.config().git_concurrency_limit() {
+            iter(futures_iterator).buffer_unordered(limit).boxed()
+        } else {
+            futures_iterator.collect::<FuturesUnordered<_>>().boxed()
+        };
+
+        let basic_rt = runtime::Runtime::new()?;
+        let results = basic_rt.block_on(async { stream_of_futures.collect::<Vec<Result<()>>>().await });
+
+        let error = results.into_iter().find(std::result::Result::is_err);
+        error.unwrap_or(Ok(()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_fetch_default;
+
+    #[test]
+    fn fetches_when_on_a_different_branch() {
+        assert!(should_fetch_default(Some("feature"), "main"));
+    }
+
+    #[test]
+    fn fetches_when_head_is_detached() {
+        assert!(should_fetch_default(None, "main"));
+    }
+
+    #[test]
+    fn skips_when_already_on_the_default_branch() {
+        assert!(!should_fetch_default(Some("main"), "main"));
+    }
+}

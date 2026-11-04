@@ -1,0 +1,407 @@
+#![allow(clippy::cognitive_complexity)]
+
+use std::env;
+use std::env::home_dir;
+use std::io;
+use std::path::PathBuf;
+use std::process::exit;
+use std::time::Duration;
+
+use clap::CommandFactory;
+use clap::{Parser, crate_version};
+use color_eyre::eyre::Context;
+use color_eyre::eyre::Result;
+use crossterm::event::KeyCode;
+#[cfg(windows)]
+use etcetera::base_strategy::Windows;
+#[cfg(unix)]
+use etcetera::base_strategy::Xdg;
+use rust_i18n::{i18n, t};
+use std::sync::{LazyLock, OnceLock};
+use tempfile::{TempDir, tempdir};
+use tracing::debug;
+
+use self::config::{CommandLineArgs, Config};
+use self::error::StepFailed;
+use self::runner::StepResult;
+use self::steps::{remote::*, *};
+use self::sudo::{Sudo, SudoCreateError, SudoKind};
+use self::terminal::*;
+use self::utils::{install_color_eyre, install_tracing, is_elevated, set_wsl_use_windows_path, update_tracing};
+
+mod breaking_changes;
+mod command;
+mod config;
+mod ctrlc;
+mod error;
+mod execution_context;
+mod executor;
+mod runner;
+#[cfg(windows)]
+mod self_renamer;
+#[cfg(feature = "self-update")]
+mod self_update;
+mod step;
+mod steps;
+mod sudo;
+mod terminal;
+#[cfg(unix)]
+mod tmux;
+mod utils;
+
+// Users without home directory are possible, but no-one has complained yet
+pub(crate) static HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| home_dir().expect("No home directory"));
+#[cfg(unix)]
+pub(crate) static XDG_DIRS: LazyLock<Xdg> = LazyLock::new(|| Xdg::new().expect("No home directory"));
+#[cfg(windows)]
+pub(crate) static WINDOWS_DIRS: LazyLock<Windows> = LazyLock::new(|| Windows::new().expect("No home directory"));
+
+// Init and load the i18n files
+i18n!("locales", fallback = "en");
+
+pub(crate) static OLD_CWD: OnceLock<PathBuf> = OnceLock::new();
+
+struct TempCwd {
+    #[allow(unused)]
+    temp_dir: TempDir,
+    old_cwd: PathBuf,
+}
+
+impl TempCwd {
+    fn new() -> Result<Self> {
+        let old_cwd = env::current_dir()?;
+        let temp_dir = tempdir()?;
+        env::set_current_dir(&temp_dir)?;
+        Ok(Self { temp_dir, old_cwd })
+    }
+}
+
+impl Drop for TempCwd {
+    fn drop(&mut self) {
+        env::set_current_dir(&self.old_cwd).expect("Restoring cwd failed");
+    }
+}
+
+fn run() -> Result<()> {
+    install_color_eyre()?;
+    ctrlc::set_handler();
+
+    let opt = CommandLineArgs::parse();
+    // Set up the logger with the filter directives from:
+    //     1. CLI option `--log-filter`
+    //     2. `debug` if the `--verbose` option is present
+    // We do this because we need our logger to work while loading the
+    // configuration file.
+    //
+    // When the configuration file is loaded, update the logger with the full
+    // filter directives.
+    //
+    // For more info, see the comments in `CommandLineArgs::tracing_filter_directives()`
+    // and `Config::tracing_filter_directives()`.
+    let reload_handle = install_tracing(&opt.tracing_filter_directives())?;
+
+    // Get current system locale and set it as the default locale
+    let system_locale = sys_locale::get_locale().unwrap_or("en".to_string());
+    rust_i18n::set_locale(&system_locale);
+    debug!("Current system locale is {system_locale}");
+
+    if let Some(shell) = opt.gen_completion {
+        let cmd = &mut CommandLineArgs::command();
+        clap_complete::generate(shell, cmd, clap::crate_name!(), &mut io::stdout());
+        return Ok(());
+    }
+
+    if opt.gen_manpage {
+        let man = clap_mangen::Man::new(CommandLineArgs::command());
+        man.render(&mut io::stdout())?;
+        return Ok(());
+    }
+
+    for (key, value) in opt.env_variables() {
+        unsafe { env::set_var(key, value) };
+    }
+
+    if opt.edit_config() {
+        Config::edit()?;
+        return Ok(());
+    };
+
+    if opt.show_config_reference() {
+        print!("{}", config::EXAMPLE_CONFIG);
+        return Ok(());
+    }
+
+    let config = Config::load(opt)?;
+    // Update the logger with the full filter directives.
+    update_tracing(&reload_handle, &config.tracing_filter_directives())?;
+    set_title(config.set_title());
+    display_time(config.display_time());
+    set_desktop_notifications(config.notify_each_step());
+    set_wsl_use_windows_path(config.wsl_use_windows_path())?;
+
+    debug!("Version: {}", crate_version!());
+    debug!("OS: {}", env!("TARGET"));
+    debug!("{:?}", env::args());
+    debug!("Binary path: {:?}", env::current_exe());
+    debug!("self-update Feature Enabled: {:?}", cfg!(feature = "self-update"));
+    debug!("Configuration: {:?}", config);
+
+    if config.run_in_tmux() && env::var("TOPGRADE_INSIDE_TMUX").is_err() {
+        #[cfg(unix)]
+        {
+            tmux::run_in_tmux(config.tmux_config()?)?;
+            return Ok(());
+        }
+    }
+
+    // Some steps (like mise or pi) have different behavior when ran in a project directory.
+    //  Since Topgrade only handles global updates, run all commands in a temporary directory.
+    let temp_cwd = TempCwd::new()?;
+    OLD_CWD.set(temp_cwd.old_cwd.clone()).unwrap();
+
+    let elevated = is_elevated();
+
+    #[cfg(unix)]
+    if !config.allow_root() && elevated {
+        print_warning(t!(
+            "Topgrade should not be run as root, it will run commands with sudo or equivalent where needed."
+        ));
+        if !prompt_yesno(&t!("Continue?"))? {
+            exit(1)
+        }
+    }
+
+    let sudo = match config.sudo_command() {
+        Some(kind) => Sudo::new(kind),
+        None if elevated => Sudo::new(SudoKind::Null),
+        None => Sudo::detect(),
+    };
+    debug!("Sudo: {:?}", sudo);
+
+    let (sudo, sudo_err) = match sudo {
+        Ok(sudo) => (Some(sudo), None),
+        Err(e) => (None, Some(e)),
+    };
+
+    #[cfg(target_os = "linux")]
+    let distribution = linux::Distribution::detect();
+
+    let run_type = config.run_type();
+    let ctx = execution_context::ExecutionContext::new(
+        run_type,
+        sudo,
+        &config,
+        #[cfg(target_os = "linux")]
+        &distribution,
+    );
+    let mut runner = runner::Runner::new(&ctx);
+
+    if !breaking_changes::should_skip() {
+        breaking_changes::run()?;
+    }
+
+    step::Step::SelfUpdate.run(&mut runner, &ctx)?;
+
+    #[cfg(windows)]
+    let _self_rename = if config.self_rename() {
+        Some(crate::self_renamer::SelfRenamer::create()?)
+    } else {
+        None
+    };
+
+    if let Some(sudo) = ctx.sudo()
+        && (config.pre_sudo() || (config.sudo_loop() && sudo.can_refresh()))
+    {
+        sudo.elevate(&ctx)?;
+    }
+
+    // Held until `run()` returns — dropping would stop the background thread.
+    let _sudo_loop_guard = spawn_sudo_loop(&ctx, &config)?;
+
+    if let Some(commands) = config.pre_commands() {
+        for (name, command) in commands {
+            generic::run_custom_command(name, command, &ctx)?;
+        }
+    }
+
+    for step in config.steps()? {
+        match step.run(&mut runner, &ctx) {
+            Ok(()) => (),
+            Err(error)
+                if error
+                    .downcast_ref::<io::Error>()
+                    .is_some_and(|e| e.kind() == io::ErrorKind::Interrupted) =>
+            {
+                println!();
+                debug!("Interrupted (possibly with 'q' during retry prompt). Printing summary.");
+                break;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    let mut failed = false;
+
+    let report = runner.report();
+    if !report.is_empty() {
+        print_separator(t!("Summary"));
+
+        let mut skipped_missing_sudo = false;
+
+        for (key, result) in report {
+            if !failed && result.failed() {
+                failed = true;
+            }
+            if let StepResult::SkippedMissingSudo = result {
+                skipped_missing_sudo = true;
+            }
+            print_result(key, result);
+        }
+
+        if skipped_missing_sudo {
+            print_warning(t!(
+                "\nSome steps were skipped as sudo or equivalent could not be found."
+            ));
+            // Steps can only fail with SkippedMissingSudo if sudo is None,
+            // therefore we must have a sudo_err
+            match sudo_err.unwrap() {
+                SudoCreateError::CannotFindBinary => {
+                    #[cfg(unix)]
+                    print_warning(t!(
+                        "Install one of `sudo`, `doas`, `pkexec`, `run0` or `please` to run these steps."
+                    ));
+
+                    // If this Windows version supported Windows Sudo, the error would have been WinSudoDisabled
+                    #[cfg(windows)]
+                    print_warning(t!("Install gsudo to run these steps."));
+                }
+                #[cfg(windows)]
+                SudoCreateError::WinSudoDisabled => {
+                    print_warning(t!(
+                        "Install gsudo or enable Windows Sudo to run these steps.\nFor Windows Sudo, the default 'In a new window' mode is not supported as it prevents Topgrade from waiting for commands to finish. Please configure it to use 'Inline' mode instead.\nGo to https://go.microsoft.com/fwlink/?linkid=2257346 to learn more."
+                    ));
+                }
+                #[cfg(windows)]
+                SudoCreateError::WinSudoNewWindowMode => {
+                    print_warning(t!(
+                        "Windows Sudo was found, but it is set to 'In a new window' mode, which prevents Topgrade from waiting for commands to finish. Please configure it to use 'Inline' mode instead.\nGo to https://go.microsoft.com/fwlink/?linkid=2257346 to learn more."
+                    ));
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    if config.show_distribution_summary()
+        && let Ok(distribution) = &distribution
+    {
+        distribution.show_summary();
+    }
+
+    if let Some(commands) = config.post_commands() {
+        for (name, command) in commands {
+            let result = generic::run_custom_command(name, command, &ctx);
+            if !failed && result.is_err() {
+                failed = true;
+            }
+        }
+    }
+
+    if config.keep_at_end() {
+        print_info(t!("\n(R)eboot\n(P)oweroff\n(S)hell\n(Q)uit"));
+        loop {
+            match get_key() {
+                Ok(KeyCode::Char('s' | 'S')) => {
+                    run_shell().context("Failed to execute shell")?;
+                }
+                Ok(KeyCode::Char('r' | 'R')) => {
+                    println!("{}", t!("Rebooting..."));
+                    reboot(&ctx).context("Failed to reboot")?;
+                }
+                Ok(KeyCode::Char('p' | 'P')) => {
+                    println!("{}", t!("Shutting down..."));
+                    shutdown(&ctx).context("Failed to shut down")?;
+                }
+                Ok(KeyCode::Char('q' | 'Q')) => (),
+                _ => {
+                    continue;
+                }
+            }
+            break;
+        }
+    }
+
+    let should_notify = match config.notify_end() {
+        config::NotifyEnd::Always => true,
+        config::NotifyEnd::Never => false,
+        config::NotifyEnd::OnFailure => failed,
+    };
+
+    if should_notify {
+        notify_desktop(
+            if failed {
+                t!("Topgrade finished with errors")
+            } else {
+                t!("Topgrade finished successfully")
+            },
+            Some(Duration::from_secs(10)),
+        );
+    }
+
+    if failed { Err(StepFailed.into()) } else { Ok(()) }
+}
+
+fn spawn_sudo_loop(
+    ctx: &execution_context::ExecutionContext,
+    config: &Config,
+) -> Result<Option<std::sync::mpsc::Sender<()>>> {
+    if !config.sudo_loop() {
+        return Ok(None);
+    }
+    let sudo = match ctx.sudo().as_ref() {
+        None => return Ok(None),
+        Some(sudo) => sudo.clone(),
+    };
+    let run_type = ctx.run_type();
+    let interval = Duration::from_secs(config.sudo_loop_interval().into());
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    std::thread::Builder::new()
+        .name("sudo-loop".into())
+        .spawn(move || {
+            loop {
+                match rx.recv_timeout(interval) {
+                    Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        if let Err(err) = sudo.refresh(run_type) {
+                            print_warning(format!("Failed to refresh sudo credentials: {err:?}"));
+                        }
+                    }
+                }
+            }
+        })
+        .wrap_err("failed to spawn sudo-loop thread")?;
+    Ok(Some(tx))
+}
+
+fn main() {
+    match run() {
+        Ok(()) => {
+            exit(0);
+        }
+        Err(error) => {
+            let skip_print = (error.downcast_ref::<StepFailed>().is_some())
+                || (error
+                    .downcast_ref::<io::Error>()
+                    .filter(|io_error| io_error.kind() == io::ErrorKind::Interrupted)
+                    .is_some());
+
+            if !skip_print {
+                // The `Debug` implementation of `eyre::Result` prints a multi-line
+                // error message that includes all the 'causes' added with
+                // `.with_context(...)` calls.
+                println!("{}", t!("Error: {error}", error = format!("{:?}", error)));
+            }
+            exit(1);
+        }
+    }
+}

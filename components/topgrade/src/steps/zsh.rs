@@ -1,0 +1,245 @@
+use std::env;
+use std::path::{Path, PathBuf};
+
+use color_eyre::eyre::Result;
+use tracing::debug;
+use walkdir::WalkDir;
+
+use crate::HOME_DIR;
+use crate::XDG_DIRS;
+use crate::command::CommandExt;
+use crate::execution_context::ExecutionContext;
+use crate::executor::Executor;
+use crate::git::RepoStep;
+use crate::terminal::print_separator;
+use crate::utils::{PathExt, require};
+use etcetera::base_strategy::BaseStrategy;
+
+/// Build an interactive `zsh -i -c` invocation with a trailing `exit $?`.
+///
+/// `zsh -i -c` execs (rather than forks) its last command, so an external final command leaves
+/// the tty foreground process group pointing at a dead pgrp. Forcing the builtin `exit` to be the
+/// last command sidesteps that. Drop this helper and restore plain `execute` once zsh fixes it.
+fn execute_interactive_zsh(ctx: &ExecutionContext, zsh: &Path, command: &str) -> Executor {
+    let script = format!("{command}; exit $?");
+    let mut exec = ctx.execute(zsh);
+    exec.args(["-i", "-c", &script]);
+    exec
+}
+
+pub fn run_zr(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+
+    require("zr")?;
+
+    print_separator("zr");
+
+    execute_interactive_zsh(ctx, &zsh, "zr +update").status_checked()
+}
+
+fn zdotdir() -> PathBuf {
+    env::var("ZDOTDIR").map_or_else(|_| HOME_DIR.clone(), PathBuf::from)
+}
+
+pub fn zshrc() -> PathBuf {
+    zdotdir().join(".zshrc")
+}
+
+enum AntidoteUpdate {
+    Shell,
+    Source(PathBuf),
+}
+
+pub fn run_antidote(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+    let update = if antidote_available_in_shell(ctx, &zsh) {
+        AntidoteUpdate::Shell
+    } else {
+        let mut antidote = zdotdir().join(".antidote").require()?;
+        antidote.push("antidote.zsh");
+        AntidoteUpdate::Source(antidote)
+    };
+
+    print_separator("antidote");
+
+    match update {
+        // Commands handed to an *interactive* zsh must end on a builtin (#2158).
+        AntidoteUpdate::Shell => ctx
+            .execute(zsh)
+            .args(["-i", "-c", "antidote update; exit $?"])
+            .status_checked(),
+        AntidoteUpdate::Source(antidote) => ctx
+            .execute(zsh)
+            .args(["-c", r#"source "$1" && antidote update"#, "zsh"])
+            .arg(&antidote)
+            .status_checked(),
+    }
+}
+
+fn antidote_available_in_shell(ctx: &ExecutionContext, zsh: &Path) -> bool {
+    // Commands handed to an *interactive* zsh must end on a builtin (#2158).
+    ctx.execute(zsh)
+        .always()
+        .args(["-i", "-c", "command -v antidote"])
+        .output_checked()
+        .is_ok()
+}
+
+pub fn run_antibody(ctx: &ExecutionContext) -> Result<()> {
+    require("zsh")?;
+    let antibody = require("antibody")?;
+
+    print_separator("antibody");
+
+    ctx.execute(antibody).arg("update").status_checked()
+}
+
+pub fn run_antigen(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+    env::var("ADOTDIR")
+        .map_or_else(|_| HOME_DIR.join("antigen.zsh"), PathBuf::from)
+        .require()?;
+
+    print_separator("antigen");
+
+    execute_interactive_zsh(ctx, &zsh, "antigen selfupdate ; antigen update").status_checked()
+}
+
+pub fn run_zgenom(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+    env::var("ZGEN_SOURCE")
+        .map_or_else(|_| HOME_DIR.join(".zgenom"), PathBuf::from)
+        .require()?;
+
+    print_separator("zgenom");
+
+    execute_interactive_zsh(ctx, &zsh, "zgenom selfupdate && zgenom update").status_checked()
+}
+
+pub fn run_zplug(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+
+    env::var("ZPLUG_HOME")
+        .map_or_else(|_| HOME_DIR.join(".zplug"), PathBuf::from)
+        .require()?;
+
+    print_separator("zplug");
+
+    ctx.execute(zsh).args(["-i", "-c", "zplug update"]).status_checked()
+}
+
+pub fn run_zinit(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+
+    env::var("ZINIT_HOME")
+        .map_or_else(|_| XDG_DIRS.data_dir().join("zinit"), PathBuf::from)
+        .require()?;
+
+    print_separator("zinit");
+
+    execute_interactive_zsh(ctx, &zsh, "zinit self-update && zinit update --all").status_checked()
+}
+
+pub fn run_zi(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+
+    HOME_DIR.join(".zi").require()?;
+
+    print_separator("zi");
+
+    execute_interactive_zsh(ctx, &zsh, "zi self-update && zi update --all").status_checked()
+}
+
+pub fn run_zim(ctx: &ExecutionContext) -> Result<()> {
+    let zsh = require("zsh")?;
+    env::var("ZIM_HOME")
+        .or_else(|_| {
+            ctx.execute("zsh")
+                .always()
+                // TODO: Should these be quoted?
+                .args(["-c", "[[ -n ${ZIM_HOME} ]] && print -n ${ZIM_HOME}"])
+                .output_checked_utf8()
+                .map(|o| o.stdout)
+        })
+        .map_or_else(|_| HOME_DIR.join(".zim"), PathBuf::from)
+        .require()?;
+
+    print_separator("zim");
+
+    ctx.execute(zsh)
+        .args(["-i", "-c", "zimfw upgrade && zimfw update"])
+        .status_checked()
+}
+
+pub fn run_oh_my_zsh(ctx: &ExecutionContext) -> Result<()> {
+    require("zsh")?;
+
+    // When updating `oh-my-zsh` on a remote machine through topgrade, the
+    // following processes will be created:
+    //
+    // SSH -> ZSH -> ZSH ($SHELL) -> topgrade -> ZSH
+    //
+    // The first ZSH process, won't source zshrc (as it is a login shell),
+    // and thus it won't have the ZSH environment variable, as a result, the
+    // children processes won't get it either, so we source the zshrc and set
+    // the ZSH variable for topgrade here.
+    if ctx.under_ssh() {
+        let res_env_zsh = ctx
+            .execute("zsh")
+            .always()
+            .args(["-ic", "print -rn -- ${ZSH:?}"])
+            .output_checked_utf8();
+
+        // this command will fail if `ZSH` is not set
+        if let Ok(output) = res_env_zsh {
+            let env_zsh = output.stdout;
+            debug!("Oh-my-zsh: under SSH, setting ZSH={}", env_zsh);
+            unsafe { env::set_var("ZSH", env_zsh) };
+        }
+    }
+
+    let oh_my_zsh = env::var("ZSH")
+        .map(PathBuf::from)
+        // default to `~/.oh-my-zsh`
+        .unwrap_or(HOME_DIR.join(".oh-my-zsh"))
+        .require()?;
+
+    print_separator("Oh My Zsh");
+
+    let custom_dir = env::var::<_>("ZSH_CUSTOM")
+        .or_else(|_| {
+            ctx.execute("zsh")
+                .always()
+                // TODO: Should these be quoted?
+                .args(["-c", "test $ZSH_CUSTOM && echo -n $ZSH_CUSTOM"])
+                .output_checked_utf8()
+                .map(|o| o.stdout)
+        })
+        .map(PathBuf::from)
+        .unwrap_or_else(|e| {
+            let default_path = oh_my_zsh.join("custom");
+            debug!(
+                "Running zsh returned {e}. Using default path: {}",
+                default_path.display()
+            );
+            default_path
+        });
+
+    debug!("oh-my-zsh custom dir: {}", custom_dir.display());
+
+    let mut custom_repos = RepoStep::try_new()?;
+
+    for entry in WalkDir::new(custom_dir).max_depth(2) {
+        let entry = entry?;
+        custom_repos.insert_if_repo(ctx, entry.path());
+    }
+
+    custom_repos.remove(&oh_my_zsh);
+    ctx.execute("zsh")
+        .arg(oh_my_zsh.join("tools/upgrade.sh"))
+        // oh-my-zsh returns 80 when it is already updated and no changes pulled
+        // in this update.
+        // See this comment: https://github.com/r-darwish/topgrade/issues/569#issuecomment-736756731
+        // for more information.
+        .status_checked_with_codes(&[80])
+}

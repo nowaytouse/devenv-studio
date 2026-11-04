@@ -1,0 +1,258 @@
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+use std::{fmt::Display, rc::Rc, str::FromStr};
+
+use color_eyre::eyre::{OptionExt, Result, WrapErr, eyre};
+use regex::Regex;
+use rust_i18n::t;
+use strum::EnumString;
+use tracing::{debug, error};
+
+use crate::command::CommandExt;
+use crate::execution_context::ExecutionContext;
+use crate::step::Step;
+use crate::terminal::print_separator;
+use crate::{error::SkipStep, output_changed_message, utils};
+
+#[derive(Debug, Copy, Clone, EnumString)]
+#[strum(serialize_all = "lowercase")]
+enum BoxStatus {
+    PowerOff,
+    Running,
+    Saved,
+    Aborted,
+}
+
+impl BoxStatus {
+    fn powered_on(self) -> bool {
+        matches!(self, BoxStatus::Running)
+    }
+}
+
+#[derive(Debug)]
+pub struct VagrantBox {
+    path: Rc<Path>,
+    name: String,
+    initial_status: BoxStatus,
+}
+
+impl VagrantBox {
+    pub fn smart_name(&self) -> Result<&str> {
+        Ok(if self.name == "default" {
+            self.path
+                .file_name()
+                .ok_or_eyre("Invalid vagrant path")?
+                .to_str()
+                .ok_or_eyre("Non-UTF-8 vagrant path")?
+        } else {
+            &self.name
+        })
+    }
+}
+
+impl Display for VagrantBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} @ {}", self.name, self.path.display())
+    }
+}
+
+struct Vagrant {
+    path: PathBuf,
+}
+
+impl Vagrant {
+    fn get_boxes(&self, ctx: &ExecutionContext, directory: &str) -> Result<Vec<VagrantBox>> {
+        let path: Rc<Path> = Path::new(directory).into();
+
+        let output = ctx
+            .execute(&self.path)
+            .always()
+            .arg("status")
+            .current_dir(directory)
+            .output_checked_utf8()?;
+        debug!("Vagrant output in {}: {}", directory, output);
+
+        let boxes = output
+            .stdout
+            .split('\n')
+            .skip(2)
+            .take_while(|line| !(line.is_empty() || line.starts_with('\r')))
+            .map(|line| {
+                debug!("Vagrant line: {:?}", line);
+                let mut elements = line.split_whitespace();
+
+                let name = elements
+                    .next()
+                    .ok_or_else(|| eyre!(output_changed_message!("vagrant status", "no name")))?
+                    .to_string();
+                let initial_status = BoxStatus::from_str(
+                    elements
+                        .next()
+                        .ok_or_else(|| eyre!(output_changed_message!("vagrant status", "no status")))?,
+                )
+                .wrap_err_with(|| output_changed_message!("vagrant status", "invalid status"))?;
+
+                let vagrant_box = VagrantBox {
+                    name,
+                    path: path.clone(),
+                    initial_status,
+                };
+                debug!("{:?}", vagrant_box);
+                Ok(vagrant_box)
+            })
+            .collect::<Result<Vec<VagrantBox>>>()?;
+
+        Ok(boxes)
+    }
+
+    fn temporary_power_on<'a>(
+        &'a self,
+        vagrant_box: &'a VagrantBox,
+        ctx: &'a ExecutionContext,
+    ) -> Result<TemporaryPowerOn<'a>> {
+        TemporaryPowerOn::create(&self.path, vagrant_box, ctx)
+    }
+}
+
+struct TemporaryPowerOn<'a> {
+    vagrant: &'a Path,
+    vagrant_box: &'a VagrantBox,
+    ctx: &'a ExecutionContext<'a>,
+}
+
+impl<'a> TemporaryPowerOn<'a> {
+    fn create(vagrant: &'a Path, vagrant_box: &'a VagrantBox, ctx: &'a ExecutionContext<'a>) -> Result<Self> {
+        let subcommand = match vagrant_box.initial_status {
+            BoxStatus::PowerOff | BoxStatus::Aborted => "up",
+            BoxStatus::Saved => "resume",
+            BoxStatus::Running => unreachable!(),
+        };
+
+        ctx.execute(vagrant)
+            .args([subcommand, &vagrant_box.name])
+            .current_dir(vagrant_box.path.clone())
+            .status_checked()?;
+        Ok(TemporaryPowerOn {
+            vagrant,
+            vagrant_box,
+            ctx,
+        })
+    }
+}
+
+impl Drop for TemporaryPowerOn<'_> {
+    fn drop(&mut self) {
+        let subcommand = if self.ctx.config().vagrant_always_suspend().unwrap_or(false) {
+            "suspend"
+        } else {
+            match self.vagrant_box.initial_status {
+                BoxStatus::PowerOff | BoxStatus::Aborted => "halt",
+                BoxStatus::Saved => "suspend",
+                BoxStatus::Running => unreachable!(),
+            }
+        };
+
+        println!();
+        self.ctx
+            .execute(self.vagrant)
+            .args([subcommand, &self.vagrant_box.name])
+            .current_dir(self.vagrant_box.path.clone())
+            .status_checked()
+            .ok();
+    }
+}
+
+pub fn collect_boxes(ctx: &ExecutionContext) -> Result<Vec<VagrantBox>> {
+    let directories = utils::require_option(
+        ctx.config().vagrant_directories(),
+        String::from(t!("No Vagrant directories were specified in the configuration file")),
+    )?;
+    let vagrant = Vagrant {
+        path: utils::require("vagrant")?,
+    };
+
+    print_separator("Vagrant");
+    println!("{}", t!("Collecting Vagrant boxes"));
+
+    let mut result = Vec::new();
+
+    for directory in directories {
+        match vagrant.get_boxes(ctx, directory) {
+            Ok(mut boxes) => {
+                result.append(&mut boxes);
+            }
+            Err(e) => error!("Error collecting vagrant boxes from {}: {}", directory, e),
+        };
+    }
+
+    Ok(result)
+}
+
+pub fn topgrade_vagrant_box(ctx: &ExecutionContext, vagrant_box: &VagrantBox) -> Result<()> {
+    let vagrant = Vagrant {
+        path: utils::require("vagrant")?,
+    };
+
+    let separator = format!("Vagrant ({})", vagrant_box.smart_name()?);
+    let mut _poweron = None;
+    if !vagrant_box.initial_status.powered_on() {
+        if !(ctx.config().vagrant_power_on().unwrap_or(true)) {
+            return Err(SkipStep(format!(
+                "{}",
+                t!("Skipping powered off box {vagrant_box}", vagrant_box = vagrant_box)
+            ))
+            .into());
+        } else {
+            print_separator(separator);
+            _poweron = Some(vagrant.temporary_power_on(vagrant_box, ctx)?);
+        }
+    } else {
+        print_separator(separator);
+    }
+    let mut command = format!(
+        "env TOPGRADE_PREFIX={} topgrade",
+        shell_words::quote(vagrant_box.smart_name()?)
+    );
+    if ctx.config().yes(Step::Vagrant) {
+        command.push_str(" -y");
+    }
+
+    ctx.execute(&vagrant.path)
+        .current_dir(&vagrant_box.path)
+        .args(["ssh", "-c", &command])
+        .status_checked()
+}
+
+pub fn upgrade_vagrant_boxes(ctx: &ExecutionContext) -> Result<()> {
+    let vagrant = utils::require("vagrant")?;
+    print_separator(t!("Vagrant boxes"));
+
+    let outdated = ctx
+        .execute(&vagrant)
+        .always()
+        .args(["box", "outdated", "--global"])
+        .output_checked_utf8()?;
+
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\* '(.*?)' for '(.*?)' is outdated").unwrap());
+
+    let mut found = false;
+    for ele in RE.captures_iter(&outdated.stdout) {
+        found = true;
+        let [box_, provider] = ele.extract().1;
+        let _ = ctx
+            .execute(&vagrant)
+            .args(["box", "update", "--box"])
+            .arg(box_)
+            .arg("--provider")
+            .arg(provider)
+            .status_checked();
+    }
+
+    if !found {
+        println!("{}", t!("No outdated boxes"));
+    } else {
+        ctx.execute(&vagrant).args(["box", "prune"]).status_checked()?;
+    }
+
+    Ok(())
+}

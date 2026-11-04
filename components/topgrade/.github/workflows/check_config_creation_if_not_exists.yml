@@ -1,0 +1,29 @@
+name: Check config file creation if not exists
+
+on:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  TestConfig:
+    if: github.repository == 'topgrade-rs/topgrade'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - run: |
+          CONFIG_PATH=~/.config/topgrade.toml;
+          if [ -f "$CONFIG_PATH" ]; then rm $CONFIG_PATH; fi
+          cargo build;
+          TOPGRADE_SKIP_BRKC_NOTIFY=true ./target/debug/topgrade --dry-run --only system;
+          stat $CONFIG_PATH;

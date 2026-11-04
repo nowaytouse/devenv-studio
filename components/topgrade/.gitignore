@@ -1,0 +1,34 @@
+# JetBrains IDEs
+.idea/
+
+# Visual Studio
+.vs/
+
+# Visual Studio Code
+.vscode/
+
+# Generic build outputs
+/build
+
+# Specific for some languages like Rust
+/target
+
+# LLVM profiling output
+*.profraw
+
+# Backup files for any .rs files in the project
+**/*.rs.bk
+
+# Machine-local profile state and Python bytecode
+/profiles/macos/local/
+/profiles/macos/.state/
+**/__pycache__/
+*.pyc
+
+# Audited guard-owned npm package data, not editable development projects.
+/profiles/macos/share/npm-security/node_modules/*
+!/profiles/macos/share/npm-security/node_modules/
+!/profiles/macos/share/npm-security/node_modules/undici/
+!/profiles/macos/share/npm-security/node_modules/undici/**
+!/profiles/macos/share/npm-security/node_modules/ip-address/
+!/profiles/macos/share/npm-security/node_modules/ip-address/**

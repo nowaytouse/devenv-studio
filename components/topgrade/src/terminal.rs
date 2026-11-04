@@ -1,0 +1,376 @@
+use std::cmp::{max, min};
+use std::env;
+use std::io::{self, Write};
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
+
+use chrono::{Local, Timelike};
+use color_eyre::Result;
+use color_eyre::eyre;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::OptionExt;
+use console::{Term, measure_text_width, style};
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind, read};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use notify_rust::{Notification, Timeout};
+use rust_i18n::t;
+use tracing::{debug, error};
+
+use crate::OLD_CWD;
+use crate::command::CommandExt;
+use crate::runner::StepResult;
+#[cfg(unix)]
+use crate::utils::which;
+#[cfg(windows)]
+use crate::utils::which_one;
+
+static TERMINAL: LazyLock<Mutex<Terminal>> = LazyLock::new(|| Mutex::new(Terminal::new()));
+
+#[cfg(unix)]
+pub fn shell() -> Result<PathBuf> {
+    if let Ok(shell) = env::var("SHELL") {
+        which(shell)?.ok_or_eyre("Expected binary from `SHELL` environment variable to be available")
+    } else {
+        which("sh")?.ok_or_eyre("Expected `sh` to be available")
+    }
+}
+
+#[cfg(windows)]
+pub fn shell() -> Result<PathBuf> {
+    which_one(["pwsh", "powershell"])?.ok_or_eyre("Expected `pwsh` or `powershell` to be available")
+}
+
+#[expect(clippy::disallowed_methods)]
+pub fn run_shell() -> Result<()> {
+    Command::new(shell()?)
+        .env("IN_TOPGRADE", "1")
+        .current_dir(OLD_CWD.get().expect("OLD_CWD should be set at this point"))
+        .status_checked()
+}
+
+struct Terminal {
+    width: Option<u16>,
+    prefix: String,
+    term: Term,
+    set_title: bool,
+    display_time: bool,
+    desktop_notification: bool,
+}
+
+struct RawTerminalMode;
+
+impl RawTerminalMode {
+    fn enter() -> io::Result<Self> {
+        enable_raw_mode()?;
+        let guard = Self;
+        crossterm::execute!(io::stdout(), EnableBracketedPaste)?;
+        Ok(guard)
+    }
+}
+
+impl Drop for RawTerminalMode {
+    fn drop(&mut self) {
+        crossterm::execute!(io::stdout(), DisableBracketedPaste).unwrap();
+        disable_raw_mode().unwrap();
+    }
+}
+
+impl Terminal {
+    fn new() -> Self {
+        let term = Term::stdout();
+        Self {
+            width: term.size_checked().map(|(_, w)| w),
+            term,
+            prefix: env::var("TOPGRADE_PREFIX").map_or_else(|_| String::new(), |prefix| format!("({prefix}) ")),
+            set_title: true,
+            display_time: true,
+            desktop_notification: false,
+        }
+    }
+
+    fn set_desktop_notifications(&mut self, desktop_notifications: bool) {
+        self.desktop_notification = desktop_notifications;
+    }
+
+    fn set_title(&mut self, set_title: bool) {
+        self.set_title = set_title;
+    }
+
+    fn display_time(&mut self, display_time: bool) {
+        self.display_time = display_time;
+    }
+
+    fn notify_desktop<P: AsRef<str>>(&self, message: P, timeout: Option<Duration>) {
+        debug!("Desktop notification: {}", message.as_ref());
+        let mut notification = Notification::new();
+        notification
+            .summary("Topgrade")
+            .body(message.as_ref())
+            .appname("topgrade");
+
+        if let Some(timeout) = timeout {
+            notification.timeout(Timeout::Milliseconds(timeout.as_millis() as u32));
+        }
+        notification.show().ok();
+    }
+
+    fn print_separator<P: AsRef<str>>(&mut self, message: P) {
+        if self.set_title {
+            self.term
+                .set_title(format!("{}Topgrade - {}", self.prefix, message.as_ref()));
+        }
+
+        if self.desktop_notification {
+            self.notify_desktop(message.as_ref(), Some(Duration::from_secs(5)));
+        }
+
+        let now = Local::now();
+        let message = if self.display_time {
+            format!(
+                "{}{:02}:{:02}:{:02} - {}",
+                self.prefix,
+                now.hour(),
+                now.minute(),
+                now.second(),
+                message.as_ref()
+            )
+        } else {
+            String::from(message.as_ref())
+        };
+
+        match self.width {
+            Some(width) => {
+                self.term
+                    .write_fmt(format_args!(
+                        "{}\n",
+                        style(format_args!(
+                            "\n── {} {:─^border$}",
+                            message,
+                            "",
+                            border = max(
+                                2,
+                                min(80, width as usize)
+                                    .checked_sub(4)
+                                    .and_then(|e| e.checked_sub(measure_text_width(&message)))
+                                    .unwrap_or(0)
+                            )
+                        ))
+                        .bold()
+                    ))
+                    .ok();
+            }
+            None => {
+                self.term.write_fmt(format_args!("―― {message} ――\n")).ok();
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn print_error<P: AsRef<str>, Q: AsRef<str>>(&mut self, key: Q, message: P) {
+        let key = key.as_ref();
+        let message = message.as_ref();
+        self.term
+            .write_fmt(format_args!(
+                "{} {}",
+                style(format!("{}", t!("{key} failed:", key = key))).red().bold(),
+                message
+            ))
+            .ok();
+    }
+
+    #[allow(dead_code)]
+    fn print_warning<P: AsRef<str>>(&mut self, message: P) {
+        let message = message.as_ref();
+        self.term
+            .write_fmt(format_args!("{}\n", style(message).yellow().bold()))
+            .ok();
+    }
+
+    #[allow(dead_code)]
+    fn print_info<P: AsRef<str>>(&mut self, message: P) {
+        let message = message.as_ref();
+        self.term
+            .write_fmt(format_args!("{}\n", style(message).blue().bold()))
+            .ok();
+    }
+
+    fn print_result<P: AsRef<str>>(&mut self, key: P, result: &StepResult) {
+        let key = key.as_ref();
+
+        self.term
+            .write_fmt(format_args!(
+                "{}: {}\n",
+                key,
+                match result {
+                    StepResult::Success => format!("{}", style(t!("OK")).bold().green()),
+                    StepResult::Failure => format!("{}", style(t!("FAILED")).bold().red()),
+                    StepResult::Ignored => format!("{}", style(t!("IGNORED")).bold().yellow()),
+                    StepResult::SkippedMissingSudo => format!(
+                        "{}: {}",
+                        style(t!("SKIPPED")).bold().yellow(),
+                        t!("Could not find sudo")
+                    ),
+                    StepResult::Skipped(reason) => format!("{}: {}", style(t!("SKIPPED")).bold().blue(), reason),
+                }
+            ))
+            .ok();
+    }
+
+    #[allow(dead_code)]
+    fn prompt_yesno(&mut self, question: &str) -> Result<bool, io::Error> {
+        self.term
+            .write_fmt(format_args!(
+                "{}",
+                style(format!("{question} {}", t!("(Y)es/(N)o"))).yellow().bold()
+            ))
+            .ok();
+
+        loop {
+            match self.get_char()? {
+                KeyCode::Char('y' | 'Y') => break Ok(true),
+                KeyCode::Char('n' | 'N') | KeyCode::Enter => break Ok(false),
+                _ => (),
+            }
+        }
+    }
+
+    fn should_retry(&mut self, step_name: &str) -> eyre::Result<ShouldRetry> {
+        if self.width.is_none() {
+            return Ok(ShouldRetry::No);
+        }
+
+        if self.set_title {
+            self.term.set_title(format!("Topgrade - {}", t!("Awaiting user")));
+        }
+
+        if self.desktop_notification {
+            self.notify_desktop(format!("{}", t!("{step_name} failed", step_name = step_name)), None);
+        }
+
+        let prompt_inner = style(format!("{}{}", self.prefix, t!("Retry? (y)es/(N)o/(s)hell/(q)uit")))
+            .yellow()
+            .bold();
+
+        let answer = loop {
+            self.term.write_fmt(format_args!("\n{prompt_inner}")).ok();
+            match self.get_char() {
+                Ok(KeyCode::Char('y' | 'Y')) => break Ok(ShouldRetry::Yes),
+                Ok(KeyCode::Char('s' | 'S')) => {
+                    println!(
+                        "\n\n{}\n",
+                        t!("Dropping you to shell. Fix what you need and then exit the shell.")
+                    );
+                    if let Err(err) = run_shell().context("Failed to run shell") {
+                        self.term.write_fmt(format_args!("{err:?}\n{prompt_inner}")).ok();
+                    } else {
+                        break Ok(ShouldRetry::Yes);
+                    }
+                }
+                Ok(KeyCode::Char('n' | 'N') | KeyCode::Enter) => break Ok(ShouldRetry::No),
+                Err(e) => {
+                    if let io::ErrorKind::Interrupted = e.kind() {
+                        println!();
+                        error!("Interrupted while reading from terminal: {}", e);
+                        continue;
+                    }
+                    error!("Error reading from terminal: {}", e);
+                    break Ok(ShouldRetry::No);
+                }
+                Ok(KeyCode::Char('q' | 'Q')) => {
+                    break Ok(ShouldRetry::Quit);
+                }
+                _ => (),
+            }
+        };
+
+        self.term.write_str("\n").ok();
+
+        answer
+    }
+
+    fn get_char(&self) -> io::Result<KeyCode> {
+        let _raw_mode_guard = RawTerminalMode::enter()?;
+        loop {
+            let Event::Key(key) = read()? else { continue };
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            break Ok(key.code);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum ShouldRetry {
+    Yes,
+    No,
+    Quit,
+}
+
+impl Default for Terminal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn should_retry(step_name: &str) -> eyre::Result<ShouldRetry> {
+    TERMINAL.lock().unwrap().should_retry(step_name)
+}
+
+pub fn print_separator<P: AsRef<str>>(message: P) {
+    TERMINAL.lock().unwrap().print_separator(message);
+}
+
+#[allow(dead_code)]
+pub fn print_error<P: AsRef<str>, Q: AsRef<str>>(key: Q, message: P) {
+    TERMINAL.lock().unwrap().print_error(key, message);
+}
+
+#[allow(dead_code)]
+pub fn print_warning<P: AsRef<str>>(message: P) {
+    TERMINAL.lock().unwrap().print_warning(message);
+}
+
+#[allow(dead_code)]
+pub fn print_info<P: AsRef<str>>(message: P) {
+    TERMINAL.lock().unwrap().print_info(message);
+}
+
+pub fn print_result<P: AsRef<str>>(key: P, result: &StepResult) {
+    TERMINAL.lock().unwrap().print_result(key, result);
+}
+
+/// Tells whether the terminal is dumb.
+pub fn is_dumb() -> bool {
+    TERMINAL.lock().unwrap().width.is_none()
+}
+
+pub fn get_key() -> io::Result<KeyCode> {
+    TERMINAL.lock().unwrap().get_char()
+}
+
+pub fn set_title(set_title: bool) {
+    TERMINAL.lock().unwrap().set_title(set_title);
+}
+
+pub fn set_desktop_notifications(desktop_notifications: bool) {
+    TERMINAL
+        .lock()
+        .unwrap()
+        .set_desktop_notifications(desktop_notifications);
+}
+
+#[allow(dead_code)]
+pub fn prompt_yesno(question: &str) -> Result<bool, io::Error> {
+    TERMINAL.lock().unwrap().prompt_yesno(question)
+}
+
+pub fn notify_desktop<P: AsRef<str>>(message: P, timeout: Option<Duration>) {
+    TERMINAL.lock().unwrap().notify_desktop(message, timeout);
+}
+
+pub fn display_time(display_time: bool) {
+    TERMINAL.lock().unwrap().display_time(display_time);
+}

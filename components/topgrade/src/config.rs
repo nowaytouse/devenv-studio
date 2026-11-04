@@ -1,0 +1,2633 @@
+#![allow(dead_code)]
+
+use std::collections::HashSet;
+use std::fs::{File, write};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+use std::{env, fmt, fs};
+
+use clap::{Parser, ValueEnum};
+use clap_complete::Shell;
+use color_eyre::eyre::Result;
+use color_eyre::eyre::{Context, OptionExt};
+use etcetera::base_strategy::BaseStrategy;
+use indexmap::IndexMap;
+use merge2::Merge;
+use regex::Regex;
+use regex_split::RegexSplit;
+use rust_i18n::t;
+use serde::Deserialize;
+use strum::IntoEnumIterator;
+use tracing::{debug, error};
+
+use crate::execution_context::RunType;
+use crate::step::{DEPRECATED_STEPS, Step};
+use crate::sudo::SudoKind;
+use crate::terminal::print_warning;
+use crate::utils::string_prepend_str;
+
+// TODO: Add i18n to this. Tracking issue: https://github.com/topgrade-rs/topgrade/issues/859
+pub static EXAMPLE_CONFIG: &str = include_str!("../config.example.toml");
+
+/// Topgrade's default log level.
+pub const DEFAULT_LOG_LEVEL: &str = "warn";
+
+#[allow(unused_macros)]
+macro_rules! str_value {
+    ($section:ident, $value:ident) => {
+        pub fn $value(&self) -> Option<&str> {
+            self.config_file
+                .$section
+                .as_ref()
+                .and_then(|section| section.$value.as_deref())
+        }
+    };
+}
+
+pub type Commands = IndexMap<String, String>;
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Include {
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    paths: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Containers {
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    ignored_containers: Option<Vec<String>>,
+    runtime: Option<ContainerRuntime>,
+    system_prune: Option<bool>,
+    use_sudo: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Mandb {
+    enable: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Git {
+    max_concurrency: Option<usize>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    repos: Option<Vec<String>>,
+
+    pull_predefined: Option<bool>,
+
+    fetch_only: Option<bool>,
+
+    fallback_to_fetch_default: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Vagrant {
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    directories: Option<Vec<String>>,
+
+    power_on: Option<bool>,
+    always_suspend: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdatesAutoReboot {
+    Yes,
+    #[default]
+    No,
+    Ask,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Windows {
+    accept_all_updates: Option<bool>,
+    updates_auto_reboot: Option<UpdatesAutoReboot>,
+    self_rename: Option<bool>,
+    open_remotes_in_new_terminal: Option<bool>,
+    wsl_update_pre_release: Option<bool>,
+    wsl_update_use_web_download: Option<bool>,
+    winget_silent_install: Option<bool>,
+    winget_use_sudo: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Python {
+    enable_pip_review: Option<bool>,
+    enable_pip_review_local: Option<bool>,
+    enable_pipupgrade: Option<bool>,
+    pipupgrade_arguments: Option<String>,
+    poetry_force_self_update: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Conda {
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    env_names: Option<Vec<String>>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    env_paths: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Distrobox {
+    use_root: Option<bool>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    containers: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Yarn {
+    use_sudo: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct VitePlus {
+    use_sudo: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Npm {
+    use_sudo: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Skills {
+    package_manager: Option<SkillsPackageManager>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Deno {
+    version: Option<String>,
+    no_delta: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Chezmoi {
+    exclude_encrypted: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Mise {
+    bump: Option<bool>,
+    interactive: Option<bool>,
+    jobs: Option<u32>,
+    verbose: Option<bool>,
+    quiet: Option<bool>,
+    silent: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Firmware {
+    upgrade: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Flatpak {
+    use_sudo: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Pixi {
+    include_release_notes: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Brew {
+    greedy_cask: Option<bool>,
+    greedy_latest: Option<bool>,
+    greedy_auto_updates: Option<bool>,
+    autoremove: Option<bool>,
+    fetch_head: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct GithubCli {
+    skills_updater: Option<PathBuf>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Helm {
+    repository_updater: Option<PathBuf>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Go {
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    gup_exclude: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ArchPackageManager {
+    #[default]
+    Autodetect,
+    Aura,
+    GarudaUpdate,
+    Pacman,
+    Pamac,
+    Paru,
+    Pikaur,
+    Shelly,
+    Trizen,
+    Yay,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillsPackageManager {
+    #[default]
+    #[serde(alias = "npx")]
+    Npm,
+    Pnpm,
+    Bun,
+    Yarn,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContainerRuntime {
+    #[default] // defaults to a popular choice
+    Docker,
+    Podman,
+}
+
+impl fmt::Display for ContainerRuntime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ContainerRuntime::Docker => write!(f, "docker"),
+            ContainerRuntime::Podman => write!(f, "podman"),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, Default, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum NixHandler {
+    #[default]
+    Autodetect,
+    Nh,
+    Vanilla,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Linux {
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    yay_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    aura_aur_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    aura_pacman_arguments: Option<String>,
+    arch_package_manager: Option<ArchPackageManager>,
+    show_arch_news: Option<bool>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    garuda_update_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    trizen_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    pikaur_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    pamac_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    shelly_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    dnf_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    nix_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    nix_env_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    apt_arguments: Option<String>,
+
+    enable_tlmgr: Option<bool>,
+    redhat_distro_sync: Option<bool>,
+    suse_dup: Option<bool>,
+    rpm_ostree: Option<bool>,
+    bootc: Option<bool>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    emerge_sync_flags: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    emerge_update_flags: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    home_manager_arguments: Option<Vec<String>>,
+
+    wsl_use_windows_path: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Composer {
+    self_update: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Vim {
+    force_plug_update: Option<bool>,
+
+    vim_pack_prune: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Misc {
+    allow_root: Option<bool>,
+
+    pre_sudo: Option<bool>,
+
+    sudo_loop: Option<bool>,
+
+    sudo_loop_interval: Option<u16>,
+
+    sudo_command: Option<SudoKind>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    disable: Option<Vec<Step>>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    first: Option<Vec<Step>>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    last: Option<Vec<Step>>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    ignore_failures: Option<Vec<Step>>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    remote_topgrades: Option<Vec<String>>,
+
+    remote_topgrade_path: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    ssh_arguments: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::string_append_opt)]
+    tmux_arguments: Option<String>,
+
+    set_title: Option<bool>,
+
+    display_time: Option<bool>,
+
+    assume_yes: Option<bool>,
+
+    ask_retry: Option<bool>,
+
+    auto_retry: Option<u16>,
+
+    /// TODO: Remove this in favor of ask_retry = false
+    no_retry: Option<bool>,
+
+    show_skipped: Option<bool>,
+
+    run_in_tmux: Option<bool>,
+
+    tmux_session_mode: Option<TmuxSessionMode>,
+
+    cleanup: Option<bool>,
+
+    notify_each_step: Option<bool>,
+
+    /// Deprecated: use `notify_end = "never"` instead
+    skip_notify: Option<bool>,
+
+    notify_end: Option<NotifyEnd>,
+
+    bashit_branch: Option<String>,
+
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    only: Option<Vec<Step>>,
+
+    no_self_update: Option<bool>,
+
+    log_filters: Option<Vec<String>>,
+
+    show_distribution_summary: Option<bool>,
+
+    nix_handler: Option<NixHandler>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, ValueEnum, Default)]
+#[clap(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum TmuxSessionMode {
+    #[default]
+    AttachIfNotInSession,
+    AttachAlways,
+}
+
+/// Controls when the end-of-run desktop notification is sent.
+#[derive(Clone, Copy, Debug, Deserialize, ValueEnum, Default)]
+#[clap(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum NotifyEnd {
+    /// Always send a notification (default)
+    #[default]
+    Always,
+    /// Never send a notification
+    Never,
+    /// Only send a notification if there were failures
+    OnFailure,
+}
+
+pub struct TmuxConfig {
+    pub args: Vec<String>,
+    pub session_mode: TmuxSessionMode,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Lensfun {
+    use_sudo: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct JuliaConfig {
+    startup_file: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Sheldon {
+    quiet: Option<bool>,
+    verbose: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Zigup {
+    target_versions: Option<Vec<String>>,
+    install_dir: Option<String>,
+    path_link: Option<String>,
+    cleanup: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct VscodeConfig {
+    profile: Option<String>,
+    cleanup_obsolete_extensions: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct DoomConfig {
+    aot: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Flutter {
+    force: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Cargo {
+    git: Option<bool>,
+    quiet: Option<bool>,
+    locked: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Rustup {
+    channels: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Pkgfile {
+    enable: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+pub struct Uv {
+    cache_force: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Debug, Merge)]
+#[serde(deny_unknown_fields)]
+/// Configuration file
+pub struct ConfigFile {
+    #[merge(strategy = merge2::option::recursive)]
+    include: Option<Include>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    misc: Option<Misc>,
+
+    #[merge(strategy = crate::utils::merge_strategies::indexmap_merge_opt)]
+    pre_commands: Option<Commands>,
+
+    #[merge(strategy = crate::utils::merge_strategies::indexmap_merge_opt)]
+    post_commands: Option<Commands>,
+
+    #[merge(strategy = crate::utils::merge_strategies::indexmap_merge_opt)]
+    commands: Option<Commands>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    conda: Option<Conda>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    python: Option<Python>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    composer: Option<Composer>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    brew: Option<Brew>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    github_cli: Option<GithubCli>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    helm: Option<Helm>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    linux: Option<Linux>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    mandb: Option<Mandb>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    git: Option<Git>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    go: Option<Go>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    containers: Option<Containers>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    windows: Option<Windows>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    npm: Option<Npm>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    chezmoi: Option<Chezmoi>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    mise: Option<Mise>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    sheldon: Option<Sheldon>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    yarn: Option<Yarn>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    deno: Option<Deno>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    vim: Option<Vim>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    firmware: Option<Firmware>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    flutter: Option<Flutter>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    vagrant: Option<Vagrant>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    flatpak: Option<Flatpak>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    pixi: Option<Pixi>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    distrobox: Option<Distrobox>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    lensfun: Option<Lensfun>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    julia: Option<JuliaConfig>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    zigup: Option<Zigup>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    vscode: Option<VscodeConfig>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    doom: Option<DoomConfig>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    cargo: Option<Cargo>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    rustup: Option<Rustup>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    pkgfile: Option<Pkgfile>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    skills: Option<Skills>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    viteplus: Option<VitePlus>,
+
+    #[merge(strategy = merge2::option::recursive)]
+    uv: Option<Uv>,
+}
+
+fn config_directory() -> PathBuf {
+    #[cfg(unix)]
+    return crate::XDG_DIRS.config_dir();
+
+    #[cfg(windows)]
+    return crate::WINDOWS_DIRS.config_dir();
+}
+
+/// The only purpose of this struct is to deserialize only the `include` field of the config file.
+#[derive(Deserialize, Default, Debug)]
+struct ConfigFileIncludeOnly {
+    include: Option<Include>,
+}
+
+impl ConfigFile {
+    /// Returns the main config file and any additional config files
+    /// 0 = main config file
+    /// 1 = additional config files coming from topgrade.d
+    fn ensure() -> Result<(PathBuf, Vec<PathBuf>)> {
+        Self::ensure_in(&config_directory())
+    }
+
+    fn ensure_in(config_directory: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
+        let mut res = (PathBuf::new(), Vec::new());
+
+        let possible_config_paths = [
+            config_directory.join("topgrade.toml"),
+            config_directory.join("topgrade/topgrade.toml"),
+        ];
+
+        // Search for the main config file
+        for path in &possible_config_paths {
+            if path.exists() {
+                debug!("Configuration at {}", path.display());
+                res.0.clone_from(path);
+                break;
+            }
+        }
+
+        res.1 = Self::find_topgrade_d_configs(config_directory)?;
+
+        // If no config file exists, create a default one in the config directory
+        if !res.0.exists() && res.1.is_empty() {
+            res.0.clone_from(&possible_config_paths[0]);
+            debug!("No configuration exists");
+            if let Some(parent) = res.0.parent() {
+                fs::create_dir_all(parent).wrap_err_with(|| format!("Unable to create {}", parent.display()))?;
+            }
+            write(&res.0, EXAMPLE_CONFIG).map_err(|e| {
+                debug!(
+                    "Unable to write the example configuration file to {}: {}. Using blank config.",
+                    &res.0.display(),
+                    e
+                );
+                e
+            })?;
+        }
+
+        Ok(res)
+    }
+
+    /// Searches topgrade.d for additional config files
+    fn find_topgrade_d_configs(config_directory: &Path) -> Result<Vec<PathBuf>> {
+        let mut res = Vec::new();
+        let dir_to_search = config_directory.join("topgrade.d");
+
+        if !dir_to_search.exists() {
+            debug!("No additional configuration directory exists, skipping");
+            return Ok(res);
+        }
+
+        let entries =
+            fs::read_dir(&dir_to_search).wrap_err_with(|| format!("Unable to read {}", dir_to_search.display()))?;
+
+        for entry in entries {
+            let entry_path = entry?.path();
+
+            if entry_path.is_file() {
+                let file_name = entry_path
+                    .file_name()
+                    .expect("`fs::read_dir` does not return paths ending in `..`")
+                    .to_string_lossy();
+                if file_name.eq_ignore_ascii_case(".DS_Store") {
+                    debug!("Skipping .DS_Store file at {}", entry_path.display());
+                    continue;
+                }
+                debug!(
+                    "Found additional (directory) configuration file at {}",
+                    entry_path.display()
+                );
+                res.push(entry_path);
+            }
+        }
+
+        res.sort();
+
+        Ok(res)
+    }
+
+    /// Read the configuration file.
+    ///
+    /// If the configuration file does not exist, the function returns the default ConfigFile.
+    fn read(config_path: Option<PathBuf>) -> Result<ConfigFile> {
+        let mut result = Self::default();
+
+        let config_path = if let Some(path) = config_path {
+            path
+        } else {
+            let (path, dir_include) = Self::ensure()?;
+
+            /*
+            The Function was called without a config_path, we need
+            to read the include directory before returning the main config path
+            */
+            for include in dir_include {
+                let include_contents = fs::read_to_string(&include).inspect_err(|_| {
+                    error!("Unable to read {}", include.display());
+                })?;
+                let mut include_contents_parsed = toml::from_str(include_contents.as_str()).inspect_err(|_| {
+                    error!("Failed to deserialize {}", include.display());
+                })?;
+
+                result.merge(&mut include_contents_parsed);
+            }
+
+            path
+        };
+
+        if config_path == PathBuf::default() {
+            // Here we expect topgrade.d and consequently result is not empty.
+            // If empty, Self:: ensure() would have created the default config.
+            return Ok(result);
+        }
+
+        let mut contents_non_split = fs::read_to_string(&config_path).inspect_err(|_| {
+            error!("Unable to read {}", config_path.display());
+        })?;
+
+        Self::ensure_misc_is_present(&mut contents_non_split, &config_path)?;
+
+        // To parse [include] sections in the order as they are written,
+        // we split the file and parse each part as a separate file
+        static REGEX_MATCH_INCLUDE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*\[include]").unwrap());
+        let contents_split = REGEX_MATCH_INCLUDE.split_inclusive_left(contents_non_split.as_str());
+
+        for contents in contents_split {
+            let config_file_include_only: ConfigFileIncludeOnly = toml::from_str(contents).inspect_err(|_| {
+                error!("Failed to deserialize an include section of {}", config_path.display());
+            })?;
+
+            if let Some(includes) = &config_file_include_only.include {
+                // Parses the [include] section present in the slice
+                if let Some(ref paths) = includes.paths {
+                    for include in paths.iter().rev() {
+                        let include_path = shellexpand::tilde::<&str>(&include.as_ref()).into_owned();
+                        let include_path = PathBuf::from(include_path);
+                        let include_contents = match fs::read_to_string(&include_path) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                error!("Unable to read {}: {e}", include_path.display(),);
+                                continue;
+                            }
+                        };
+                        match toml::from_str::<Self>(&include_contents) {
+                            Ok(mut include_parsed) => result.merge(&mut include_parsed),
+                            Err(e) => {
+                                error!("Failed to deserialize {}: {e}", include_path.display(),);
+                                continue;
+                            }
+                        };
+                    }
+                }
+            }
+
+            match toml::from_str::<Self>(contents) {
+                Ok(mut contents) => result.merge(&mut contents),
+                Err(e) => error!("Failed to deserialize {}: {e}", config_path.display(),),
+            }
+        }
+
+        debug!("Loaded configuration: {:?}", result);
+        Ok(result)
+    }
+
+    fn edit() -> Result<()> {
+        let config_path = Self::ensure()?.0;
+        debug!("Editing config file: {:?}", config_path);
+
+        edit::edit_file(&config_path).context("Failed to open configuration file editor")
+    }
+
+    /// [Misc] was added later, here we check if it is present in the config file and add it if not
+    fn ensure_misc_is_present(contents: &mut String, path: &PathBuf) -> Result<()> {
+        if !contents.contains("[misc]") {
+            debug!("Adding [misc] section to {}", path.display());
+            string_prepend_str(contents, "[misc]\n");
+
+            File::create(path)
+                .and_then(|mut f| f.write_all(contents.as_bytes()))
+                .wrap_err("Tried to auto-migrate the config file, unable to write to config file.\nPlease add \"[misc]\" section manually to the first line of the file.\nError")?;
+        }
+        Ok(())
+    }
+}
+
+// Command line arguments
+// TODO: i18n of clap currently not easily possible. Waiting for https://github.com/clap-rs/clap/issues/380
+// Tracking issue for i18n: https://github.com/topgrade-rs/topgrade/issues/859
+#[derive(Parser, Debug)]
+#[command(name = "topgrade", version, styles = clap_cargo::style::CLAP_STYLING)]
+pub struct CommandLineArgs {
+    /// Edit the configuration file
+    #[arg(long = "edit-config")]
+    edit_config: bool,
+
+    /// Show config reference
+    #[arg(long = "config-reference")]
+    show_config_reference: bool,
+
+    /// Run inside tmux
+    #[arg(short = 't', long = "tmux")]
+    run_in_tmux: bool,
+
+    /// Don't run inside tmux
+    #[arg(long = "no-tmux")]
+    no_tmux: bool,
+
+    /// Cleanup temporary or old files
+    #[arg(short = 'c', long = "cleanup")]
+    cleanup: bool,
+
+    /// Print what would be done
+    ///
+    /// Alias for --run-type dry
+    #[arg(short = 'n', long = "dry-run")]
+    dry_run: bool,
+
+    /// Pick between just running commands, running and logging commands, and just logging commands
+    #[arg(short = 'r', long = "run-type", value_enum, default_value_t)]
+    run_type: RunType,
+
+    /// Do not ask to retry failed steps (same as --no-ask-retry, kept for legacy compatibility)
+    #[arg(long = "no-retry", hide = true)]
+    no_retry: bool,
+
+    /// Do not ask what to do after a step fails
+    #[arg(long = "no-ask-retry")]
+    no_ask_retry: bool,
+
+    /// Automatically retry failed steps up to COUNT times
+    #[arg(long = "auto-retry", value_name = "COUNT")]
+    auto_retry: Option<u16>,
+
+    /// Do not perform upgrades for the given steps
+    #[arg(long = "disable", value_name = "STEP", value_enum, num_args = 1..)]
+    disable: Vec<Step>,
+
+    /// Perform only the specified steps
+    #[arg(long = "only", value_name = "STEP", value_enum, num_args = 1..)]
+    only: Vec<Step>,
+
+    /// Run only specific custom commands
+    #[arg(long = "custom-commands", value_name = "NAME", num_args = 1..)]
+    custom_commands: Vec<String>,
+
+    /// Set environment variables
+    #[arg(long = "env", value_name = "NAME=VALUE", value_parser = env_args_parser, num_args = 1..)]
+    env: Vec<(String, String)>,
+
+    /// Output debug logs. Alias for `--log-filter debug`.
+    #[arg(short = 'v', long = "verbose")]
+    pub verbose: bool,
+
+    /// Prompt for a key before exiting
+    #[arg(short = 'k', long = "keep")]
+    keep_at_end: bool,
+
+    /// Skip sending a notification at the end of a run (deprecated: use --notify-end never)
+    #[arg(long = "skip-notify", hide = true)]
+    skip_notify: bool,
+
+    /// When to send a notification at the end of a run
+    #[arg(long = "notify-end", value_enum, default_value_t)]
+    notify_end: NotifyEnd,
+
+    /// Say yes to package manager's prompt
+    #[arg(
+        short = 'y',
+        long = "yes",
+        value_name = "STEP",
+        value_enum,
+        num_args = 0..,
+    )]
+    yes: Option<Vec<Step>>,
+
+    /// Don't pull the predefined git repos
+    #[arg(long = "disable-predefined-git-repos")]
+    disable_predefined_git_repos: bool,
+
+    /// Alternative configuration file
+    #[arg(long = "config", value_name = "PATH")]
+    config: Option<PathBuf>,
+
+    /// A regular expression for restricting remote host execution
+    #[arg(long = "remote-host-limit", value_name = "REGEX")]
+    remote_host_limit: Option<Regex>,
+
+    /// Show the reason for skipped steps
+    #[arg(long = "show-skipped")]
+    show_skipped: bool,
+
+    /// Suppress warning and confirmation prompt if running as root
+    #[arg(long = "allow-root")]
+    allow_root: bool,
+
+    /// Periodically run `sudo -v` to avoid password re-prompts during updates
+    #[arg(long = "sudoloop")]
+    sudo_loop: bool,
+
+    /// Interval in seconds between `sudo -v` invocations when --sudoloop is active (default: 240)
+    #[arg(long = "sudoloop-interval", value_name = "SECONDS")]
+    sudo_loop_interval: Option<u16>,
+
+    /// Tracing filter directives.
+    ///
+    /// See: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+    #[arg(long, default_value = DEFAULT_LOG_LEVEL)]
+    pub log_filter: String,
+
+    /// Print completion script for the given shell and exit
+    #[arg(long, value_enum, hide = true)]
+    pub gen_completion: Option<Shell>,
+
+    /// Print roff manpage and exit
+    #[arg(long, hide = true)]
+    pub gen_manpage: bool,
+
+    /// Don't update Topgrade
+    #[arg(long = "no-self-update")]
+    pub no_self_update: bool,
+}
+
+fn env_args_parser(arg: &str) -> Result<(String, String)> {
+    let (key, value) = arg
+        .split_once("=")
+        .ok_or_eyre("Environment variable must be in the format NAME=VALUE")?;
+    Ok((key.to_string(), value.to_string()))
+}
+
+impl CommandLineArgs {
+    pub fn edit_config(&self) -> bool {
+        self.edit_config
+    }
+
+    pub fn show_config_reference(&self) -> bool {
+        self.show_config_reference
+    }
+
+    pub fn env_variables(&self) -> &Vec<(String, String)> {
+        &self.env
+    }
+
+    /// In Topgrade, filter directives come from 3 places:
+    ///     1. CLI option `--log-filter`
+    ///     2. Config file
+    ///     3. `debug` if the `--verbose` option is present
+    ///
+    /// Before loading the configuration file, we need our logger to work, so this
+    /// function will return directives coming from part 1 and 2.
+    ///
+    ///
+    /// When the configuration file is loaded, `Config::tracing_filter_directives()`
+    /// will return all the 3 parts.
+    pub fn tracing_filter_directives(&self) -> String {
+        let mut ret = self.log_filter.clone();
+        if self.verbose {
+            ret.push(',');
+            ret.push_str("debug");
+        }
+
+        ret
+    }
+}
+
+/// Represents the application configuration
+///
+/// The struct holds the loaded configuration file, as well as the arguments parsed from the command line.
+/// Its provided methods decide the appropriate options based on combining the configuration file and the
+/// command line arguments.
+#[derive(Debug)]
+pub struct Config {
+    opt: CommandLineArgs,
+    config_file: ConfigFile,
+    allowed_steps: Vec<Step>,
+}
+
+impl Config {
+    /// Load the configuration.
+    ///
+    /// The function parses the command line arguments and reads the configuration file.
+    pub fn load(opt: CommandLineArgs) -> Result<Self> {
+        let config_directory = config_directory();
+        let config_file = if config_directory.is_dir() {
+            ConfigFile::read(opt.config.clone()).unwrap_or_else(|e| {
+                // Inform the user about errors when loading the configuration,
+                // but fallback to the default config to at least attempt to do something
+                error!("failed to load configuration: {e}");
+                ConfigFile::default()
+            })
+        } else {
+            debug!("Configuration directory {} does not exist", config_directory.display());
+            ConfigFile::default()
+        };
+
+        let allowed_steps = Self::allowed_steps(&opt, &config_file);
+
+        Ok(Self {
+            opt,
+            config_file,
+            allowed_steps,
+        })
+    }
+
+    /// Launch an editor to edit the configuration
+    pub fn edit() -> Result<()> {
+        ConfigFile::edit()
+    }
+
+    /// Optional executable that owns verified GitHub CLI skill updates.
+    pub fn github_cli_skills_updater(&self) -> Option<&Path> {
+        self.config_file
+            .github_cli
+            .as_ref()
+            .and_then(|github_cli| github_cli.skills_updater.as_deref())
+    }
+
+    /// Optional executable that owns verified Helm repository updates.
+    pub fn helm_repository_updater(&self) -> Option<&Path> {
+        self.config_file
+            .helm
+            .as_ref()
+            .and_then(|helm| helm.repository_updater.as_deref())
+    }
+
+    /// The list of commands to run before performing any step.
+    pub fn pre_commands(&self) -> &Option<Commands> {
+        &self.config_file.pre_commands
+    }
+
+    /// The list of commands to run at the end of all steps
+    pub fn post_commands(&self) -> &Option<Commands> {
+        &self.config_file.post_commands
+    }
+
+    /// The list of custom steps.
+    pub fn commands(&self) -> &Option<Commands> {
+        &self.config_file.commands
+    }
+
+    /// The list of additional named conda environments.
+    pub fn conda_env_names(&self) -> Option<&Vec<String>> {
+        self.config_file
+            .conda
+            .as_ref()
+            .and_then(|conda| conda.env_names.as_ref())
+    }
+
+    /// The list of additional conda environment paths.
+    pub fn conda_env_paths(&self) -> Option<&Vec<String>> {
+        self.config_file
+            .conda
+            .as_ref()
+            .and_then(|conda| conda.env_paths.as_ref())
+    }
+
+    /// The list of additional git repositories to pull.
+    pub fn git_repos(&self) -> Option<&Vec<String>> {
+        self.config_file.git.as_ref().and_then(|git| git.repos.as_ref())
+    }
+
+    /// The list of docker/podman containers to ignore.
+    pub fn containers_ignored_tags(&self) -> Option<&Vec<String>> {
+        self.config_file
+            .containers
+            .as_ref()
+            .and_then(|containers| containers.ignored_containers.as_ref())
+    }
+
+    /// The preferred runtime for container updates (podman / docker).
+    pub fn containers_runtime(&self) -> ContainerRuntime {
+        self.config_file
+            .containers
+            .as_ref()
+            .and_then(|containers| containers.runtime)
+            .unwrap_or_default()
+    }
+
+    /// Whether to run system prune for containers.
+    pub fn containers_system_prune(&self) -> bool {
+        self.config_file
+            .containers
+            .as_ref()
+            .and_then(|containers| containers.system_prune)
+            .unwrap_or(false)
+    }
+
+    /// Whether to use sudo for container operations.
+    pub fn containers_use_sudo(&self) -> bool {
+        self.config_file
+            .containers
+            .as_ref()
+            .and_then(|containers| containers.use_sudo)
+            .unwrap_or(false)
+    }
+
+    /// Tell whether the specified step should run.
+    ///
+    /// If the step appears either in the `--disable` command line argument
+    /// or the `disable` option in the configuration, the function returns false.
+    pub fn should_run(&self, step: Step) -> bool {
+        self.allowed_steps.contains(&step)
+    }
+
+    fn allowed_steps(opt: &CommandLineArgs, config_file: &ConfigFile) -> Vec<Step> {
+        // The enabled steps are
+        let mut enabled_steps: Vec<Step> = Vec::new();
+        // Any steps that are passed with `--only`
+        enabled_steps.extend(&opt.only);
+
+        // Plus any steps in the config file's `misc.only`
+        if let Some(misc) = config_file.misc.as_ref()
+            && let Some(only) = misc.only.as_ref()
+        {
+            enabled_steps.extend(only);
+        }
+
+        let step_is_deprecated = |x| DEPRECATED_STEPS.contains(&x);
+
+        // If neither of those contain anything
+        if enabled_steps.is_empty() {
+            // All steps are enabled
+            enabled_steps.extend(Step::iter());
+            // Handle deprecated steps. Disable automatically when not explicitly mentioned in the
+            // config, so that the warning doesn't print.
+            enabled_steps.retain(|x| !step_is_deprecated(*x));
+        }
+
+        let mut disabled_steps: Vec<Step> = Vec::new();
+        disabled_steps.extend(&opt.disable);
+        if let Some(misc) = config_file.misc.as_ref()
+            && let Some(disabled) = misc.disable.as_ref()
+        {
+            disabled_steps.extend(disabled);
+        }
+
+        // When a deprecated step is mentioned,
+        for step in enabled_steps
+            .iter()
+            .chain(disabled_steps.iter())
+            .filter(|x| step_is_deprecated(**x))
+        {
+            print_warning(t!("`{step}` step is deprecated", step = format!("{step:?}")));
+        }
+
+        // All steps that are disabled are not enabled, except ones that are passed to `--only`
+        enabled_steps.retain(|e| !disabled_steps.contains(e) || opt.only.contains(e));
+        enabled_steps
+    }
+
+    /// Tell whether we should run a self-update.
+    pub fn no_self_update(&self) -> bool {
+        self.opt.no_self_update
+            || self
+                .config_file
+                .misc
+                .as_ref()
+                .and_then(|misc| misc.no_self_update)
+                .unwrap_or(false)
+    }
+
+    /// Tell whether we should run in tmux.
+    pub fn run_in_tmux(&self) -> bool {
+        !self.opt.no_tmux
+            && (self.opt.run_in_tmux
+                || self
+                    .config_file
+                    .misc
+                    .as_ref()
+                    .and_then(|misc| misc.run_in_tmux)
+                    .unwrap_or(false))
+    }
+
+    /// The preferred way to run the new tmux session.
+    fn tmux_session_mode(&self) -> TmuxSessionMode {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.tmux_session_mode)
+            .unwrap_or_default()
+    }
+
+    /// Tell whether we should perform cleanup steps.
+    pub fn cleanup(&self) -> bool {
+        self.opt.cleanup
+            || self
+                .config_file
+                .misc
+                .as_ref()
+                .and_then(|misc| misc.cleanup)
+                .unwrap_or(false)
+    }
+
+    /// Get the [RunType] for the current execution
+    pub fn run_type(&self) -> RunType {
+        if self.opt.dry_run {
+            RunType::Dry
+        } else {
+            self.opt.run_type
+        }
+    }
+
+    /// Get the auto retry count for failed steps
+    pub fn auto_retry(&self) -> u16 {
+        self.opt
+            .auto_retry
+            .or_else(|| self.config_file.misc.as_ref().and_then(|misc| misc.auto_retry))
+            .unwrap_or(0)
+    }
+
+    /// Determine whether to ask for retry after a step fails
+    pub fn ask_retry(&self) -> bool {
+        if self.opt.no_ask_retry {
+            return false;
+        }
+
+        if self.opt.no_retry {
+            return false;
+        }
+
+        if self
+            .config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.no_retry)
+            .unwrap_or(false)
+        {
+            return false;
+        }
+
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.ask_retry)
+            .unwrap_or(true)
+    }
+
+    /// List of user-defined environment variables
+    pub fn env_variables(&self) -> &Vec<(String, String)> {
+        self.opt.env_variables()
+    }
+
+    /// List of remote hosts to run Topgrade in
+    pub fn remote_topgrades(&self) -> Option<&Vec<String>> {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.remote_topgrades.as_ref())
+    }
+
+    /// Path to Topgrade executable used for all remote hosts
+    pub fn remote_topgrade_path(&self) -> &str {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.remote_topgrade_path.as_deref())
+            .unwrap_or("topgrade")
+    }
+
+    /// Extra SSH arguments
+    pub fn ssh_arguments(&self) -> Option<&String> {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.ssh_arguments.as_ref())
+    }
+
+    /// Extra Git arguments
+    pub fn git_arguments(&self) -> Option<&String> {
+        self.config_file.git.as_ref().and_then(|git| git.arguments.as_ref())
+    }
+
+    /// Only fetch repositories instead of pulling
+    pub fn git_fetch_only(&self) -> bool {
+        self.config_file
+            .git
+            .as_ref()
+            .and_then(|git| git.fetch_only)
+            .unwrap_or(false)
+    }
+
+    /// Fetch the default branch instead of failing when a repo is on another branch
+    pub fn git_fallback_to_fetch_default(&self) -> bool {
+        self.config_file
+            .git
+            .as_ref()
+            .and_then(|git| git.fallback_to_fetch_default)
+            .unwrap_or(false)
+    }
+
+    pub fn tmux_config(&self) -> Result<TmuxConfig> {
+        let args = self.tmux_arguments()?;
+        Ok(TmuxConfig {
+            args,
+            session_mode: self.tmux_session_mode(),
+        })
+    }
+
+    /// Extra Tmux arguments
+    fn tmux_arguments(&self) -> Result<Vec<String>> {
+        let args = &self
+            .config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.tmux_arguments.as_ref())
+            .map(String::to_owned)
+            .unwrap_or_default();
+        shell_words::split(args)
+            // The only time the parse failed is in case of a missing close quote.
+            // The error message looks like this:
+            //     Error: Failed to parse `tmux_arguments`: `'foo`
+            //
+            //     Caused by:
+            //         missing closing quote
+            .with_context(|| format!("Failed to parse `tmux_arguments`: `{args}`"))
+    }
+
+    /// Prompt for a key before exiting
+    pub fn keep_at_end(&self) -> bool {
+        self.opt.keep_at_end || env::var("TOPGRADE_KEEP_END").is_ok()
+    }
+
+    /// When to send a notification at the end of a run
+    pub fn notify_end(&self) -> NotifyEnd {
+        let skip_notify = self
+            .config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.skip_notify)
+            .unwrap_or(self.opt.skip_notify);
+
+        let notify_end = self
+            .config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.notify_end)
+            .unwrap_or(self.opt.notify_end);
+
+        // TODO: deprecate skip_notify
+        if skip_notify {
+            return NotifyEnd::Never;
+        }
+
+        notify_end
+    }
+
+    /// Whether to set the terminal title
+    pub fn set_title(&self) -> bool {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.set_title)
+            .unwrap_or(true)
+    }
+
+    /// Whether to say yes to package managers
+    pub fn yes(&self, step: Step) -> bool {
+        if let Some(yes) = self.config_file.misc.as_ref().and_then(|misc| misc.assume_yes) {
+            return yes;
+        }
+
+        if let Some(yes_list) = &self.opt.yes {
+            if yes_list.is_empty() {
+                return true;
+            }
+
+            return yes_list.contains(&step);
+        }
+
+        false
+    }
+
+    /// Bash-it branch
+    pub fn bashit_branch(&self) -> &str {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.bashit_branch.as_deref())
+            .unwrap_or("stable")
+    }
+
+    /// Whether to accept all Windows updates
+    pub fn accept_all_windows_updates(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|windows| windows.accept_all_updates)
+            .unwrap_or(true)
+    }
+
+    /// Whether to auto reboot for Windows updates that require it
+    pub fn windows_updates_auto_reboot(&self) -> UpdatesAutoReboot {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|windows| windows.updates_auto_reboot)
+            .unwrap_or_default()
+    }
+
+    /// Whether to self rename the Topgrade executable during the run
+    pub fn self_rename(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|w| w.self_rename)
+            .unwrap_or(false)
+    }
+
+    // Should wsl --update use the --pre-release flag
+    pub fn wsl_update_pre_release(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|w| w.wsl_update_pre_release)
+            .unwrap_or(false)
+    }
+
+    // Should wsl --update use the --web-download flag
+    pub fn wsl_update_use_web_download(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|w| w.wsl_update_use_web_download)
+            .unwrap_or(false)
+    }
+
+    /// Should tool detection keep using Windows PATH binaries (under `/mnt`) inside WSL
+    pub fn wsl_use_windows_path(&self) -> bool {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|l| l.wsl_use_windows_path)
+            .unwrap_or(false)
+    }
+
+    /// Should use sudo for Winget
+    pub fn winget_use_sudo(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|w| w.winget_use_sudo)
+            .unwrap_or(false)
+    }
+
+    /// Whether Brew cask should be greedy
+    pub fn brew_cask_greedy(&self) -> bool {
+        self.config_file
+            .brew
+            .as_ref()
+            .and_then(|c| c.greedy_cask)
+            .unwrap_or(false)
+    }
+
+    /// Whether Brew cask should be greedy_latest
+    pub fn brew_greedy_latest(&self) -> bool {
+        self.config_file
+            .brew
+            .as_ref()
+            .and_then(|c| c.greedy_latest)
+            .unwrap_or(false)
+    }
+
+    /// Whether Brew cask should be auto_updates
+    pub fn brew_greedy_auto_updates(&self) -> bool {
+        self.config_file
+            .brew
+            .as_ref()
+            .and_then(|c| c.greedy_auto_updates)
+            .unwrap_or(false)
+    }
+
+    /// Whether Brew should autoremove
+    pub fn brew_autoremove(&self) -> bool {
+        self.config_file
+            .brew
+            .as_ref()
+            .and_then(|c| c.autoremove)
+            .unwrap_or(false)
+    }
+
+    /// Whether Brew should upgrade formulae built from the HEAD branch
+    pub fn brew_fetch_head(&self) -> bool {
+        self.config_file
+            .brew
+            .as_ref()
+            .and_then(|c| c.fetch_head)
+            .unwrap_or(false)
+    }
+
+    /// Whether Composer should update itself
+    pub fn composer_self_update(&self) -> bool {
+        self.config_file
+            .composer
+            .as_ref()
+            .and_then(|c| c.self_update)
+            .unwrap_or(false)
+    }
+
+    /// Whether to force plug update in Vim
+    pub fn force_vim_plug_update(&self) -> bool {
+        self.config_file
+            .vim
+            .as_ref()
+            .and_then(|c| c.force_plug_update)
+            .unwrap_or(false)
+    }
+
+    /// Whether to prune inactive `vim.pack` packages in Neovim
+    pub fn vim_pack_prune(&self) -> bool {
+        self.config_file
+            .vim
+            .as_ref()
+            .and_then(|c| c.vim_pack_prune)
+            .unwrap_or(false)
+    }
+
+    /// Binaries to exclude from `gup update`
+    pub fn gup_exclude(&self) -> &[String] {
+        self.config_file
+            .go
+            .as_ref()
+            .and_then(|g| g.gup_exclude.as_deref())
+            .unwrap_or(&[])
+    }
+
+    /// Whether to send a desktop notification at the beginning of every step
+    pub fn notify_each_step(&self) -> bool {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.notify_each_step)
+            .unwrap_or(false)
+    }
+
+    /// Extra garuda-update arguments
+    pub fn garuda_update_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.garuda_update_arguments.as_deref())
+            .unwrap_or("")
+    }
+
+    /// Extra trizen arguments
+    pub fn trizen_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.trizen_arguments.as_deref())
+            .unwrap_or("")
+    }
+
+    /// Extra Pikaur arguments
+    pub fn pikaur_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.pikaur_arguments.as_deref())
+            .unwrap_or("")
+    }
+
+    /// Extra Pamac arguments
+    pub fn pamac_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.pamac_arguments.as_deref())
+            .unwrap_or("")
+    }
+
+    /// Extra Shelly arguments
+    pub fn shelly_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.shelly_arguments.as_deref())
+            .unwrap_or("")
+    }
+
+    /// Show release notes of latest pixi release
+    pub fn show_pixi_release_notes(&self) -> bool {
+        self.config_file
+            .pixi
+            .as_ref()
+            .and_then(|s| s.include_release_notes)
+            .unwrap_or(false)
+    }
+
+    /// Show news on Arch Linux
+    pub fn show_arch_news(&self) -> bool {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.show_arch_news)
+            .unwrap_or(true)
+    }
+
+    /// Get the package manager of an Arch Linux system
+    pub fn arch_package_manager(&self) -> ArchPackageManager {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.arch_package_manager)
+            .unwrap_or_default()
+    }
+
+    /// Extra yay arguments
+    pub fn yay_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.yay_arguments.as_deref())
+            .unwrap_or("")
+    }
+
+    /// Extra aura arguments for AUR and pacman
+    pub fn aura_aur_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.aura_aur_arguments.as_deref())
+            .unwrap_or("")
+    }
+    pub fn aura_pacman_arguments(&self) -> &str {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|s| s.aura_pacman_arguments.as_deref())
+            .unwrap_or("")
+    }
+
+    /// Extra apt arguments
+    pub fn apt_arguments(&self) -> Option<&str> {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.apt_arguments.as_deref())
+    }
+
+    /// Extra dnf arguments
+    pub fn dnf_arguments(&self) -> Option<&str> {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.dnf_arguments.as_deref())
+    }
+
+    /// Get the handler to use for NixOS/home-manager
+    pub fn nix_handler(&self) -> NixHandler {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|s| s.nix_handler)
+            .unwrap_or_default()
+    }
+
+    /// Extra nix arguments
+    pub fn nix_arguments(&self) -> Option<&str> {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.nix_arguments.as_deref())
+    }
+
+    /// Extra nix-env arguments
+    pub fn nix_env_arguments(&self) -> Option<&str> {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.nix_env_arguments.as_deref())
+    }
+
+    /// Extra Home Manager arguments
+    pub fn home_manager(&self) -> Option<&Vec<String>> {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|misc| misc.home_manager_arguments.as_ref())
+    }
+
+    /// Distrobox use root
+    pub fn distrobox_root(&self) -> bool {
+        self.config_file
+            .distrobox
+            .as_ref()
+            .and_then(|r| r.use_root)
+            .unwrap_or(false)
+    }
+
+    /// Distrobox containers
+    pub fn distrobox_containers(&self) -> Option<&Vec<String>> {
+        self.config_file.distrobox.as_ref().and_then(|r| r.containers.as_ref())
+    }
+
+    /// Concurrency limit for git
+    pub fn git_concurrency_limit(&self) -> Option<usize> {
+        self.config_file.git.as_ref().and_then(|git| git.max_concurrency)
+    }
+
+    /// Determine whether we should power on vagrant boxes
+    pub fn vagrant_power_on(&self) -> Option<bool> {
+        self.config_file.vagrant.as_ref().and_then(|vagrant| vagrant.power_on)
+    }
+
+    /// Vagrant directories
+    pub fn vagrant_directories(&self) -> Option<&Vec<String>> {
+        self.config_file
+            .vagrant
+            .as_ref()
+            .and_then(|vagrant| vagrant.directories.as_ref())
+    }
+
+    /// Always suspend vagrant boxes instead of powering off
+    pub fn vagrant_always_suspend(&self) -> Option<bool> {
+        self.config_file
+            .vagrant
+            .as_ref()
+            .and_then(|vagrant| vagrant.always_suspend)
+    }
+
+    /// Enable tlmgr on Linux
+    pub fn enable_tlmgr_linux(&self) -> bool {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.enable_tlmgr)
+            .unwrap_or(false)
+    }
+
+    /// Use distro-sync in Red Hat based distributions
+    pub fn redhat_distro_sync(&self) -> bool {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.redhat_distro_sync)
+            .unwrap_or(false)
+    }
+
+    /// Use zypper dist-upgrade (same as distro-sync on RH) instead of update (default: false on SLE/Leap, ignored on Tumbleweed (dup is always run))
+    pub fn suse_dup(&self) -> bool {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.suse_dup)
+            .unwrap_or(false)
+    }
+
+    /// Use rpm-ostree *when rpm-ostree is detected* (default: false)
+    pub fn rpm_ostree(&self) -> bool {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.rpm_ostree)
+            .unwrap_or(false)
+    }
+
+    /// Use bootc *when bootc is detected* (default: false)
+    pub fn bootc(&self) -> bool {
+        self.config_file
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.bootc)
+            .unwrap_or(false)
+    }
+
+    /// Returns the steps to execute in order, prioritizing `misc.first` and `misc.last`
+    /// to over the default step list.
+    ///
+    /// Steps in `first` run first (in the order listed), then any remaining default
+    /// steps in their normal order, then steps in `last` (in the order listed).
+    pub fn steps(&self) -> Result<impl Iterator<Item = Step> + '_> {
+        let misc = self.config_file.misc.as_ref();
+        let first = misc.and_then(|m| m.first.as_deref()).unwrap_or_default();
+        let last = misc.and_then(|m| m.last.as_deref()).unwrap_or_default();
+
+        let specified: HashSet<Step> = first.iter().chain(last).copied().collect();
+        if specified.len() != first.len() + last.len() {
+            color_eyre::eyre::bail!("All steps included in `misc.first` and `misc.last` must be unique");
+        }
+
+        Ok(first
+            .iter()
+            .copied()
+            .chain(
+                crate::step::default_steps()
+                    .into_iter()
+                    .filter(move |s| !specified.contains(s)),
+            )
+            .chain(last.iter().copied()))
+    }
+
+    /// Determine if we should ignore failures for this step
+    pub fn ignore_failure(&self, step: Step) -> bool {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.ignore_failures.as_ref())
+            .is_some_and(|v| v.contains(&step))
+    }
+
+    pub fn use_predefined_git_repos(&self) -> bool {
+        !self.opt.disable_predefined_git_repos
+            && self
+                .config_file
+                .git
+                .as_ref()
+                .and_then(|git| git.pull_predefined)
+                .unwrap_or(true)
+    }
+
+    pub fn cargo_update_git(&self) -> bool {
+        self.config_file
+            .cargo
+            .as_ref()
+            .and_then(|cargo| cargo.git)
+            .unwrap_or(true)
+    }
+
+    pub fn cargo_update_quiet(&self) -> bool {
+        self.config_file
+            .cargo
+            .as_ref()
+            .and_then(|cargo| cargo.quiet)
+            .unwrap_or(false)
+    }
+
+    pub fn cargo_update_locked(&self) -> bool {
+        self.config_file
+            .cargo
+            .as_ref()
+            .and_then(|cargo| cargo.locked)
+            .unwrap_or(false)
+    }
+
+    pub fn flutter_force(&self) -> bool {
+        self.config_file
+            .flutter
+            .as_ref()
+            .and_then(|flutter| flutter.force)
+            .unwrap_or(false)
+    }
+
+    pub fn rustup_channels(&self) -> Vec<String> {
+        self.config_file
+            .rustup
+            .as_ref()
+            .and_then(|rustup| rustup.channels.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn verbose(&self) -> bool {
+        self.opt.verbose
+    }
+
+    /// After loading the config file, filter directives consist of 3 parts:
+    ///
+    ///     1. directives from the configuration file
+    ///     2. directives from the CLI options `--log-filter`
+    ///     3. `debug`, which would be enabled if the `--verbose` option is present
+    ///
+    /// Previous directive will be overwritten if a directive with the same target
+    /// appear later.
+    pub fn tracing_filter_directives(&self) -> String {
+        let mut ret = String::new();
+        if let Some(directives) = self.config_file.misc.as_ref().and_then(|m| m.log_filters.as_ref()) {
+            ret.push_str(&directives.join(","));
+        }
+        ret.push(',');
+        ret.push_str(&self.opt.log_filter);
+        if self.verbose() {
+            ret.push_str(",debug");
+        }
+        ret
+    }
+
+    pub fn show_skipped(&self) -> bool {
+        self.opt.show_skipped
+            || self
+                .config_file
+                .misc
+                .as_ref()
+                .and_then(|misc| misc.show_skipped)
+                .unwrap_or(false)
+    }
+
+    pub fn enable_mandb(&self) -> bool {
+        self.config_file
+            .mandb
+            .as_ref()
+            .and_then(|mandb| mandb.enable)
+            .unwrap_or(false)
+    }
+
+    pub fn open_remotes_in_new_terminal(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|windows| windows.open_remotes_in_new_terminal)
+            .unwrap_or(false)
+    }
+
+    pub fn winget_silent_install(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|windows| windows.winget_silent_install)
+            .unwrap_or(true)
+    }
+
+    pub fn allow_root(&self) -> bool {
+        self.opt.allow_root
+            || self
+                .config_file
+                .misc
+                .as_ref()
+                .and_then(|misc| misc.allow_root)
+                .unwrap_or(false)
+    }
+
+    pub fn sudo_command(&self) -> Option<SudoKind> {
+        self.config_file.misc.as_ref().and_then(|misc| misc.sudo_command)
+    }
+
+    /// If `true`, `sudo -v` should be called to cache credentials at the start of the run
+    pub fn pre_sudo(&self) -> bool {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.pre_sudo)
+            .unwrap_or(false)
+    }
+
+    /// If `true`, credentials are cached at the start of the run (as with `pre_sudo`)
+    /// and refreshed non-interactively (`sudo -n -v`) to keep them alive during the run
+    pub fn sudo_loop(&self) -> bool {
+        self.opt.sudo_loop
+            || self
+                .config_file
+                .misc
+                .as_ref()
+                .and_then(|misc| misc.sudo_loop)
+                .unwrap_or(false)
+    }
+
+    /// Interval in seconds between `sudo -n -v` invocations when sudo_loop is active
+    pub fn sudo_loop_interval(&self) -> u16 {
+        self.opt
+            .sudo_loop_interval
+            .or_else(|| self.config_file.misc.as_ref().and_then(|misc| misc.sudo_loop_interval))
+            .unwrap_or(240)
+    }
+
+    pub fn show_distribution_summary(&self) -> bool {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.show_distribution_summary)
+            .unwrap_or(true)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn npm_use_sudo(&self) -> bool {
+        self.config_file
+            .npm
+            .as_ref()
+            .and_then(|npm| npm.use_sudo)
+            .unwrap_or(false)
+    }
+    #[cfg(target_os = "linux")]
+    pub fn yarn_use_sudo(&self) -> bool {
+        self.config_file
+            .yarn
+            .as_ref()
+            .and_then(|yarn| yarn.use_sudo)
+            .unwrap_or(false)
+    }
+    #[cfg(target_os = "linux")]
+    pub fn viteplus_use_sudo(&self) -> bool {
+        self.config_file
+            .viteplus
+            .as_ref()
+            .and_then(|viteplus| viteplus.use_sudo)
+            .unwrap_or(false)
+    }
+
+    /// Package runner to use to run the `skills` CLI (npx / pnpx / bunx / yarn dlx)
+    pub fn skills_package_manager(&self) -> SkillsPackageManager {
+        self.config_file
+            .skills
+            .as_ref()
+            .and_then(|skills| skills.package_manager)
+            .unwrap_or_default()
+    }
+
+    pub fn deno_version(&self) -> Option<&str> {
+        self.config_file.deno.as_ref().and_then(|deno| deno.version.as_deref())
+    }
+
+    pub fn deno_no_delta(&self) -> bool {
+        self.config_file
+            .deno
+            .as_ref()
+            .and_then(|deno| deno.no_delta)
+            .unwrap_or(false)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn firmware_upgrade(&self) -> bool {
+        self.config_file
+            .firmware
+            .as_ref()
+            .and_then(|firmware| firmware.upgrade)
+            .unwrap_or(false)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn flatpak_use_sudo(&self) -> bool {
+        self.config_file
+            .flatpak
+            .as_ref()
+            .and_then(|flatpak| flatpak.use_sudo)
+            .unwrap_or(false)
+    }
+
+    #[cfg(target_os = "linux")]
+    str_value!(linux, emerge_sync_flags);
+
+    #[cfg(target_os = "linux")]
+    str_value!(linux, emerge_update_flags);
+
+    pub fn should_execute_remote(&self, hostname: Result<String>, remote: &str) -> bool {
+        let remote_host = remote.split_once('@').map_or(remote, |(_, host)| host);
+
+        if let Ok(hostname) = hostname
+            && remote_host == hostname
+        {
+            return false;
+        }
+
+        if let Some(limit) = &self.opt.remote_host_limit.as_ref() {
+            return limit.is_match(remote_host);
+        }
+
+        true
+    }
+
+    pub fn enable_pipupgrade(&self) -> bool {
+        self.config_file
+            .python
+            .as_ref()
+            .and_then(|python| python.enable_pipupgrade)
+            .unwrap_or(false)
+    }
+    pub fn pipupgrade_arguments(&self) -> &str {
+        self.config_file
+            .python
+            .as_ref()
+            .and_then(|s| s.pipupgrade_arguments.as_deref())
+            .unwrap_or("")
+    }
+    pub fn enable_pip_review(&self) -> bool {
+        self.config_file
+            .python
+            .as_ref()
+            .and_then(|python| python.enable_pip_review)
+            .unwrap_or(false)
+    }
+    pub fn enable_pip_review_local(&self) -> bool {
+        self.config_file
+            .python
+            .as_ref()
+            .and_then(|python| python.enable_pip_review_local)
+            .unwrap_or(false)
+    }
+    pub fn poetry_force_self_update(&self) -> bool {
+        self.config_file
+            .python
+            .as_ref()
+            .and_then(|python| python.poetry_force_self_update)
+            .unwrap_or(false)
+    }
+
+    pub fn display_time(&self) -> bool {
+        self.config_file
+            .misc
+            .as_ref()
+            .and_then(|misc| misc.display_time)
+            .unwrap_or(true)
+    }
+
+    pub fn should_run_custom_command(&self, name: &str) -> bool {
+        if self.opt.custom_commands.is_empty() {
+            return true;
+        }
+
+        self.opt.custom_commands.iter().any(|s| s == name)
+    }
+
+    pub fn lensfun_use_sudo(&self) -> bool {
+        self.config_file
+            .lensfun
+            .as_ref()
+            .and_then(|lensfun| lensfun.use_sudo)
+            .unwrap_or(false)
+    }
+
+    pub fn julia_use_startup_file(&self) -> bool {
+        self.config_file
+            .julia
+            .as_ref()
+            .and_then(|julia| julia.startup_file)
+            .unwrap_or(true)
+    }
+
+    pub fn zigup_target_versions(&self) -> Vec<String> {
+        self.config_file
+            .zigup
+            .as_ref()
+            .and_then(|zigup| zigup.target_versions.clone())
+            .unwrap_or(vec!["master".to_owned()])
+    }
+
+    pub fn zigup_install_dir(&self) -> Option<&str> {
+        self.config_file
+            .zigup
+            .as_ref()
+            .and_then(|zigup| zigup.install_dir.as_deref())
+    }
+
+    pub fn zigup_path_link(&self) -> Option<&str> {
+        self.config_file
+            .zigup
+            .as_ref()
+            .and_then(|zigup| zigup.path_link.as_deref())
+    }
+
+    pub fn zigup_cleanup(&self) -> bool {
+        self.config_file
+            .zigup
+            .as_ref()
+            .and_then(|zigup| zigup.cleanup)
+            .unwrap_or(false)
+    }
+
+    pub fn chezmoi_exclude_encrypted(&self) -> bool {
+        self.config_file
+            .chezmoi
+            .as_ref()
+            .and_then(|chezmoi| chezmoi.exclude_encrypted)
+            .unwrap_or(false)
+    }
+
+    pub fn sheldon_quiet(&self) -> bool {
+        self.config_file
+            .sheldon
+            .as_ref()
+            .and_then(|sheldon| sheldon.quiet)
+            .unwrap_or(false)
+    }
+
+    pub fn sheldon_verbose(&self) -> bool {
+        self.config_file
+            .sheldon
+            .as_ref()
+            .and_then(|sheldon| sheldon.verbose)
+            .unwrap_or(false)
+    }
+
+    pub fn mise_bump(&self) -> bool {
+        self.config_file
+            .mise
+            .as_ref()
+            .and_then(|mise| mise.bump)
+            .unwrap_or(false)
+    }
+
+    pub fn mise_jobs(&self) -> Option<u32> {
+        self.config_file.mise.as_ref().and_then(|mise| mise.jobs)
+    }
+
+    pub fn mise_interactive(&self) -> bool {
+        self.config_file
+            .mise
+            .as_ref()
+            .and_then(|mise| mise.interactive)
+            .unwrap_or(false)
+    }
+
+    pub fn mise_quiet(&self) -> bool {
+        self.config_file
+            .mise
+            .as_ref()
+            .and_then(|mise| mise.quiet)
+            .unwrap_or(false)
+    }
+
+    pub fn mise_silent(&self) -> bool {
+        self.config_file
+            .mise
+            .as_ref()
+            .and_then(|mise| mise.silent)
+            .unwrap_or(false)
+    }
+
+    pub fn mise_verbose(&self) -> bool {
+        self.config_file
+            .mise
+            .as_ref()
+            .and_then(|mise| mise.verbose)
+            .unwrap_or(false)
+    }
+
+    pub fn vscode_profile(&self) -> Option<&str> {
+        let vscode_cfg = self.config_file.vscode.as_ref()?;
+        let profile = vscode_cfg.profile.as_ref()?;
+
+        if profile.is_empty() {
+            None
+        } else {
+            Some(profile.as_str())
+        }
+    }
+
+    pub fn vscode_cleanup_obsolete_extensions(&self) -> bool {
+        self.config_file
+            .vscode
+            .as_ref()
+            .and_then(|vscode| vscode.cleanup_obsolete_extensions)
+            .unwrap_or(false)
+    }
+
+    pub fn doom_aot(&self) -> bool {
+        self.config_file
+            .doom
+            .as_ref()
+            .and_then(|doom| doom.aot)
+            .unwrap_or(false)
+    }
+
+    pub fn enable_pkgfile(&self) -> bool {
+        self.config_file
+            .pkgfile
+            .as_ref()
+            .and_then(|pkgfile| pkgfile.enable)
+            .unwrap_or(false)
+    }
+
+    pub fn uv_cache_force(&self) -> bool {
+        self.config_file
+            .uv
+            .as_ref()
+            .and_then(|uv| uv.cache_force)
+            .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use crate::config::*;
+    use color_eyre::eyre::eyre;
+    use merge2::Merge;
+
+    /// Regression test: verify that `overwrite_none` merge strategy preserves
+    /// existing (left) values and only fills in `None` fields from right.
+    /// Guards against future `merge` crate upgrades changing config precedence.
+    #[test]
+    fn merge_overwrite_none_preserves_left_values() {
+        let mut left = Containers {
+            ignored_containers: None,
+            runtime: Some(ContainerRuntime::Podman),
+            system_prune: Some(false),
+            use_sudo: None,
+        };
+        let mut right = Containers {
+            ignored_containers: None,
+            runtime: Some(ContainerRuntime::Docker),
+            system_prune: None,
+            use_sudo: Some(true),
+        };
+        left.merge(&mut right);
+
+        // Left Some is preserved even when right is also Some
+        assert!(matches!(left.runtime, Some(ContainerRuntime::Podman)));
+        assert_eq!(left.system_prune, Some(false));
+        // Left None is filled from right
+        assert_eq!(left.use_sudo, Some(true));
+    }
+
+    /// `package_manager = "npx"` shipped in 17.10.0 as the only value; keep it working.
+    #[test]
+    fn test_skills_package_manager() {
+        for (value, expected) in [
+            ("npm", SkillsPackageManager::Npm),
+            ("pnpm", SkillsPackageManager::Pnpm),
+            ("bun", SkillsPackageManager::Bun),
+            ("yarn", SkillsPackageManager::Yarn),
+            ("npx", SkillsPackageManager::Npm),
+        ] {
+            let config = config_from_toml(&format!("[skills]\npackage_manager = \"{value}\"\n"));
+            assert_eq!(config.skills_package_manager(), expected, "{value}");
+        }
+
+        assert_eq!(config_from_toml("").skills_package_manager(), SkillsPackageManager::Npm);
+    }
+
+    #[test]
+    fn github_cli_skills_updater_is_optional_and_a_literal_path() {
+        assert!(config_from_toml("").github_cli_skills_updater().is_none());
+        let config = config_from_toml("[github_cli]\nskills_updater = \"~/.local/bin/skills updater;literal\"\n");
+        assert_eq!(
+            config.github_cli_skills_updater(),
+            Some(Path::new("~/.local/bin/skills updater;literal"))
+        );
+    }
+
+    #[test]
+    fn github_cli_skills_updater_preserves_recursive_config_precedence() {
+        let mut left: ConfigFile = toml::from_str("[github_cli]\n").unwrap();
+        let mut right: ConfigFile = toml::from_str("[github_cli]\nskills_updater = \"right\"\n").unwrap();
+        left.merge(&mut right);
+        assert_eq!(
+            left.github_cli.as_ref().unwrap().skills_updater.as_deref(),
+            Some(Path::new("right"))
+        );
+
+        let mut preferred: ConfigFile = toml::from_str("[github_cli]\nskills_updater = \"left\"\n").unwrap();
+        preferred.merge(&mut left);
+        assert_eq!(
+            preferred.github_cli.unwrap().skills_updater.as_deref(),
+            Some(Path::new("left"))
+        );
+    }
+
+    #[test]
+    fn helm_repository_updater_is_optional_and_a_literal_path() {
+        assert!(config_from_toml("").helm_repository_updater().is_none());
+        let config = config_from_toml("[helm]\nrepository_updater = \"~/.local/bin/helm updater;literal\"\n");
+        assert_eq!(
+            config.helm_repository_updater(),
+            Some(Path::new("~/.local/bin/helm updater;literal"))
+        );
+    }
+
+    #[test]
+    fn helm_repository_updater_preserves_config_precedence() {
+        let mut left = Helm {
+            repository_updater: Some(PathBuf::from("left")),
+        };
+        let mut right = Helm {
+            repository_updater: Some(PathBuf::from("right")),
+        };
+        left.merge(&mut right);
+        assert_eq!(left.repository_updater, Some(PathBuf::from("left")));
+    }
+
+    /// Test the default configuration in `config.example.toml` is valid.
+    #[test]
+    fn test_default_config() {
+        let str = include_str!("../config.example.toml");
+
+        assert!(toml::from_str::<ConfigFile>(str).is_ok());
+    }
+
+    /// Regression test for https://github.com/topgrade-rs/topgrade/issues/2283:
+    /// `--edit-config` must work when the config directory does not exist yet.
+    #[test]
+    fn test_edit_config_without_config_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_directory = dir.path().join("missing");
+
+        let (path, extra) = ConfigFile::ensure_in(&config_directory).unwrap();
+
+        assert_eq!(path, config_directory.join("topgrade.toml"));
+        assert!(extra.is_empty());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), EXAMPLE_CONFIG);
+    }
+
+    /// `topgrade.d` must not be auto-created, only read when present.
+    /// See: https://github.com/topgrade-rs/topgrade/issues/624
+    #[test]
+    fn test_topgrade_d_not_auto_created() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Absent topgrade.d: contributes nothing and is not created.
+        let extra = ConfigFile::find_topgrade_d_configs(dir.path()).unwrap();
+        assert!(extra.is_empty(), "absent topgrade.d should yield no configs");
+        assert!(
+            !dir.path().join("topgrade.d").exists(),
+            "topgrade.d must not be auto-created"
+        );
+
+        // Present topgrade.d: files are picked up in sorted order.
+        let d = dir.path().join("topgrade.d");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("b.toml"), "[misc]\n").unwrap();
+        std::fs::write(d.join("a.toml"), "[misc]\n").unwrap();
+        let extra = ConfigFile::find_topgrade_d_configs(dir.path()).unwrap();
+        assert_eq!(extra, vec![d.join("a.toml"), d.join("b.toml")]);
+    }
+
+    fn config() -> Config {
+        Config {
+            opt: CommandLineArgs::parse_from::<_, String>([]),
+            config_file: ConfigFile::default(),
+            allowed_steps: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_should_execute_remote_different_hostname() {
+        assert!(config().should_execute_remote(Ok("hostname".to_string()), "remote_hostname"));
+    }
+
+    #[test]
+    fn test_should_execute_remote_different_hostname_with_user() {
+        assert!(config().should_execute_remote(Ok("hostname".to_string()), "user@remote_hostname"));
+    }
+
+    #[test]
+    fn test_should_execute_remote_unknown_hostname() {
+        assert!(config().should_execute_remote(Err(eyre!("failed to get hostname")), "remote_hostname"));
+    }
+
+    #[test]
+    fn test_should_not_execute_remote_same_hostname() {
+        assert!(!config().should_execute_remote(Ok("hostname".to_string()), "hostname"));
+    }
+
+    #[test]
+    fn test_should_not_execute_remote_same_hostname_with_user() {
+        assert!(!config().should_execute_remote(Ok("hostname".to_string()), "user@hostname"));
+    }
+
+    #[test]
+    fn test_should_execute_remote_matching_limit() {
+        let mut config = config();
+        config.opt = CommandLineArgs::parse_from(["topgrade", "--remote-host-limit", "remote_hostname"]);
+        assert!(config.should_execute_remote(Ok("hostname".to_string()), "user@remote_hostname"));
+    }
+
+    #[test]
+    fn test_should_not_execute_remote_not_matching_limit() {
+        let mut config = config();
+        config.opt = CommandLineArgs::parse_from(["topgrade", "--remote-host-limit", "other_hostname"]);
+        assert!(!config.should_execute_remote(Ok("hostname".to_string()), "user@remote_hostname"));
+    }
+
+    /// Ensure that custom commands are stored in insertion order.
+    #[test]
+    fn test_custom_commands_order() {
+        let toml_str = r#"
+[commands]
+z = "cmd_z"
+y = "cmd_y"
+x = "cmd_x"
+"#;
+        let order: Vec<_> = toml::from_str::<ConfigFile>(toml_str)
+            .expect("toml parse error")
+            .commands
+            .expect("commands field missing")
+            .keys()
+            .cloned()
+            .collect();
+
+        assert_eq!(order, vec!["z", "y", "x"]);
+    }
+
+    #[test]
+    fn test_env_variable_parser() {
+        let mut config = config();
+        config.opt = CommandLineArgs::parse_from(["topgrade", "--env", "VAR1=foo", "--env", "VAR2=bar"]);
+        let env_vars = config.env_variables();
+        assert_eq!(env_vars.len(), 2);
+        assert_eq!(env_vars[0], ("VAR1".to_string(), "foo".to_string()));
+        assert_eq!(env_vars[1], ("VAR2".to_string(), "bar".to_string()));
+    }
+
+    fn config_from_toml(toml_str: &str) -> Config {
+        Config {
+            opt: CommandLineArgs::parse_from::<_, String>([]),
+            config_file: toml::from_str(toml_str).expect("toml parse error"),
+            allowed_steps: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_steps_default_order_without_first_or_last() {
+        let steps: Vec<Step> = config().steps().unwrap().collect();
+        assert_eq!(steps, crate::step::default_steps());
+    }
+
+    #[test]
+    fn test_steps_first_and_last_reorder() {
+        let config = config_from_toml(
+            r#"
+[misc]
+first = ["cargo", "rustup"]
+last = ["chezmoi", "vim"]
+"#,
+        );
+        let steps: Vec<Step> = config.steps().unwrap().collect();
+
+        assert_eq!(&steps[..2], &[Step::Cargo, Step::Rustup]);
+        assert_eq!(&steps[steps.len() - 2..], &[Step::Chezmoi, Step::Vim]);
+        for reordered in [Step::Cargo, Step::Rustup, Step::Chezmoi, Step::Vim] {
+            assert_eq!(steps.iter().filter(|&&s| s == reordered).count(), 1);
+        }
+        // Untouched defaults still present.
+        assert!(steps.contains(&Step::Remotes));
+    }
+
+    #[test]
+    fn test_steps_rejects_duplicates_in_first() {
+        let config = config_from_toml(
+            r#"
+[misc]
+first = ["cargo", "cargo"]
+"#,
+        );
+        assert!(config.steps().is_err());
+    }
+
+    #[test]
+    fn test_steps_rejects_overlap_between_first_and_last() {
+        let config = config_from_toml(
+            r#"
+[misc]
+first = ["cargo"]
+last = ["cargo"]
+"#,
+        );
+        assert!(config.steps().is_err());
+    }
+}

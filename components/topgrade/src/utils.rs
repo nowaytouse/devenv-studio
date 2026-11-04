@@ -1,0 +1,502 @@
+#[cfg(windows)]
+use crate::WINDOWS_DIRS;
+#[cfg(unix)]
+use crate::XDG_DIRS;
+use crate::output_changed_message;
+use std::collections::HashSet;
+use std::env;
+use std::ffi::OsStr;
+use std::fmt::Debug;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::{LazyLock, OnceLock};
+
+use color_eyre::eyre::{Context, Result, eyre};
+use etcetera::BaseStrategy;
+use itertools::Itertools;
+use rust_i18n::t;
+
+use tracing::{debug, warn};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::reload::{Handle, Layer};
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, registry};
+use tracing_subscriber::{Registry, fmt};
+
+use crate::command::CommandExt;
+use crate::config::DEFAULT_LOG_LEVEL;
+use crate::error::SkipStep;
+use crate::execution_context::ExecutionContext;
+use crate::executor::Executor;
+use crate::steps::generic::IS_WSL;
+
+pub trait PathExt
+where
+    Self: Sized,
+{
+    fn if_exists(self) -> Option<Self>;
+    fn is_descendant_of(&self, ancestor: &Path) -> bool;
+
+    /// Used to check for UNIX launcher shims that shadow a real executable
+    fn has_shebang(&self) -> bool;
+
+    /// Returns the path if it exists or ErrorKind::SkipStep otherwise
+    fn require(self) -> Result<Self>;
+}
+
+impl<T> PathExt for T
+where
+    T: AsRef<Path>,
+{
+    fn if_exists(self) -> Option<Self> {
+        if self.as_ref().exists() {
+            debug!("Path {:?} exists", self.as_ref());
+            Some(self)
+        } else {
+            debug!("Path {:?} doesn't exist", self.as_ref());
+            None
+        }
+    }
+
+    fn is_descendant_of(&self, ancestor: &Path) -> bool {
+        self.as_ref().iter().zip(ancestor.iter()).all(|(a, b)| a == b)
+    }
+
+    fn has_shebang(&self) -> bool {
+        use std::io::Read;
+
+        // checks for `#!` by the reading the first 2 bytes of the file
+        let mut magic = [0u8; 2];
+        std::fs::File::open(self.as_ref())
+            .and_then(|mut file| file.read_exact(&mut magic))
+            .is_ok()
+            && &magic == b"#!"
+    }
+
+    fn require(self) -> Result<Self> {
+        if self.as_ref().exists() {
+            debug!("Path {:?} exists", self.as_ref());
+            Ok(self)
+        } else {
+            Err(SkipStep(format!(
+                "{}",
+                t!("Path {path} doesn't exist", path = format!("{:?}", self.as_ref()))
+            ))
+            .into())
+        }
+    }
+}
+
+#[allow(unused)]
+pub trait OptionExt<T> {
+    fn or_else_fallible<F: FnOnce() -> Result<Option<T>>>(self, f: F) -> Result<Option<T>>;
+}
+
+impl<T> OptionExt<T> for Option<T> {
+    fn or_else_fallible<F: FnOnce() -> Result<Option<T>>>(self, f: F) -> Result<Option<T>> {
+        match self {
+            Some(x) => Ok(Some(x)),
+            None => f(),
+        }
+    }
+}
+
+/// `[linux] wsl_use_windows_path`, set once at startup. While unset the filter keeps its
+/// default: off outside WSL, on inside.
+static WSL_USE_WINDOWS_PATH: OnceLock<bool> = OnceLock::new();
+
+pub fn set_wsl_use_windows_path(use_windows_path: bool) -> Result<()> {
+    WSL_USE_WINDOWS_PATH
+        .set(use_windows_path)
+        .map_err(|_| eyre!("WSL Windows-path setting was already initialized"))
+}
+
+/// Inside WSL a plain PATH lookup can resolve a Windows executable on `/mnt/*` that
+/// fails to run in the guest (topgrade-rs/topgrade#1243). When on, detection skips those.
+/// Off via `wsl_use_windows_path = true`.
+fn wsl_windows_path_filter_enabled() -> bool {
+    *IS_WSL && !WSL_USE_WINDOWS_PATH.get().copied().unwrap_or(false)
+}
+
+/// Mount points backed by Windows drives (drvfs on WSL1, 9p/virtiofs on WSL2).
+static PREFIXES: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
+    // On a read failure the list stays empty, so the filter is inert (plain lookup).
+    let mounts = std::fs::read_to_string("/proc/mounts").unwrap_or_else(|e| {
+        warn!("Could not read /proc/mounts: {e}; WSL Windows-path filter stays inert");
+        String::new()
+    });
+    mounts
+        .lines()
+        .filter_map(|line| {
+            let mut cols = line.split_whitespace();
+            let _source = cols.next()?;
+            let mount_point = cols.next()?;
+            let fstype = cols.next()?;
+            let options = cols.next().unwrap_or("");
+            // A Windows drive is WSL1 drvfs, or a WSL2 9p/virtiofs mount tagged
+            // `aname=drvfs`. Keying on that tag rather than the fstype avoids WSL's own
+            // 9p/virtiofs mounts (/usr/lib/wsl/drivers, /mnt/wslg) and still catches a
+            // drive mounted via virtiofs.
+            (fstype == "drvfs" || options.contains("aname=drvfs")).then(|| PathBuf::from(mount_point))
+        })
+        .collect()
+});
+
+fn is_windows_mount_path(path: &Path) -> bool {
+    PREFIXES.iter().any(|prefix| path.starts_with(prefix))
+}
+
+/// Mise shims dir, normally ~/.local/share/mise/shims
+static MISE_SHIMS: LazyLock<PathBuf> = LazyLock::new(|| {
+    env::var("MISE_SHIMS_DIR").map(PathBuf::from).unwrap_or_else(|_| {
+        env::var("MISE_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                #[cfg(unix)]
+                let data_dir = XDG_DIRS.data_dir();
+                #[cfg(windows)]
+                let data_dir = WINDOWS_DIRS.cache_dir(); // AppData\Local
+                data_dir.join("mise")
+            })
+            .join("shims")
+    })
+});
+
+fn mise_shim_is_nonfunctional(path: &Path) -> Result<bool> {
+    // --help is usually safe to run. A program not supporting it and erroring is okay too.
+    debug!("{path:?} is in mise shims dir ({MISE_SHIMS:?}), running `{path:?} --help` to check if it is functional");
+    // TODO: There's no easy way to do this without `which` and `require` taking `ctx`.
+    //  This loses automatic logging and damp runs.
+    #[expect(clippy::disallowed_methods)]
+    let out = Command::new(path)
+        .arg("--help")
+        .output()
+        .wrap_err_with(|| format!("Running `{} --help` failed", path.display()))?;
+    let stderr = match String::from_utf8(out.stderr) {
+        Ok(stderr) => stderr,
+        Err(_) => return Ok(false), // Non-UTF-8 output is weird, but mise's shim errors are UTF-8 so it must be working
+    };
+    Ok(stderr.contains("mise ERROR No version is set for shim:"))
+}
+
+pub fn which<T: AsRef<OsStr> + Debug>(binary_name: T) -> Result<Option<PathBuf>> {
+    #[expect(clippy::disallowed_methods)]
+    let candidates = match which_crate::which_all(&binary_name) {
+        Ok(candidates) => candidates,
+        Err(which_crate::Error::CannotFindBinaryPath) => {
+            debug!("Cannot find {:?}", &binary_name);
+            return Ok(None);
+        }
+        Err(e) => return Err(eyre!(e).wrap_err(format!("Detecting {:?} failed", binary_name))),
+    };
+
+    let mut errors = HashSet::new();
+    let path = 'find: {
+        for path in candidates {
+            if path.starts_with(&*MISE_SHIMS) && mise_shim_is_nonfunctional(&path)? {
+                errors.insert("a Mise shim without global default version");
+                continue;
+            }
+            if wsl_windows_path_filter_enabled() && is_windows_mount_path(&path) {
+                errors.insert("a Windows binary via WSL interop");
+                continue;
+            }
+            break 'find Some(path);
+        }
+        None
+    };
+
+    match path {
+        Some(path) => {
+            debug!("Detected {:?} as {:?}", &path, &binary_name);
+            Ok(Some(path))
+        }
+        None => {
+            if !errors.is_empty() {
+                debug!(
+                    "Cannot find usable {:?} in PATH (only {})",
+                    &binary_name,
+                    errors.into_iter().sorted().join(", and ")
+                );
+            } else {
+                debug!("Cannot find {:?}", &binary_name);
+            }
+            Ok(None)
+        }
+    }
+}
+
+pub fn require<T: AsRef<OsStr> + Debug>(binary_name: T) -> Result<PathBuf> {
+    which(&binary_name)?.ok_or_else(|| {
+        SkipStep(format!(
+            "{}",
+            t!(
+                "Cannot find {binary_name} in PATH",
+                binary_name = format!("{:?}", &binary_name)
+            )
+        ))
+        .into()
+    })
+}
+
+#[allow(unused)]
+pub fn require_flatpak(ctx: &ExecutionContext, name: &str) -> Result<Executor> {
+    let flatpak = require("flatpak")?;
+
+    let result = ctx.execute(&flatpak).always().args(["info", name]).output_checked();
+
+    match result {
+        Ok(_) => {
+            debug!("Flatpak {name:?} is installed");
+            let mut cmd = ctx.execute(&flatpak);
+            cmd.args(["run", name]);
+            Ok(cmd)
+        }
+        _ => Err(SkipStep(t!("Flatpak {name} is not installed", name = name).to_string()).into()),
+    }
+}
+
+#[allow(unused)]
+pub fn which_one<T: AsRef<OsStr> + Debug>(binary_names: impl IntoIterator<Item = T>) -> Result<Option<PathBuf>> {
+    for bin in binary_names {
+        if let Some(path) = which(&bin)? {
+            return Ok(Some(path));
+        }
+    }
+    Ok(None)
+}
+
+pub fn require_one<T: AsRef<OsStr> + Debug>(binary_names: impl IntoIterator<Item = T>) -> Result<PathBuf> {
+    let mut failed_bins = Vec::new();
+    for bin in binary_names {
+        match which(&bin)? {
+            Some(path) => return Ok(path),
+            None => failed_bins.push(bin),
+        }
+    }
+
+    Err(SkipStep(format!(
+        "{}",
+        t!(
+            "Cannot find any of {binary_names} in PATH",
+            binary_names = failed_bins
+                .iter()
+                .format_with(", ", |bin, f| f(&format_args!("{:?}", bin)))
+        )
+    ))
+    .into())
+}
+
+pub fn is_installed_via_homebrew(binary: &Path) -> bool {
+    binary
+        .canonicalize()
+        .is_ok_and(|p| p.to_string_lossy().contains("/Cellar/"))
+}
+
+#[allow(dead_code)]
+pub fn require_one_path<T: AsRef<Path> + Debug>(paths: impl IntoIterator<Item = T>) -> Result<PathBuf> {
+    let mut failed_paths = Vec::new();
+    for path_s in paths {
+        let path = path_s.as_ref();
+        if path.exists() {
+            debug!("Found required path at {:?}", path);
+            return Ok(path.to_path_buf());
+        } else {
+            failed_paths.push(path_s);
+        }
+    }
+
+    Err(SkipStep(format!(
+        "{}",
+        t!(
+            "None of {paths} exist",
+            paths = failed_paths
+                .iter()
+                .format_with(", ", |path, f| f(&format_args!("{:?}", path)))
+        )
+    ))
+    .into())
+}
+
+#[allow(dead_code)]
+pub fn require_option<T>(option: Option<T>, cause: String) -> Result<T> {
+    if let Some(value) = option {
+        Ok(value)
+    } else {
+        Err(SkipStep(cause).into())
+    }
+}
+
+pub fn string_prepend_str(string: &mut String, s: &str) {
+    let mut new_string = String::with_capacity(string.len() + s.len());
+    new_string.push_str(s);
+    new_string.push_str(string);
+    *string = new_string;
+}
+
+#[cfg(unix)]
+pub fn hostname() -> Result<String> {
+    match nix::unistd::gethostname() {
+        Ok(os_str) => Ok(os_str
+            .into_string()
+            .map_err(|_| SkipStep(t!("Failed to get a UTF-8 encoded hostname").into()))?),
+        Err(e) => Err(e.into()),
+    }
+}
+
+#[cfg(windows)]
+pub fn hostname() -> Result<String> {
+    std::env::var("COMPUTERNAME")
+        .map_err(|err| SkipStep(t!("Failed to get hostname: {err}", err = err).to_string()).into())
+}
+
+#[cfg(unix)]
+pub fn is_elevated() -> bool {
+    let euid = nix::unistd::Uid::effective();
+    debug!("Running with euid: {euid}");
+    euid.is_root()
+}
+
+#[cfg(windows)]
+pub fn is_elevated() -> bool {
+    let elevated = is_elevated::is_elevated();
+    if elevated {
+        debug!("Detected elevated process");
+    }
+    elevated
+}
+
+pub mod merge_strategies {
+    use indexmap::IndexMap;
+    use std::hash::Hash;
+    use std::mem;
+
+    /// Prepends right to left (both Option<Vec<T>>)
+    pub fn vec_prepend_opt<T>(left: &mut Option<Vec<T>>, right: &mut Option<Vec<T>>) {
+        if let Some(left_vec) = left {
+            if let Some(right_vec) = right {
+                merge2::vec::prepend(left_vec, right_vec);
+            }
+        } else {
+            mem::swap(left, right);
+        }
+    }
+
+    /// Appends an Option<String> to another Option<String>
+    pub fn string_append_opt(left: &mut Option<String>, right: &mut Option<String>) {
+        if let Some(left_str) = left {
+            if let Some(right_str) = right {
+                left_str.push(' ');
+                left_str.push_str(right_str);
+            }
+        } else {
+            mem::swap(left, right);
+        }
+    }
+
+    pub fn indexmap_merge_opt<T: Hash + Eq, U>(left: &mut Option<IndexMap<T, U>>, right: &mut Option<IndexMap<T, U>>) {
+        if let Some(left_inner) = left {
+            if let Some(right_inner) = right {
+                left_inner.extend(mem::take(right_inner));
+            }
+        } else {
+            mem::swap(left, right);
+        }
+    }
+}
+
+/// Return `Err(SkipStep)` if `python` is a Python 2 or shim.
+///
+/// # Shim
+/// On Windows, if you install `python` through `winget`, an actual `python`
+/// is installed as well as a `python3` shim. Shim is invocable, but when you
+/// execute it, the Microsoft Store will be launched instead of a Python
+/// shell.
+///
+/// We do this check through `python -V`, a shim will just give `Python` with
+/// no version number.
+pub fn check_is_python_2_or_shim(ctx: &ExecutionContext, python: PathBuf) -> Result<PathBuf> {
+    let output = ctx.execute(&python).always().arg("-V").output_checked_utf8()?;
+    // "Python x.x.x\n"
+    let stdout = output.stdout;
+    // ["Python"] or ["Python", "x.x.x"], the newline char is trimmed.
+    let mut split = stdout.split_whitespace();
+
+    if let Some(version) = split.nth(1) {
+        let major_version = version
+            .split('.')
+            .next()
+            .ok_or_else(|| {
+                eyre!(output_changed_message!(
+                    "python -V",
+                    "Should have a major version number"
+                ))
+            })?
+            .parse::<u32>()
+            .wrap_err_with(|| output_changed_message!("python -V", "Major version should be a valid number"))?;
+        if major_version == 2 {
+            return Err(SkipStep(t!("{python} is a Python 2, skip.", python = python.display()).to_string()).into());
+        }
+    } else {
+        // No version number, is a shim
+        return Err(SkipStep(t!("{python} is a Python shim, skip.", python = python.display()).to_string()).into());
+    }
+
+    Ok(python)
+}
+
+/// Set up the tracing logger
+///
+/// # Return value
+/// A reload handle will be returned so that we can change the log level at
+/// runtime.
+pub fn install_tracing(filter_directives: &str) -> Result<Handle<EnvFilter, Registry>> {
+    let env_filter = EnvFilter::try_new(filter_directives)
+        .or_else(|_| EnvFilter::try_from_default_env())
+        .or_else(|_| EnvFilter::try_new(DEFAULT_LOG_LEVEL))?;
+
+    let fmt_layer = fmt::layer().with_target(false).without_time();
+
+    let (filter, reload_handle) = Layer::new(env_filter);
+
+    registry().with(filter).with(fmt_layer).init();
+
+    Ok(reload_handle)
+}
+
+/// Update the tracing logger with new `filter_directives`.
+pub fn update_tracing(reload_handle: &Handle<EnvFilter, Registry>, filter_directives: &str) -> Result<()> {
+    let new = EnvFilter::try_new(filter_directives)
+        .or_else(|_| EnvFilter::try_from_default_env())
+        .or_else(|_| EnvFilter::try_new(DEFAULT_LOG_LEVEL))?;
+    reload_handle.modify(|old| *old = new)?;
+
+    Ok(())
+}
+
+/// Set up the error handler crate
+pub fn install_color_eyre() -> Result<()> {
+    color_eyre::config::HookBuilder::new()
+        // Don't display the backtrace reminder by default:
+        //   Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+        //   Run with RUST_BACKTRACE=full to include source snippets.
+        .display_env_section(false)
+        // Display location information by default:
+        //   Location:
+        //      src/steps.rs:92
+        .display_location_section(true)
+        .install()
+}
+
+/// Macro to construct an error message for when the output of a command is unexpected.
+#[macro_export]
+macro_rules! output_changed_message {
+    ($command:expr, $message:expr) => {
+        format!(
+            "The output of `{}` changed: {}. This is not your fault, this is an issue in Topgrade. Please open an issue at: https://github.com/topgrade-rs/topgrade/issues/new?template=bug-report.yml&version=topgrade%20{}",
+            $command,
+            $message,
+            env!("CARGO_PKG_VERSION"),
+        )
+    };
+}
