@@ -13,7 +13,7 @@ use std::{
     os::unix::{fs::DirBuilderExt, fs::PermissionsExt, process::CommandExt as _},
     path::{Component, Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
-    sync::mpsc,
+    sync::{Arc, mpsc},
     thread,
     time::{Duration, Instant},
 };
@@ -105,10 +105,22 @@ struct Captured {
 }
 
 fn capture(command: &mut Command, timeout: Duration, limit: u64) -> Result<Captured> {
-    fn pipe(reader: impl Read + Send + 'static, limit: u64) -> mpsc::Receiver<Result<Vec<u8>>> {
+    capture_with(command, timeout, limit, |reader, limit, _| bounded(reader, limit))
+}
+
+fn capture_with(
+    command: &mut Command,
+    timeout: Duration,
+    limit: u64,
+    read: impl Fn(&mut dyn Read, u64, bool) -> Result<Vec<u8>> + Send + Sync + 'static,
+) -> Result<Captured> {
+    fn pipe(
+        mut reader: impl Read + Send + 'static,
+        read: impl FnOnce(&mut dyn Read) -> Result<Vec<u8>> + Send + 'static,
+    ) -> mpsc::Receiver<Result<Vec<u8>>> {
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
-            let _ = sender.send(bounded(reader, limit));
+            let _ = sender.send(read(&mut reader));
         });
         receiver
     }
@@ -120,8 +132,16 @@ fn capture(command: &mut Command, timeout: Duration, limit: u64) -> Result<Captu
         .spawn_checked()?;
     let pgid = i32::try_from(child.id())?;
     let result = (|| {
-        let out = pipe(child.stdout.take().context("Missing skill command stdout")?, limit);
-        let err = pipe(child.stderr.take().context("Missing skill command stderr")?, DATA_LIMIT);
+        let read = Arc::new(read);
+        let stdout = Arc::clone(&read);
+        let out = pipe(
+            child.stdout.take().context("Missing skill command stdout")?,
+            move |reader| stdout(reader, limit, false),
+        );
+        let err = pipe(
+            child.stderr.take().context("Missing skill command stderr")?,
+            move |reader| read(reader, DATA_LIMIT, true),
+        );
         let deadline = Instant::now() + timeout;
         let status = loop {
             if let Some(status) = child.try_wait()? {

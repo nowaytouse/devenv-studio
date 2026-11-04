@@ -6,7 +6,7 @@ use regex::Regex;
 use serde_json::json;
 use std::{
     fs::OpenOptions,
-    io::{Seek, SeekFrom},
+    io::{BufRead, BufReader, Seek, SeekFrom},
     os::unix::fs::{MetadataExt, OpenOptionsExt},
     sync::LazyLock,
 };
@@ -217,6 +217,42 @@ fn accepted(output: &str, success: bool) -> bool {
     success && !FAILURE.is_match(&plain) && SUCCESS.is_match(&plain)
 }
 
+fn tee(reader: &mut dyn Read, mut sink: impl Write, secrets: &[String], mut remaining: u64) -> Result<Vec<u8>> {
+    let mut reader = BufReader::new(reader);
+    let mut record = Vec::new();
+    let mut evidence = Vec::new();
+    let mut emit = |record: &[u8]| -> Result<()> {
+        let mut text = String::from_utf8_lossy(record).into_owned();
+        for secret in secrets {
+            text = text.replace(secret, "[REDACTED]");
+        }
+        sink.write_all(text.as_bytes())?;
+        sink.flush()?;
+        evidence.extend_from_slice(text.as_bytes());
+        Ok(())
+    };
+    loop {
+        let chunk = reader.fill_buf()?;
+        if chunk.is_empty() {
+            if !record.is_empty() {
+                emit(&record)?;
+            }
+            return Ok(evidence);
+        }
+        let boundary = chunk.iter().position(|byte| matches!(byte, b'\n' | b'\r'));
+        let count = boundary.map_or(chunk.len(), |index| index + 1);
+        ensure!(count as u64 <= remaining, "Skill update output exceeded its size limit");
+        remaining -= count as u64;
+        record.extend_from_slice(&chunk[..count]);
+        reader.consume(count);
+        if boundary.is_some() {
+            // Buffer one record so credentials split across pipe reads never reach the terminal.
+            emit(&record)?;
+            record.clear();
+        }
+    }
+}
+
 fn verify_lock(before: &Value, after: &Value) -> Result<()> {
     let new = lock_entries(after)?;
     let old = lock_entries(before)?;
@@ -291,12 +327,20 @@ pub(super) fn run(home: &Path) -> Result<()> {
         bytes(&lock_path, DATA_LIMIT)? == original,
         "Shared skill lock changed before NPX execution"
     );
-    let out = capture(
+    println!("Running {SKILLS_PACKAGE} update --global --yes (live output)");
+    let out = capture_with(
         command
             .current_dir(work.path())
             .args(["--yes", SKILLS_PACKAGE, "update", "--global", "--yes"]),
         Duration::from_secs(900),
         DATA_LIMIT,
+        move |reader, limit, stderr| {
+            if stderr {
+                tee(reader, io::stderr(), &secrets, limit)
+            } else {
+                tee(reader, io::stdout(), &secrets, limit)
+            }
+        },
     )
     .wrap_err_with(|| {
         format!(
@@ -304,15 +348,11 @@ pub(super) fn run(home: &Path) -> Result<()> {
             archive.display()
         )
     })?;
-    let mut output = format!(
+    let output = format!(
         "{}\n{}",
         String::from_utf8_lossy(&out.out),
         String::from_utf8_lossy(&out.err)
     );
-    for secret in secrets {
-        output = output.replace(&secret, "[REDACTED]");
-    }
-    print!("{output}");
     ensure!(
         accepted(&output, out.status.success()),
         "Skills update did not verify every source ({}). Pre-update lock saved at {}",
@@ -332,6 +372,62 @@ pub(super) fn run(home: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_output_arrives_before_exit_and_hidden_failure_still_fails() -> Result<()> {
+        use std::os::unix::net::UnixStream;
+
+        let work = tempfile::tempdir()?;
+        let resume = work.path().join("resume");
+        let (mut out, out_sink) = UnixStream::pair()?;
+        let (mut err, err_sink) = UnixStream::pair()?;
+        out.set_read_timeout(Some(Duration::from_secs(5)))?;
+        err.set_read_timeout(Some(Duration::from_secs(5)))?;
+        let arg = resume.clone();
+        let worker = thread::spawn(move || {
+            capture_with(
+                crate::studio::command(Path::new("/bin/sh"))
+                    .args([
+                        "-c",
+                        "printf 'fetching\\r'; printf 'diagnostic\\n' >&2; \
+                         while [ ! -f \"$1\" ]; do /bin/sleep 0.01; done; \
+                         printf 'test-cre'; printf 'dential\\n'; \
+                         printf 'Failed to check source\\n' >&2; \
+                         printf 'All global skills are up to date'",
+                        "fixture",
+                    ])
+                    .arg(arg),
+                Duration::from_secs(10),
+                4096,
+                move |reader, limit, stderr| {
+                    tee(
+                        reader,
+                        if stderr { &err_sink } else { &out_sink },
+                        &["test-credential".into()],
+                        limit,
+                    )
+                },
+            )
+        });
+        let mut first = [0; 9];
+        out.read_exact(&mut first)?;
+        assert_eq!(&first, b"fetching\r");
+        let mut diagnostic = [0; 11];
+        err.read_exact(&mut diagnostic)?;
+        assert_eq!(&diagnostic, b"diagnostic\n");
+        fs::write(resume, [])?;
+
+        let captured = worker.join().expect("fixture capture thread")?;
+        let stdout = String::from_utf8(captured.out)?;
+        let stderr = String::from_utf8(captured.err)?;
+        let mut tail = String::new();
+        out.read_to_string(&mut tail)?;
+        assert_eq!(tail, "[REDACTED]\nAll global skills are up to date");
+        assert!(stdout.ends_with(&tail));
+        assert!(captured.status.success());
+        assert!(!accepted(&format!("{stdout}\n{stderr}"), captured.status.success()));
+        Ok(())
+    }
 
     #[test]
     fn output_requires_success_evidence_and_rejects_hidden_failure() {

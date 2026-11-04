@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS 无人值守技能更新实时转发 NPX 的 stdout 和 stderr，先脱敏再显示，仍核验逐源失败及更新后的技能锁。
+
 - macOS 更新中心把工具与缓存、只读诊断和终端维护分开呈现。BetterDisplay 和 HEAD-sync 有独立预演入口，Homebrew 清单可筛选已固定版本。
 - Topgrade 组件在枚举其余 Homebrew 更新前验证 ggml 和 llama.cpp 的活动 keg 及完整 SHA。最终运行时验证和公式事务恢复继续保留。
 
