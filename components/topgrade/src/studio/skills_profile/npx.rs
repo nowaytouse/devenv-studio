@@ -316,6 +316,9 @@ pub(super) fn run(home: &Path) -> Result<()> {
     }
     let work = tempfile::tempdir()?;
     npm_config(&mut command, work.path())?;
+    let launcher = work.path().join("skills.mjs");
+    fs::write(&launcher, include_str!("skills-1.7.6.mjs"))?;
+    let node = resolve_tool("node")?;
     let archive_root = directory(home, Path::new(".local/state/topgrade-skill-lock"), true)?;
     let archive = tempfile::Builder::new()
         .prefix("npx-")
@@ -327,11 +330,14 @@ pub(super) fn run(home: &Path) -> Result<()> {
         bytes(&lock_path, DATA_LIMIT)? == original,
         "Shared skill lock changed before NPX execution"
     );
-    println!("Running {SKILLS_PACKAGE} update --global --yes (live output)");
+    println!("Running {SKILLS_PACKAGE} update --global --yes (per-source results)");
     let out = capture_with(
         command
             .current_dir(work.path())
-            .args(["--yes", SKILLS_PACKAGE, "update", "--global", "--yes"]),
+            .args(["--yes", "--package", SKILLS_PACKAGE, "--"])
+            .arg(node)
+            .arg(launcher)
+            .args(["update", "--global", "--yes"]),
         Duration::from_secs(900),
         DATA_LIMIT,
         move |reader, limit, stderr| {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS 技能更新校验固定 NPX 包后即时报告逐源结果，为 GitHub 树查询提供有界长超时，并以失败状态报告未核验的来源。
+
 - macOS 无人值守技能更新实时转发 NPX 的 stdout 和 stderr，先脱敏再显示，仍核验逐源失败及更新后的技能锁。
 
 - macOS 更新中心把工具与缓存、只读诊断和终端维护分开呈现。BetterDisplay 和 HEAD-sync 有独立预演入口，Homebrew 清单可筛选已固定版本。
