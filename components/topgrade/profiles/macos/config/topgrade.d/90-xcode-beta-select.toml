@@ -1,2 +1,2 @@
 [post_commands]
-"Auto-select newest Xcode Beta" = "$HOME/.local/bin/topgrade-select-xcode-beta"
+"Auto-select newest Xcode Beta" = "@studio:xcode_select_beta"

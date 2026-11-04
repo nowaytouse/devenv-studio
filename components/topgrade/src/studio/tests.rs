@@ -64,7 +64,15 @@ fn studio_request_requires_private_directory_and_distinct_known_steps() {
     private_file(&path, &serde_json::to_vec(&data).unwrap());
     assert_eq!(request(&dir).unwrap().steps, [Step::GithubCliSkills, Step::Helm]);
 
-    for steps in [serde_json::json!(["helm", "helm"]), serde_json::json!(["shell"])] {
+    data["steps"] = serde_json::json!(Step::ALL);
+    fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+    assert_eq!(request(&dir).unwrap().steps, Step::ALL);
+    for steps in [
+        serde_json::json!(["helm", "helm"]),
+        serde_json::json!(["helm", "github_cli_skills"]),
+        serde_json::json!(["brew_formula"]),
+        serde_json::json!(["unknown"]),
+    ] {
         data["steps"] = steps;
         fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
         assert!(request(&dir).is_err());
@@ -110,10 +118,11 @@ fn studio_release_rejects_asset_drift_and_receipt_replacement() {
     let reviewed = digest(&receipt);
     verify_release(&home, &executable, &reviewed).unwrap();
 
-    fs::write(home.join(SKILLS), b"unexpected script").unwrap();
+    let asset = REQUIRED_ASSETS[0];
+    fs::write(home.join(asset), b"unexpected config").unwrap();
     let error = verify_release(&home, &executable, &reviewed).err().unwrap();
     assert!(error.to_string().contains("Managed file changed"));
-    fs::write(home.join(SKILLS), SKILLS).unwrap();
+    fs::write(home.join(asset), asset).unwrap();
     fs::write(&receipt, b"{}").unwrap();
     let error = verify_release(&home, &executable, &reviewed).err().unwrap();
     assert!(error.to_string().contains("Reviewed engine receipt has changed"));
@@ -123,21 +132,48 @@ fn studio_release_rejects_asset_drift_and_receipt_replacement() {
 fn studio_clean_child_exit_clears_marker_but_signal_retains_it() {
     let temp = tempfile::tempdir().unwrap();
     let dir = temp.path().canonicalize().unwrap();
-    let interpreter = dir.join("mock-python");
-    private_file(&interpreter, b"#!/bin/sh\nexit 0\n");
-    fs::set_permissions(&interpreter, fs::Permissions::from_mode(0o700)).unwrap();
-    assert_eq!(
-        run_step(&dir, &dir, &dir, "clean", Step::Helm, &interpreter).unwrap(),
-        Outcome::Success
+    let held = lock(&dir).unwrap();
+    let executable = dir.join("mock-engine");
+    let check = concat!(
+        "#!/bin/sh\n",
+        "test \"$1\" = --studio-worker && test -e \"/dev/fd/$4\" || exit 42\n",
+        "/bin/cat >/dev/null || exit 43\n",
+        "/usr/bin/grep -Fq \"\\\"child_pgid\\\":$$\" \"$2/maintenance-active.json\" || exit 44\n",
     );
+    private_file(&executable, format!("{check}exit 0\n").as_bytes());
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let worker = || worker_command(&dir, &executable, &held, &dir, Step::Helm);
+    assert_eq!(run_step(&dir, "clean", Step::Helm, worker()).unwrap(), Outcome::Success);
     check_admission(&dir, &dir).unwrap();
 
-    fs::write(&interpreter, b"#!/bin/sh\nkill -TERM $$\n").unwrap();
-    assert!(run_step(&dir, &dir, &dir, "interrupted", Step::Helm, &interpreter).is_err());
+    fs::write(&executable, format!("{check}kill -TERM $$\n")).unwrap();
+    assert!(run_step(&dir, "interrupted", Step::Helm, worker()).is_err());
     assert!(check_admission(&dir, &dir).is_err());
     let marker: Interruption = serde_json::from_slice(&fs::read(dir.join(MARKER)).unwrap()).unwrap();
     assert_eq!(marker.run_id, "interrupted");
     assert!(!signal_group(marker.child_pgid.unwrap(), None).unwrap());
+}
+
+#[test]
+fn studio_inventory_uses_topgrade_step_ids_and_only_controls_reviewed_operations() {
+    use clap::ValueEnum;
+    let rows = inventory::entries();
+    assert_eq!(rows.len(), crate::step::Step::value_variants().len() + 2);
+    assert!(rows.windows(2).all(|pair| pair[0].id < pair[1].id));
+    let ids: Vec<_> = rows
+        .iter()
+        .filter(|entry| entry.mode == "controlled")
+        .map(|entry| entry.id.as_str())
+        .collect();
+    assert_eq!(ids, Step::ALL.map(Step::id));
+    for step in Step::ALL {
+        assert_eq!(serde_json::to_value(step).unwrap(), step.id());
+    }
+    for id in ["brew_formula", "mas", "self_update", "custom_commands"] {
+        let row = rows.iter().find(|entry| entry.id == id).unwrap();
+        assert_eq!(row.mode, "terminal");
+        assert!(row.tools.is_empty());
+    }
 }
 
 #[test]

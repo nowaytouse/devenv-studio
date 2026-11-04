@@ -1,8 +1,20 @@
 # Topgrade 更新中心
 
-「环境更新」是 DevEnv Studio 单窗口中的 Apple Silicon macOS 页面。默认没有选中项。检查工具和安装记录后，选择 GitHub CLI Skills 或 Helm 仓库，审核并明确确认。重新执行需要重新检查。完整本机配置、Homebrew HEAD-sync、MAS 和需要交互的步骤使用页面提供的终端命令。配置迁移包仍是独立的备份和提取入口。
+「更新中心」从已核验的 Topgrade 引擎读取步骤目录。GitHub CLI 技能和扩展、Helm、TLDR、Homebrew 链接审计和 CLI 工具版本可以在 GUI 内审核后执行。默认零选中，重跑前需重新检查。其余引擎步骤及本机 profile 的定制任务有可搜索的终端入口。预演读取正常 Topgrade 配置，前后置命令及配置中的 `misc.only` 也会参与；以预演结果核对实际范围。配置迁移包仍是独立的备份和提取入口。
 
-Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制和受管脚本、配置及工具身份。受限入口只运行已审核的两个验证器，使用独立的运行请求和结果流。运行记录、有限长度日志和错误保存到已有 Studio 数据目录下的 `maintenance/runs`。普通终端入口、Studio 的相应 Mac 写操作和引擎切换使用同一个维护锁。其他工具直接运行的命令由其各自锁保护。
+Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受管配置和选中工具的身份。受限入口用 Rust 子进程执行白名单步骤，通过独立请求和事件记录汇报。运行记录和有界日志位于现有 Studio 数据目录的 `maintenance/runs`。普通终端入口、Studio 的相应 Mac 写操作和引擎切换共用维护锁。
+
+当前 Rust 迁移的范围：
+
+| 功能 | 正常 profile | GUI |
+| --- | --- | --- |
+| GitHub CLI Skills、Helm | 原生验证器保留归属、共享锁和缓存检查 | 可审核执行 |
+| Homebrew 链接审计、CLI 版本报告 | Rust 审计与版本探测 | 可审核执行 |
+| GitHub CLI 扩展、TLDR | Topgrade 自身步骤 | 可审核执行 |
+| gcloud、MAS、Xcode Beta 选择 | Rust 保留重试、核验或回退边界 | 终端入口 |
+| HEAD-sync、SQLite、Preview/Beta 应用安装、Gradle、项目滚动依赖、NPX/设计包和 npm 安全修复 | 继续使用受管脚本 | 终端入口 |
+
+旧验证器文件仍随 profile 保存，用于兼容及回退。新引擎的六个受控步骤不调用这些 Python 或 Shell 验证器。Profile 安装器和上表剩余任务继续依赖原有运行时。
 
 取消在当前步骤结束后生效。超时或无法证明子进程结束时，保留中断记录，暂停新的维护操作。先检查任务和现存变更，再在终端运行已安装 Topgrade 的 `--studio-acknowledge-interruption`。如果中断记录缺少可核验的进程组信息，先人工确认没有残余进程并核验更新器状态，再保留该记录作恢复依据。
 

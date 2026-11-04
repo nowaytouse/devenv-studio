@@ -30,8 +30,6 @@ use std::{
 const RECORD_LIMIT: u64 = 16 * 1024;
 const LOG_LIMIT: usize = 8 * 1024 * 1024;
 const MAX_HISTORY: usize = 256;
-const SOFT_DEADLINE: Duration = Duration::from_secs(31 * 60);
-const HARD_DEADLINE: Duration = Duration::from_secs(33 * 60);
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -253,6 +251,10 @@ impl Supervisor<'_> {
                 sender,
             );
             let start = Instant::now();
+            // The engine owns the 15-minute watchdog for each step.
+            let step_budget = Duration::from_secs(15 * 60 * self.request.steps.len() as u64);
+            let soft_deadline = step_budget + Duration::from_secs(60);
+            let hard_deadline = step_budget + Duration::from_secs(3 * 60);
             let mut previous = Vec::new();
             let mut announced = (0, None);
             let (mut faulted, mut cancel_sent, mut closed) = (false, false, 0);
@@ -282,7 +284,7 @@ impl Supervisor<'_> {
                 if !cancel_sent
                     && (faulted
                         || self.cancel.load(Ordering::Acquire)
-                        || start.elapsed() >= SOFT_DEADLINE)
+                        || start.elapsed() >= soft_deadline)
                 {
                     if persist(&self.path.join("cancel"), b"").is_err() {
                         faulted = true;
@@ -290,7 +292,7 @@ impl Supervisor<'_> {
                     cancel_sent = true;
                 }
                 ensure!(
-                    start.elapsed() < HARD_DEADLINE,
+                    start.elapsed() < hard_deadline,
                     "Topgrade engine did not stop before its outer deadline"
                 );
                 thread::sleep(Duration::from_millis(100));
@@ -501,6 +503,53 @@ fn read_run(path: PathBuf, run_id: &str) -> Result<Report> {
         );
     }
     Ok(record.report(path))
+}
+
+pub(in crate::maintenance) fn output_excerpt(report: &Report) -> Result<String> {
+    const EXCERPT: usize = 16 * 1024;
+    ensure!(
+        valid_run_id(&report.run_id),
+        "Invalid maintenance output identifier"
+    );
+    let path = directory(&account_home()?).join(&report.run_id);
+    ensure!(
+        path == report.path,
+        "Maintenance output is outside its run directory"
+    );
+    let metadata = real_metadata(&path)?;
+    ensure!(
+        metadata.is_dir() && metadata.mode() & 0o077 == 0,
+        "Invalid maintenance output directory"
+    );
+    let mut excerpt = String::new();
+    for filename in ["stdout.log", "stderr.log"] {
+        let file = path.join(filename);
+        if !present(&file)? {
+            continue;
+        }
+        let (input, metadata) = super::open_regular(&file, LOG_LIMIT as u64)?;
+        ensure!(
+            metadata.mode() & 0o077 == 0,
+            "Maintenance output is not private"
+        );
+        let mut bytes = Vec::new();
+        input.take((EXCERPT + 1) as u64).read_to_end(&mut bytes)?;
+        if bytes.is_empty() {
+            continue;
+        }
+        excerpt.push_str(filename);
+        excerpt.push('\n');
+        excerpt.extend(
+            String::from_utf8_lossy(&bytes[..bytes.len().min(EXCERPT)])
+                .chars()
+                .filter(|c| matches!(c, '\n' | '\t') || !c.is_control()),
+        );
+        if bytes.len() > EXCERPT {
+            excerpt.push_str("\n[Excerpt truncated. Full output remains in the run directory.]");
+        }
+        excerpt.push_str("\n\n");
+    }
+    Ok(excerpt)
 }
 
 pub(in crate::maintenance) fn history() -> Result<Vec<Report>> {

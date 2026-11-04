@@ -229,12 +229,14 @@ pub struct Brew {
 #[serde(deny_unknown_fields)]
 pub struct GithubCli {
     skills_updater: Option<PathBuf>,
+    skills_native: Option<bool>,
 }
 
 #[derive(Deserialize, Default, Debug, Merge)]
 #[serde(deny_unknown_fields)]
 pub struct Helm {
     repository_updater: Option<PathBuf>,
+    repository_native: Option<bool>,
 }
 
 #[derive(Deserialize, Default, Debug, Merge)]
@@ -1113,12 +1115,28 @@ impl Config {
             .and_then(|github_cli| github_cli.skills_updater.as_deref())
     }
 
+    pub fn github_cli_skills_native(&self) -> bool {
+        self.config_file
+            .github_cli
+            .as_ref()
+            .and_then(|config| config.skills_native)
+            .unwrap_or(false)
+    }
+
     /// Optional executable that owns verified Helm repository updates.
     pub fn helm_repository_updater(&self) -> Option<&Path> {
         self.config_file
             .helm
             .as_ref()
             .and_then(|helm| helm.repository_updater.as_deref())
+    }
+
+    pub fn helm_repository_native(&self) -> bool {
+        self.config_file
+            .helm
+            .as_ref()
+            .and_then(|config| config.repository_native)
+            .unwrap_or(false)
     }
 
     /// The list of commands to run before performing any step.
@@ -2444,12 +2462,26 @@ mod test {
     fn helm_repository_updater_preserves_config_precedence() {
         let mut left = Helm {
             repository_updater: Some(PathBuf::from("left")),
+            ..Default::default()
         };
         let mut right = Helm {
             repository_updater: Some(PathBuf::from("right")),
+            ..Default::default()
         };
         left.merge(&mut right);
         assert_eq!(left.repository_updater, Some(PathBuf::from("left")));
+    }
+
+    #[test]
+    fn managed_profile_selects_native_hooks_without_changing_upstream_defaults() {
+        let default = config_from_toml("");
+        assert!(!default.github_cli_skills_native());
+        assert!(!default.helm_repository_native());
+        let managed = config_from_toml(include_str!("../profiles/macos/config/topgrade.toml"));
+        assert!(managed.github_cli_skills_native());
+        assert!(managed.helm_repository_native());
+        assert!(managed.github_cli_skills_updater().is_none());
+        assert!(managed.helm_repository_updater().is_none());
     }
 
     /// Test the default configuration in `config.example.toml` is valid.

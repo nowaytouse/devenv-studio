@@ -15,18 +15,13 @@ use std::{
 };
 
 mod run;
-pub(super) use run::{history, run};
+pub(super) use run::{history, output_excerpt, run};
 
 const PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
-const PYTHON: &str = "/opt/homebrew/opt/python@3.15/bin/python3.15";
 const FILE_LIMIT: u64 = 128 * 1024 * 1024;
 const JSON_LIMIT: u64 = 128 * 1024;
 const NO_FOLLOW_NONBLOCK: i32 = 0x100 | 0x4;
-const ASSETS: [&str; 9] = [
-    ".local/bin/topgrade-gh-skills-verified",
-    ".local/bin/topgrade-helm-verified",
-    ".local/bin/topgrade-cursor-native-reconcile.py",
-    ".local/bin/normalize-gh-skill-lock.py",
+const ASSETS: [&str; 5] = [
     ".config/topgrade.toml",
     ".config/topgrade.d/90-brew-headsync.toml",
     ".config/topgrade.d/90-skills-coverage.toml",
@@ -402,8 +397,8 @@ fn load_proof(cancel: &AtomicBool) -> Result<Proof> {
 }
 
 fn tool(name: &str) -> Result<Tool> {
-    let candidates = if name == "python3.15" {
-        vec![PathBuf::from(PYTHON)]
+    let candidates = if name == "curl" {
+        vec![PathBuf::from("/usr/bin/curl")]
     } else {
         PATH.split(':')
             .map(|dir| Path::new(dir).join(name))
@@ -429,13 +424,6 @@ fn tool(name: &str) -> Result<Tool> {
             metadata.is_file() && metadata.mode() & 0o111 != 0 && metadata.mode() & 0o022 == 0,
             "Maintenance tool {name} must be a trusted executable file"
         );
-        if name == "python3.15" {
-            ensure!(
-                path.starts_with("/opt/homebrew/Cellar/python@3.15")
-                    && path.ends_with("bin/python3.15"),
-                "Unexpected Homebrew Python 3.15 interpreter"
-            );
-        }
         return Ok(Tool {
             path,
             device: metadata.dev(),
@@ -450,50 +438,115 @@ fn tool(name: &str) -> Result<Tool> {
 
 fn required_tools(id: &str) -> &'static [&'static str] {
     match id {
-        "github_cli_skills" => &["python3.15", "gh"],
-        "helm" => &["python3.15", "helm", "curl"],
+        "github_cli_skills" | "github_cli_extensions" => &["gh"],
+        "helm" => &["helm", "curl"],
+        "brew_linkage_audit" => &["brew"],
+        "tldr" => &["tldr"],
         _ => &[],
     }
 }
 
-fn steps() -> Vec<Step> {
-    [
-        (
-            IDS[0],
-            "GitHub Skills",
-            "Update the verified GitHub CLI-owned skills.",
-        ),
-        (
-            IDS[1],
-            "Helm repositories",
-            "Verify or refresh the existing Helm repository indexes.",
-        ),
-    ]
-    .into_iter()
-    .map(|(id, label, detail)| Step {
-        id: id.into(),
-        label: label.into(),
-        detail: detail.into(),
-        terminal: false,
-        available: true,
-    })
-    .collect()
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Inventory {
+    schema_version: u8,
+    steps: Vec<InventoryStep>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InventoryStep {
+    id: String,
+    label: String,
+    mode: InventoryMode,
+    tools: Vec<String>,
+}
+
+#[derive(Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum InventoryMode {
+    Controlled,
+    Terminal,
+}
+
+fn parse_inventory(bytes: &[u8]) -> Result<Vec<Step>> {
+    ensure!(
+        bytes.len() as u64 <= JSON_LIMIT,
+        "Topgrade inventory is too large"
+    );
+    let inventory: Inventory = serde_json::from_slice(bytes).context("Parse Topgrade inventory")?;
+    ensure!(
+        inventory.schema_version == 1 && (1..=512).contains(&inventory.steps.len()),
+        "Unsupported Topgrade inventory"
+    );
+    let mut seen = BTreeSet::new();
+    let mut steps = Vec::with_capacity(inventory.steps.len());
+    for row in inventory.steps {
+        ensure!(
+            (1..=96).contains(&row.id.len())
+                && row
+                    .id
+                    .bytes()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_')
+                && (1..=160).contains(&row.label.len())
+                && !row.label.chars().any(char::is_control)
+                && seen.insert(row.id.clone()),
+            "Invalid or duplicate Topgrade inventory row"
+        );
+        let terminal = row.mode == InventoryMode::Terminal;
+        ensure!(
+            terminal && row.tools.is_empty() && !IDS.contains(&row.id.as_str())
+                || !terminal
+                    && IDS.contains(&row.id.as_str())
+                    && row.tools == required_tools(&row.id),
+            "Unrecognized Topgrade execution route"
+        );
+        steps.push(Step {
+            id: row.id,
+            label: row.label,
+            detail: String::new(),
+            terminal,
+            available: !terminal,
+        });
+    }
+    ensure!(
+        IDS.iter().all(|id| seen.contains(*id)),
+        "Topgrade engine lacks expected native steps"
+    );
+    Ok(steps)
+}
+
+fn inventory(proof: &Proof) -> Result<Vec<Step>> {
+    let output = Command::new(&proof.binary)
+        .arg("--studio-inventory")
+        .current_dir(&proof.home)
+        .env_clear()
+        .env("HOME", &proof.home)
+        .env("PATH", PATH)
+        .stdin(Stdio::null())
+        .output()
+        .context("Read the verified Topgrade engine inventory")?;
+    ensure!(
+        output.status.success(),
+        "Installed Topgrade did not provide a Studio step inventory. Install the matching engine."
+    );
+    parse_inventory(&output.stdout)
 }
 
 pub(super) fn check(cancel: &AtomicBool) -> Result<Check> {
     require_running(cancel)?;
-    let mut steps = steps();
-    if let Err(error) = load_proof(cancel) {
-        require_running(cancel)?;
-        for step in &mut steps {
-            step.available = false;
+    let checked = load_proof(cancel).and_then(|proof| inventory(&proof));
+    let mut steps = match checked {
+        Ok(steps) => steps,
+        Err(error) => {
+            require_running(cancel)?;
+            return Ok(Check {
+                available: false,
+                detail: format!("{error:#}"),
+                steps: Vec::new(),
+            });
         }
-        return Ok(Check {
-            available: false,
-            detail: format!("{error:#}"),
-            steps,
-        });
-    }
+    };
     for step in &mut steps {
         if let Err(error) = required_tools(&step.id)
             .iter()
@@ -504,8 +557,8 @@ pub(super) fn check(cancel: &AtomicBool) -> Result<Check> {
         }
     }
     Ok(Check {
-        available: steps.iter().any(|step| step.available),
-        detail: "Managed Topgrade engine and profile assets verified.".into(),
+        available: steps.iter().any(|step| step.available && !step.terminal),
+        detail: "Managed Topgrade engine, profile and step inventory verified.".into(),
         steps,
     })
 }
@@ -527,15 +580,45 @@ pub(super) fn review(selected: &BTreeSet<String>, cancel: &AtomicBool) -> Result
         !selected.is_empty() && selected.iter().all(|id| IDS.contains(&id.as_str())),
         "Select only known macOS maintenance steps"
     );
-    let steps = steps()
-        .into_iter()
-        .filter(|step| selected.contains(&step.id))
-        .collect();
     let selected = selected.iter().cloned().collect::<Vec<_>>();
     let proof = review_proof(&selected, cancel)?;
+    let steps = inventory(&proof)?
+        .into_iter()
+        .filter(|step| !step.terminal && selected.contains(&step.id))
+        .collect();
     Ok(Review {
         steps,
         proof,
         selected,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn catalog_cannot_grant_execution_to_a_terminal_step() {
+        let mut rows = IDS
+            .iter()
+            .map(|id| {
+                serde_json::json!({
+                    "id": id, "label": id, "mode": "controlled", "tools": required_tools(id)
+                })
+            })
+            .collect::<Vec<_>>();
+        rows.push(serde_json::json!({
+            "id": "brew_formula", "label": "Homebrew Formulae", "mode": "terminal", "tools": []
+        }));
+        let bytes = |rows: &[serde_json::Value]| {
+            serde_json::to_vec(&serde_json::json!({
+                "schema_version": 1, "steps": rows
+            }))
+            .unwrap()
+        };
+        let steps = parse_inventory(&bytes(&rows)).unwrap();
+        assert!(steps.last().unwrap().terminal && !steps.last().unwrap().available);
+        rows.last_mut().unwrap()["mode"] = serde_json::json!("controlled");
+        assert!(parse_inventory(&bytes(&rows)).is_err());
+    }
 }

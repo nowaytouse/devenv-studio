@@ -1474,6 +1474,13 @@ pub fn run_myrepos_update(ctx: &ExecutionContext) -> Result<()> {
 pub fn run_custom_command(name: &str, command: &str, ctx: &ExecutionContext) -> Result<()> {
     print_separator(name);
 
+    if let Some(id) = command.strip_prefix("@studio:") {
+        #[cfg(target_os = "macos")]
+        return crate::studio::run_native_profile(id, ctx.run_type());
+        #[cfg(not(target_os = "macos"))]
+        bail!("Studio native task {id} is available only on macOS");
+    }
+
     #[cfg(unix)]
     let (command, put_i) = if let Some(new_command) = command.strip_prefix("-i ") {
         (new_command, true)
@@ -1823,6 +1830,18 @@ pub fn run_ghcli_extensions_upgrade(ctx: &ExecutionContext) -> Result<()> {
 }
 
 pub fn run_ghcli_skills_upgrade(ctx: &ExecutionContext) -> Result<()> {
+    if ctx.config().github_cli_skills_native() {
+        if ctx.config().github_cli_skills_updater().is_some() {
+            bail!("Choose skills_native or skills_updater, not both");
+        }
+        #[cfg(target_os = "macos")]
+        {
+            print_separator("GitHub CLI Skills");
+            return crate::studio::run_native_profile("github_cli_skills", ctx.run_type());
+        }
+        #[cfg(not(target_os = "macos"))]
+        bail!("skills_native is available only on macOS");
+    }
     let gh = require("gh")?;
 
     // `gh skill` only exists in recent versions of the GitHub CLI.
@@ -1869,6 +1888,18 @@ pub fn update_julia_packages(ctx: &ExecutionContext) -> Result<()> {
 }
 
 pub fn run_helm_repo_update(ctx: &ExecutionContext) -> Result<()> {
+    if ctx.config().helm_repository_native() {
+        if ctx.config().helm_repository_updater().is_some() {
+            bail!("Choose repository_native or repository_updater, not both");
+        }
+        #[cfg(target_os = "macos")]
+        {
+            print_separator("Helm");
+            return crate::studio::run_native_profile("helm", ctx.run_type());
+        }
+        #[cfg(not(target_os = "macos"))]
+        bail!("repository_native is available only on macOS");
+    }
     let helm = require("helm")?;
     print_separator("Helm");
     update_helm_repositories(ctx.run_type(), &helm, ctx.config().helm_repository_updater())

@@ -200,7 +200,7 @@
     {
       "source": "config/topgrade.d/90-xcode-beta-select.toml",
       "destination": ".config/topgrade.d/90-xcode-beta-select.toml",
-      "sha256": "1264dd5575d4660dfc5f12625bfb046e551537821a437fb2ab038f8688b4a8cc",
+      "sha256": "ea653ed142b5626111432bd0ed62be382409236b37ea641668deededfa3fd929",
       "mode": 384,
       "adoptSha256": "97269cf9ec57b2046397a8c84e2f570ad1a4a35e117d029a64339176b8b202d6"
     },
@@ -214,7 +214,7 @@
     {
       "source": "config/topgrade.toml",
       "destination": ".config/topgrade.toml",
-      "sha256": "a66a01ef042cd0f3dfe11c75e4df586fc9d6c7720618fd88f4ea45645632e826",
+      "sha256": "7c82b580ba2f65d3a553383fba38dd67333f34c1956befb2dc6b18d14d171014",
       "mode": 384,
       "adoptSha256": "27bdb0f36bd9172ac626e2f96ca19051e6327206e6e13fd734513262608d58ba"
     },

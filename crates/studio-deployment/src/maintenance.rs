@@ -121,6 +121,17 @@ pub fn history() -> Result<Vec<Report>> {
     Ok(Vec::new())
 }
 
+/// Read a bounded excerpt from the selected local run, on explicit request.
+pub fn output_excerpt(report: &Report) -> Result<String> {
+    #[cfg(target_os = "macos")]
+    return native::output_excerpt(report);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = report;
+        anyhow::bail!("Topgrade maintenance output is available on macOS only")
+    }
+}
+
 /// Resolve the logged-in macOS user's account home and reject a conflicting HOME.
 pub fn account_home() -> Result<PathBuf> {
     #[cfg(target_os = "macos")]

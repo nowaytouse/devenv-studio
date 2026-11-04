@@ -2,7 +2,14 @@ use super::{RunStatus, StepReport, StepStatus};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
-pub(super) const IDS: [&str; 2] = ["github_cli_skills", "helm"];
+pub(super) const IDS: [&str; 6] = [
+    "brew_linkage_audit",
+    "cli_versions",
+    "github_cli_extensions",
+    "github_cli_skills",
+    "helm",
+    "tldr",
+];
 pub(super) const EVENT_LIMIT: u64 = 16 * 1024;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -162,7 +169,7 @@ mod tests {
         Request {
             schema_version: 1,
             run_id: "test-123".into(),
-            steps: IDS.iter().map(|s| (*s).into()).collect(),
+            steps: IDS[..2].iter().map(|s| (*s).into()).collect(),
             review_digest: "a".repeat(64),
         }
     }

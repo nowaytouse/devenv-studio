@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
+use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::os::unix::process::{CommandExt as _, ExitStatusExt};
 use std::path::{Path, PathBuf};
@@ -13,30 +14,30 @@ use std::time::{Duration, Instant};
 
 use color_eyre::eyre::{Context, Result, bail, ensure};
 use nix::errno::Errno;
-use nix::libc::{O_NOFOLLOW, O_NONBLOCK};
+use nix::libc::{self, F_GETFD, F_SETFD, FD_CLOEXEC, O_NOFOLLOW, O_NONBLOCK};
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::{Pid, User, geteuid, getuid};
 use serde::{Deserialize, Serialize};
 
 use crate::command::CommandExt as _;
+use crate::execution_context::RunType;
 
+mod diagnostics;
+mod github_skills;
+mod helm;
+mod inventory;
+mod terminal_profile;
 #[cfg(test)]
 mod tests;
+mod xcode;
 
 const SCHEMA: u32 = 1;
 const STATE: &str = "Library/Application Support/LTSC Studio";
 const MARKER: &str = "maintenance-active.json";
 const RELEASES: &str = ".local/share/topgrade-rustup-head/releases";
 const ACTIVATION_PENDING: &str = ".local/share/topgrade-rustup-head/studio-activation.pending.json";
-const PYTHON: &str = "/opt/homebrew/opt/python@3.15/bin/python3.15";
 const TOOLS_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
-const SKILLS: &str = ".local/bin/topgrade-gh-skills-verified";
-const HELM: &str = ".local/bin/topgrade-helm-verified";
 const REQUIRED_ASSETS: &[&str] = &[
-    SKILLS,
-    HELM,
-    ".local/bin/topgrade-cursor-native-reconcile.py",
-    ".local/bin/normalize-gh-skill-lock.py",
     ".config/topgrade.toml",
     ".config/topgrade.d/90-brew-headsync.toml",
     ".config/topgrade.d/90-skills-coverage.toml",
@@ -48,19 +49,92 @@ const MAX_ASSET: u64 = 512 * 1024 * 1024;
 const STEP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const GRACE: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(100);
+const WORKER_START: u8 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum Step {
+    BrewLinkageAudit,
+    CliVersions,
+    GithubCliExtensions,
     GithubCliSkills,
     Helm,
+    Tldr,
 }
 
 impl Step {
-    fn script(self) -> &'static str {
+    const ALL: [Self; 6] = [
+        Self::BrewLinkageAudit,
+        Self::CliVersions,
+        Self::GithubCliExtensions,
+        Self::GithubCliSkills,
+        Self::Helm,
+        Self::Tldr,
+    ];
+
+    fn id(self) -> &'static str {
         match self {
-            Self::GithubCliSkills => SKILLS,
-            Self::Helm => HELM,
+            Self::BrewLinkageAudit => "brew_linkage_audit",
+            Self::CliVersions => "cli_versions",
+            Self::GithubCliExtensions => "github_cli_extensions",
+            Self::GithubCliSkills => "github_cli_skills",
+            Self::Helm => "helm",
+            Self::Tldr => "tldr",
+        }
+    }
+
+    fn find(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|step| step.id() == id)
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::BrewLinkageAudit => "Homebrew Linkage Audit",
+            Self::CliVersions => "CLI Tool Versions",
+            Self::GithubCliExtensions => "GitHub CLI Extensions",
+            Self::GithubCliSkills => "GitHub CLI Skills",
+            Self::Helm => "Helm Repositories",
+            Self::Tldr => "tldr Cache",
+        }
+    }
+
+    fn tools(self) -> &'static [&'static str] {
+        match self {
+            Self::BrewLinkageAudit => &["brew"],
+            Self::CliVersions => &[],
+            Self::GithubCliExtensions | Self::GithubCliSkills => &["gh"],
+            Self::Helm => &["helm", "curl"],
+            Self::Tldr => &["tldr"],
+        }
+    }
+
+    fn run(self) -> Result<()> {
+        match self {
+            Self::BrewLinkageAudit => diagnostics::run_linkage(),
+            Self::CliVersions => diagnostics::run_versions(),
+            Self::GithubCliExtensions => tool_command(&resolve_tool("gh")?)?
+                .args(["extension", "upgrade", "--all"])
+                .status_checked(),
+            Self::GithubCliSkills => github_skills::run(),
+            Self::Helm => helm::run(),
+            Self::Tldr => tool_command(&resolve_tool("tldr")?)?.arg("--update").status_checked(),
+        }
+    }
+}
+
+pub(crate) fn run_native_profile(id: &str, run_type: RunType) -> Result<()> {
+    let Some(step) = Step::find(id) else {
+        return terminal_profile::run(id, run_type);
+    };
+    match run_type {
+        RunType::Dry => {
+            println!("Dry running: {}", step.label());
+            Ok(())
+        }
+        RunType::Wet => step.run(),
+        RunType::Damp => {
+            println!("Executing: {}", step.label());
+            step.run()
         }
     }
 }
@@ -129,12 +203,25 @@ impl Events<'_> {
 pub fn dispatch() -> Option<Result<bool>> {
     let mut args = env::args_os().skip(1);
     let first = args.next()?;
+    if first == "--studio-inventory" {
+        return Some(if args.next().is_none() {
+            inventory::write().map(|()| true)
+        } else {
+            Err(color_eyre::eyre::eyre!("Usage: topgrade --studio-inventory"))
+        });
+    }
     if first == "--studio-run" {
         return Some(match (args.next(), args.next()) {
             (Some(dir), None) => run(Path::new(&dir)),
             _ => Err(color_eyre::eyre::eyre!(
                 "Usage: topgrade --studio-run <absolute run directory>"
             )),
+        });
+    }
+    if first == "--studio-worker" {
+        return Some(match (args.next(), args.next(), args.next(), args.next()) {
+            (Some(dir), Some(step), Some(fd), None) => worker(Path::new(&dir), &step, &fd).map(|()| true),
+            _ => Err(color_eyre::eyre::eyre!("Invalid private Studio worker invocation")),
         });
     }
     if first == "--studio-acknowledge-interruption" {
@@ -303,7 +390,8 @@ fn request(dir: &Path) -> Result<Request> {
     );
     ensure!(is_hex(&request.review_digest, 64), "Invalid reviewed receipt digest");
     ensure!(
-        (1..=2).contains(&request.steps.len()) && (request.steps.len() == 1 || request.steps[0] != request.steps[1]),
+        (1..=Step::ALL.len()).contains(&request.steps.len())
+            && request.steps.windows(2).all(|pair| pair[0].id() < pair[1].id()),
         "Select distinct supported Studio steps"
     );
     Ok(request)
@@ -317,6 +405,59 @@ fn command(executable: &Path) -> Command {
     let mut command = Command::new(executable);
     command.env_clear().env("PATH", TOOLS_PATH);
     command
+}
+
+fn resolve_tool(name: &str) -> Result<PathBuf> {
+    for root in TOOLS_PATH.split(':').map(Path::new) {
+        let link = root.join(name);
+        if !exists(&link)? {
+            continue;
+        }
+        let path = link.canonicalize()?;
+        let metadata = path.metadata()?;
+        ensure!(
+            ["/opt/homebrew", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+                .iter()
+                .any(|root| path.starts_with(root))
+                && metadata.is_file()
+                && metadata.mode() & 0o111 != 0
+                && metadata.mode() & 0o022 == 0,
+            "Untrusted executable for {name}"
+        );
+        return Ok(path);
+    }
+    bail!("Required tool {name} is unavailable in the maintenance PATH")
+}
+
+fn tool_command(executable: &Path) -> Result<Command> {
+    let mut command = command(executable);
+    command
+        .env("HOME", account_home()?)
+        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+        .env("GH_PROMPT_DISABLED", "1")
+        .stdin(Stdio::null());
+    // Preserve explicit terminal transport and repository choices. The
+    // supervisor starts Studio workers with a clean environment.
+    for name in [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "HELM_REPOSITORY_CONFIG",
+        "HELM_REPOSITORY_CACHE",
+        "HELM_CACHE_HOME",
+        "HELM_CONFIG_HOME",
+        "HELM_DATA_HOME",
+    ] {
+        if let Some(value) = env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    Ok(command)
 }
 
 fn sha256(file: File) -> Result<String> {
@@ -338,20 +479,17 @@ fn verify_file(path: &Path, digest: &str) -> Result<()> {
     Ok(())
 }
 
-fn relative_asset(path: &str) -> bool {
-    !path.contains('\\') && path.split('/').all(|part| !matches!(part, "" | "." | ".."))
-}
-
 fn verify_assets(home: &Path, receipt: &Receipt) -> Result<()> {
-    for required in REQUIRED_ASSETS {
-        ensure!(
-            receipt.assets.contains_key(*required),
-            "Engine receipt omits required asset {required}"
-        );
-    }
-    for (relative, digest) in &receipt.assets {
-        ensure!(relative_asset(relative), "Invalid managed asset path");
-        verify_file(&home.join(relative), digest)?;
+    ensure!(
+        receipt.assets.len() == REQUIRED_ASSETS.len(),
+        "Engine receipt contains an unexpected managed asset set"
+    );
+    for &required in REQUIRED_ASSETS {
+        let digest = receipt
+            .assets
+            .get(required)
+            .ok_or_else(|| color_eyre::eyre::eyre!("Engine receipt omits required asset {required}"))?;
+        verify_file(&home.join(required), digest)?;
     }
     Ok(())
 }
@@ -392,20 +530,6 @@ fn verify_release(home: &Path, executable: &Path, reviewed_digest: &str) -> Resu
     verify_file(&release.join("profile-manifest.json"), &receipt.profile_sha256)?;
     verify_assets(home, &receipt)?;
     Ok(receipt)
-}
-
-fn python() -> Result<PathBuf> {
-    let path = Path::new(PYTHON).canonicalize()?;
-    let metadata = fs::metadata(&path)?;
-    ensure!(
-        path.starts_with("/opt/homebrew/Cellar/python@3.15")
-            && path.ends_with("bin/python3.15")
-            && metadata.is_file()
-            && metadata.mode() & 0o022 == 0
-            && metadata.mode() & 0o111 != 0,
-        "Python 3.15 does not resolve to the expected Homebrew interpreter"
-    );
-    Ok(path)
 }
 
 fn persist_marker(state: &Path, marker: &Interruption) -> Result<()> {
@@ -468,7 +592,91 @@ fn terminate_group(child: &mut Child, pgid: i32) -> Result<()> {
     bail!("Studio helper group {pgid} is still present after termination");
 }
 
-fn run_step(home: &Path, state: &Path, dir: &Path, run_id: &str, step: Step, interpreter: &Path) -> Result<Outcome> {
+fn set_close_on_exec(fd: RawFd, enabled: bool) -> io::Result<()> {
+    // fcntl also checks whether the descriptor is valid before worker adoption.
+    let flags = unsafe { libc::fcntl(fd, F_GETFD) };
+    if flags == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    let flags = if enabled {
+        flags | FD_CLOEXEC
+    } else {
+        flags & !FD_CLOEXEC
+    };
+    if unsafe { libc::fcntl(fd, F_SETFD, flags) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+fn worker_command(home: &Path, executable: &Path, lock: &File, dir: &Path, step: Step) -> Command {
+    let fd = lock.as_raw_fd();
+    let mut command = command(executable);
+    command
+        .arg("--studio-worker")
+        .arg(dir)
+        .arg(step.id())
+        .arg(fd.to_string())
+        .env("HOME", home)
+        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+        .env("GH_PROMPT_DISABLED", "1")
+        .current_dir(dir);
+    // After fork, change the descriptor's close-on-exec bit using fcntl only.
+    // The worker restores it before launching tools, so they cannot retain the lock.
+    unsafe {
+        command.pre_exec(move || set_close_on_exec(fd, false));
+    }
+    command
+}
+
+fn worker(dir: &Path, id: &std::ffi::OsStr, raw: &std::ffi::OsStr) -> Result<()> {
+    user_only()?;
+    let step = id
+        .to_str()
+        .and_then(Step::find)
+        .ok_or_else(|| color_eyre::eyre::eyre!("Invalid Studio worker step"))?;
+    let fd: RawFd = raw
+        .to_str()
+        .and_then(|value| value.parse().ok())
+        .filter(|fd| *fd >= 3)
+        .ok_or_else(|| color_eyre::eyre::eyre!("Missing inherited Studio maintenance lock"))?;
+    set_close_on_exec(fd, true).wrap_err("Missing inherited Studio maintenance lock")?;
+    // This private worker takes ownership of the validated inherited descriptor.
+    let lock = unsafe { File::from_raw_fd(fd) };
+    let home = account_home()?;
+    let state = home.join(STATE);
+    let path = state.join("maintenance.lock");
+    check_file(&lock, &path, true, 0)?;
+    let opened = lock.metadata()?;
+    let expected = fs::symlink_metadata(&path)?;
+    ensure!(
+        expected.is_file() && opened.dev() == expected.dev() && opened.ino() == expected.ino(),
+        "Studio worker did not inherit the maintenance lock"
+    );
+    lock.try_lock()
+        .wrap_err("Studio worker did not inherit the active maintenance lock")?;
+    let mut start = [0];
+    io::stdin()
+        .read_exact(&mut start)
+        .wrap_err("Studio supervisor did not authorize worker startup")?;
+    ensure!(start == [WORKER_START], "Invalid Studio worker startup signal");
+    let request = request(dir)?;
+    let mut file = open_file(&state.join(MARKER), true, MAX_JSON)?;
+    let marker: Interruption = serde_json::from_slice(&read_json_bytes(&mut file)?)?;
+    let pid = i32::try_from(std::process::id())?;
+    ensure!(
+        marker.schema_version == SCHEMA
+            && marker.run_id == request.run_id
+            && marker.step == step
+            && marker.child_pgid == Some(pid)
+            && unsafe { libc::getpgrp() } == pid
+            && request.steps.contains(&step),
+        "Studio worker did not match the authorized run and process group"
+    );
+    step.run()
+}
+
+fn run_step(state: &Path, run_id: &str, step: Step, mut command: Command) -> Result<Outcome> {
     let mut marker = Interruption {
         schema_version: SCHEMA,
         run_id: run_id.to_owned(),
@@ -476,14 +684,8 @@ fn run_step(home: &Path, state: &Path, dir: &Path, run_id: &str, step: Step, int
         child_pgid: None,
     };
     persist_marker(state, &marker)?;
-    let mut child = match command(interpreter)
-        .args(["-I", "-B", "-u"])
-        .arg(home.join(step.script()))
-        .env("HOME", home)
-        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
-        .env("GH_PROMPT_DISABLED", "1")
-        .current_dir(dir)
-        .stdin(Stdio::null())
+    let mut child = match command
+        .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .process_group(0)
@@ -497,7 +699,16 @@ fn run_step(home: &Path, state: &Path, dir: &Path, run_id: &str, step: Step, int
     };
     let pgid = i32::try_from(child.id())?;
     marker.child_pgid = Some(pgid);
-    if let Err(error) = persist_marker(state, &marker) {
+    let start: Result<()> = (|| {
+        persist_marker(state, &marker)?;
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| color_eyre::eyre::eyre!("Missing Studio worker startup pipe"))?
+            .write_all(&[WORKER_START])?;
+        Ok(())
+    })();
+    if let Err(error) = start {
         if let Err(cleanup) = terminate_group(&mut child, pgid) {
             eprintln!("Studio helper cleanup: {cleanup:#}");
         }
@@ -526,10 +737,10 @@ fn run_step(home: &Path, state: &Path, dir: &Path, run_id: &str, step: Step, int
 fn execute(dir: &Path, request: &Request, events: &mut Events<'_>) -> Result<Outcome> {
     let home = account_home()?;
     let state = state_dir(&home)?;
-    let _lock = lock(&state)?;
+    let lock = lock(&state)?;
     check_admission(&home, &state)?;
-    let receipt = verify_release(&home, &env::current_exe()?.canonicalize()?, &request.review_digest)?;
-    let interpreter = python()?;
+    let executable = env::current_exe()?.canonicalize()?;
+    let receipt = verify_release(&home, &executable, &request.review_digest)?;
     for (index, &step) in request.steps.iter().enumerate() {
         if exists(&dir.join("cancel"))? {
             return Ok(Outcome::Cancelled);
@@ -539,7 +750,8 @@ fn execute(dir: &Path, request: &Request, events: &mut Events<'_>) -> Result<Out
             verify_assets(&home, &receipt)?;
         }
         events.write("started", Some(step), None)?;
-        let outcome = run_step(&home, &state, dir, &request.run_id, step, &interpreter).unwrap_or_else(|error| {
+        let command = worker_command(&home, &executable, &lock, dir, step);
+        let outcome = run_step(&state, &request.run_id, step, command).unwrap_or_else(|error| {
             eprintln!("Topgrade Studio: {error:#}");
             Outcome::Failed
         });

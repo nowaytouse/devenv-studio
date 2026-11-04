@@ -15,11 +15,7 @@ mod mac {
 
     const PYTHON: &str = "/opt/homebrew/bin/python3.15";
     const PROFILE: &str = "profiles/macos";
-    const ASSETS: [&str; 9] = [
-        ".local/bin/topgrade-gh-skills-verified",
-        ".local/bin/topgrade-helm-verified",
-        ".local/bin/topgrade-cursor-native-reconcile.py",
-        ".local/bin/normalize-gh-skill-lock.py",
+    const ASSETS: [&str; 5] = [
         ".config/topgrade.toml",
         ".config/topgrade.d/90-brew-headsync.toml",
         ".config/topgrade.d/90-skills-coverage.toml",

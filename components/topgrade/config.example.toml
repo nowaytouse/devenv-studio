@@ -204,12 +204,16 @@
 
 
 [github_cli]
+# macOS Studio-managed Rust verifier, mutually exclusive with skills_updater.
+# skills_native = true
 # Optional executable for verified skill updates; executed directly, without a shell.
 # Leading ~ is expanded. Leave unset to use the native `gh skill update --all` command.
 # skills_updater = "~/.local/bin/topgrade-gh-skills-verified"
 
 
 [helm]
+# macOS Studio-managed Rust verifier, mutually exclusive with repository_updater.
+# repository_native = true
 # Optional executable for verified repository updates; executed directly, without a shell.
 # Leading ~ is expanded. Leave unset to use the native `helm repo update` command.
 # repository_updater = "~/.local/bin/topgrade-helm-verified"

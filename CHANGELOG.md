@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 更新中心读取 Topgrade 引擎的步骤目录，支持六个受控步骤、可搜索的终端预演和本地输出查看。Rust 接管 GitHub Skills、Helm、链接审计、版本报告及终端的 gcloud、MAS、Xcode Beta 选择逻辑，保留原有核验与回退。
+
 - Apple Silicon Mac 新增「环境更新」，在 DevEnv Studio 内审核、运行和记录 GitHub CLI Skills 与 Helm。Topgrade 作为独立组件保留源码历史、许可证及原有 profile，通过单独的引擎维护流程进行切换和回退。
 
 - 清单分析复用现有后台任务、状态和取消入口，系统文件权限等待不再占用界面线程；路径/目标已变或取消后的成功与失败均不载入，保留逐项审核和执行确认。

@@ -9,8 +9,8 @@ notify_end = "never"
 disable = ["mamba", "conda", "gcloud", "mas"]
 
 [commands]
-"Mac App Store (verified)" = "$HOME/.local/bin/topgrade-mas-verified"
-"gcloud (verified)" = "$HOME/.local/bin/topgrade-gcloud-verified"
+"Mac App Store (verified)" = "@studio:mas_verified"
+"gcloud (verified)" = "@studio:gcloud_verified"
 "SQLite Python trunk" = "$HOME/.local/bin/update-python-sqlite-trunk"
 "SQLite trunk" = "$HOME/.local/bin/update-sqlite-trunk"
 "TourBox Beta Update" = "$HOME/.local/bin/update-tourbox-beta --apply"
@@ -24,14 +24,14 @@ disable = ["mamba", "conda", "gcloud", "mas"]
 
 "Gradle Nightly Toolchain" = "~/.local/bin/proxy-auto-run ~/.local/bin/update-gradle-nightly"
 "Rolling Project Dependencies" = "~/.local/bin/proxy-auto-run ~/.local/bin/update-project-deps --topgrade"
-"Homebrew Linkage Audit" = "out=\"$(brew linkage 2>&1)\"; rc=$?; if [ \"$rc\" -ne 0 ] || printf \"%s\\n\" \"$out\" | grep -Eq \"^[[:space:]]*(Missing libraries|Broken dependencies):\"; then printf \"%s\\n\" \"$out\"; echo \"FAIL: Homebrew linkage\"; exit 1; else echo \"PASS: No missing or broken Homebrew libraries\"; fi"
-"CLI Tool Versions" = "~/.local/bin/cli-versions"
+"Homebrew Linkage Audit" = "@studio:brew_linkage_audit"
+"CLI Tool Versions" = "@studio:cli_versions"
 "npm Bundled Dependency Security" = "$HOME/.local/bin/proxy-auto-run /opt/homebrew/bin/npm update --global npm --ignore-scripts --registry=https://registry.npmjs.org && $HOME/.local/bin/proxy-auto-run /opt/homebrew/opt/python@3.15/bin/python3.15 $HOME/.local/bin/npm-bundled-security-guard.py"
 [github_cli]
-skills_updater = "~/.local/bin/topgrade-gh-skills-verified"
+skills_native = true
 
 [helm]
-repository_updater = "~/.local/bin/topgrade-helm-verified"
+repository_native = true
 
 [rustup]
 channels = ["nightly"]

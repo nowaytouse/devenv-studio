@@ -6,6 +6,7 @@ pub(super) type History = Result<Vec<maintenance::Report>, String>;
 pub(super) struct UiState {
     check: Option<maintenance::Check>,
     selected: BTreeSet<String>,
+    catalog_query: String,
     review: Option<maintenance::Review>,
     confirmed: bool,
     latest: Option<maintenance::Report>,
@@ -236,7 +237,10 @@ impl Studio {
         let mut selection_change = None;
         if let Some(check) = &self.updates.check {
             ui.label(&check.detail);
-            for step in &check.steps {
+            if !check.steps.is_empty() {
+                ui.heading(tx("可在 Studio 执行", "Run in Studio"));
+            }
+            for step in check.steps.iter().filter(|step| !step.terminal) {
                 let mut selected = self.updates.selected.contains(&step.id);
                 let label = step_label(&step.id, &step.label);
                 ui.horizontal_wrapped(|ui| {
@@ -249,13 +253,11 @@ impl Studio {
                     {
                         selection_change = Some((step.id.clone(), selected));
                     }
-                    if step.terminal {
-                        ui.label(tx("终端执行", "Terminal"));
-                    } else if !step.available {
+                    if !step.available {
                         ui.label(tx("不可用", "Unavailable"));
                     }
                 });
-                ui.label(RichText::new(&step.detail).color(palette().muted));
+                ui.label(RichText::new(step_detail(step)).color(palette().muted));
             }
         }
         if let Some((id, selected)) = selection_change {
@@ -280,7 +282,7 @@ impl Studio {
                 ui.heading(tx("即将执行的步骤", "Steps to run"));
                 for step in &review.steps {
                     ui.label(step_label(&step.id, &step.label));
-                    ui.label(RichText::new(&step.detail).color(palette().muted));
+                    ui.label(RichText::new(step_detail(step)).color(palette().muted));
                 }
                 ui.label(tx(
                     "取消后，已完成的变更会保留。",
@@ -312,9 +314,12 @@ impl Studio {
             .updates
             .check
             .as_ref()
-            .is_some_and(|check| check.available)
+            .is_some_and(|check| !check.steps.is_empty())
         {
             ui.separator();
+            if let Some(check) = &self.updates.check {
+                terminal_catalog(ui, &check.steps, &mut self.updates.catalog_query, busy);
+            }
             ui.heading(tx("在终端执行完整更新", "Run the full update in Terminal"));
             ui.label(tx(
                 "命令使用当前 Topgrade 配置，范围与上方选择独立。请在 Studio 空闲时运行，在终端核对范围并处理提示或管理员授权。",
@@ -408,6 +413,37 @@ fn report_details(ui: &mut egui::Ui, report: &maintenance::Report) {
         "Local record: {}",
         report.path.display()
     ));
+    let output_id = ui.scope_id().with(("topgrade-run-output", &report.run_id));
+    let output = ui
+        .ctx()
+        .data(|data| data.get_temp::<Result<String, String>>(output_id));
+    if let Some(output) = output {
+        if ui.button(tx("收起执行输出", "Hide run output")).clicked() {
+            ui.ctx()
+                .data_mut(|data| data.remove::<Result<String, String>>(output_id));
+        } else {
+            match output {
+                Ok(output) if output.is_empty() => {
+                    ui.label(tx("此记录没有输出。", "This record has no output."));
+                }
+                Ok(output) => {
+                    egui::ScrollArea::vertical()
+                        .id_salt(output_id)
+                        .max_height(220.0)
+                        .show(ui, |ui| {
+                            ui.label(RichText::new(output).monospace());
+                        });
+                }
+                Err(error) => {
+                    ui.colored_label(colors.danger, error);
+                }
+            }
+        }
+    } else if ui.button(tx("查看执行输出", "Show run output")).clicked() {
+        let output = maintenance::output_excerpt(report).map_err(|error| format!("{error:#}"));
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(output_id, output));
+    }
 }
 
 fn run_status_label(status: &maintenance::RunStatus) -> &'static str {
@@ -422,15 +458,142 @@ fn run_status_label(status: &maintenance::RunStatus) -> &'static str {
 
 fn step_label<'a>(id: &str, fallback: &'a str) -> &'a str {
     match id {
+        "brew_linkage_audit" => tx("Homebrew 链接审计", "Homebrew linkage audit"),
+        "cli_versions" => tx("命令行工具版本", "CLI tool versions"),
+        "github_cli_extensions" => tx("GitHub CLI 扩展", "GitHub CLI extensions"),
         "github_cli_skills" => tx("GitHub CLI 技能", "GitHub CLI skills"),
         "helm" => tx("Helm 仓库", "Helm repositories"),
+        "tldr" => tx("TLDR 命令手册", "TLDR command pages"),
         _ => fallback,
     }
+}
+
+fn step_detail(step: &maintenance::Step) -> &str {
+    if !step.detail.is_empty() {
+        return &step.detail;
+    }
+    match step.id.as_str() {
+        "brew_linkage_audit" => tx(
+            "检查缺失动态库和损坏的依赖关系。",
+            "Check for missing libraries and broken dependencies.",
+        ),
+        "cli_versions" => tx(
+            "读取实际命令版本和 Homebrew 当前链接的版本。",
+            "Read executable versions and the active Homebrew kegs.",
+        ),
+        "github_cli_extensions" => tx(
+            "更新已安装的 GitHub CLI 扩展。",
+            "Update installed GitHub CLI extensions.",
+        ),
+        "github_cli_skills" => tx(
+            "核对来源及锁记录后更新由 GitHub CLI 管理的技能。",
+            "Verify origins and lock records before updating GitHub CLI skills.",
+        ),
+        "helm" => tx(
+            "核验或刷新现有 Helm 仓库索引。",
+            "Verify or refresh existing Helm repository indexes.",
+        ),
+        "tldr" => tx(
+            "刷新本机 TLDR 手册缓存。",
+            "Refresh the local TLDR command reference cache.",
+        ),
+        _ => "",
+    }
+}
+
+fn terminal_preview(id: &str) -> Option<String> {
+    if id.is_empty()
+        || !id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+    {
+        return None;
+    }
+    Some(format!(
+        "{} --dry-run --no-self-update --no-tmux --show-skipped --only {id}",
+        maintenance::TERMINAL_COMMAND
+    ))
+}
+
+fn terminal_catalog(
+    ui: &mut egui::Ui,
+    steps: &[maintenance::Step],
+    query: &mut String,
+    busy: bool,
+) {
+    let count = steps.iter().filter(|step| step.terminal).count();
+    egui::CollapsingHeader::new(format!("{} ({count})", tx("Topgrade 步骤目录", "Topgrade step catalog")))
+        .id_salt("topgrade-step-catalog")
+        .show(ui, |ui| {
+            ui.label(tx(
+                "这里列出引擎提供的其余步骤。终端预演使用当前配置，可能包括前后置命令。是否适用于本机以终端结果为准。",
+                "These are the engine's remaining steps. A terminal preview uses the current configuration, including any pre/post commands. Check applicability in Terminal.",
+            ));
+            ui.add(egui::TextEdit::singleline(query).hint_text(tx("搜索步骤，例如 brew、rustup、mas", "Search steps, e.g. brew, rustup, mas")));
+            let query = query.trim().to_ascii_lowercase();
+            egui::ScrollArea::vertical()
+                .id_salt("topgrade-terminal-steps")
+                .max_height(320.0)
+                .show(ui, |ui| {
+                    for step in steps.iter().filter(|step| {
+                        step.terminal && (step.id.contains(&query) || step.label.to_ascii_lowercase().contains(&query))
+                    }) {
+                        ui.push_id(&step.id, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(&step.label);
+                                ui.label(RichText::new(&step.id).monospace().color(palette().muted));
+                                if let Some(command) = terminal_preview(&step.id)
+                                    && ui.add_enabled(!busy, egui::Button::new(tx("复制预演命令", "Copy preview command"))).clicked()
+                                {
+                                    ui.ctx().copy_text(command);
+                                }
+                            });
+                        });
+                    }
+                });
+        });
+
+    egui::CollapsingHeader::new(tx("本机 profile 的托管任务", "Managed local profile tasks"))
+        .id_salt("topgrade-managed-profile")
+        .show(ui, |ui| {
+            ui.label(tx(
+                "以下任务沿用本机 profile 的前置检查和恢复机制。可在终端查看各项预演。",
+                "These tasks use the local profile's checks and recovery. Preview each task in Terminal.",
+            ));
+            for name in [
+                "Homebrew Formulae (HEAD-synced)", "Mac App Store (verified)", "gcloud (verified)",
+                "SQLite Python trunk", "SQLite trunk", "TourBox Beta Update", "Xcode Beta Update",
+                "BetterDisplay Internal Update", "Preview macOS Apps", "Conda frozen base",
+                "Conda default", "Gradle Nightly Toolchain", "Rolling Project Dependencies",
+                "npm Bundled Dependency Security", "Topgrade Skills Coverage Gate",
+            ] {
+                ui.push_id(name, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(name);
+                        if ui.add_enabled(!busy, egui::Button::new(tx("复制预演命令", "Copy preview command"))).clicked() {
+                            ui.ctx().copy_text(format!(
+                                "{} --dry-run --no-self-update --no-tmux --show-skipped --only custom_commands --custom-commands '{name}'",
+                                maintenance::TERMINAL_COMMAND
+                            ));
+                        }
+                    });
+                });
+            }
+        });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copied_step_preview_uses_a_fixed_launcher_and_rejects_shell_tokens() {
+        let command = terminal_preview("brew_formula").unwrap();
+        assert!(command.starts_with(maintenance::TERMINAL_COMMAND));
+        assert!(command.contains("--dry-run"));
+        assert!(command.ends_with("--only brew_formula"));
+        assert!(terminal_preview("helm; touch /tmp/example").is_none());
+    }
 
     fn step(id: &str, available: bool, terminal: bool) -> maintenance::Step {
         maintenance::Step {
