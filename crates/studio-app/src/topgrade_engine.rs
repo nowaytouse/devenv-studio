@@ -1,6 +1,10 @@
 //! Local, revision-pinned maintenance of the independent Topgrade engine.
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod profile;
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod mac {
+    use super::profile;
     use anyhow::{Context, Result, bail, ensure};
     use serde::{Deserialize, Serialize};
     use std::{
@@ -13,7 +17,6 @@ mod mac {
     };
     use studio_deployment::maintenance::{account_home, acquire_mutation_lock, sha256_file};
 
-    const PYTHON: &str = "/opt/homebrew/bin/python3.15";
     const PROFILE: &str = "profiles/macos";
     const ASSETS: [&str; 5] = [
         ".config/topgrade.toml",
@@ -142,19 +145,23 @@ mod mac {
     }
 
     fn verify_profile(checkout: &Path, tree: &str, release: &Path) -> Result<()> {
-        for name in ["install.py", "manifest.json"] {
-            let path = release.join("profile").join(name);
-            regular(&path)?;
-            let blob = git(
+        let path = release.join("profile/manifest.json");
+        regular(&path)?;
+        let blob = git(
+            checkout,
+            &["rev-parse", &format!("{tree}:{PROFILE}/manifest.json")],
+        )?;
+        ensure!(
+            git(
                 checkout,
-                &["rev-parse", &format!("{tree}:{PROFILE}/{name}")],
-            )?;
-            let path = path.to_str().context("Profile path is not UTF-8")?;
-            ensure!(
-                git(checkout, &["hash-object", "--no-filters", path])? == blob,
-                "Prepared profile {name} differs from the pinned component"
-            );
-        }
+                &[
+                    "hash-object",
+                    "--no-filters",
+                    path.to_str().context("Profile path is not UTF-8")?
+                ]
+            )? == blob,
+            "Prepared profile manifest differs from the pinned component"
+        );
         ensure!(
             sha256_file(&release.join("profile").join("manifest.json"))?
                 == sha256_file(&release.join("profile-manifest.json"))?,
@@ -350,16 +357,8 @@ mod mac {
     }
 
     fn profile(release: &Path, home: &Path, args: &[&str]) -> Result<serde_json::Value> {
-        let result = output(
-            Command::new(PYTHON)
-                .args(["-I", "-B"])
-                .arg(release.join("profile/install.py"))
-                .arg("--home")
-                .arg(home)
-                .args(args),
-            "Topgrade profile transaction",
-        )?;
-        serde_json::from_slice(&result.stdout).context("Invalid profile transaction result")
+        profile::execute(&release.join("profile"), home, args)
+            .context("Topgrade profile transaction")
     }
 
     pub(super) fn execute(args: &[String]) -> Result<()> {

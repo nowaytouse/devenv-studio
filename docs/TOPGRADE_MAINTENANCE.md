@@ -27,7 +27,7 @@ Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受�
 
 ## 本机构建与切换
 
-源代码来自保留完整历史的 Topgrade 组件，使用独立 Cargo 配置、原许可证和 Python 3.15 profile。首版依赖本机已有的 Rustup Nightly、Homebrew Python 3.15 及对应更新工具。维护者从干净、审核过的 Studio checkout 操作：
+源代码来自保留完整历史的 Topgrade 组件，使用独立 Cargo 配置及原许可证。维护者从干净、审核过的 Studio checkout 操作：
 
 ```sh
 devenv-studio topgrade-engine plan /absolute/studio-checkout FULL_STUDIO_SHA
@@ -35,7 +35,7 @@ devenv-studio topgrade-engine prepare /absolute/studio-checkout FULL_STUDIO_SHA
 devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 ```
 
-`prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 验证已有启动器、应用并回读 profile，然后原子切换到准备好的二进制。相同组件树复用引擎。软件更新使用已部署的引擎，引擎维护由上述命令显式启动。
+`prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 使用 Studio 的 Rust 安装器验证资产、应用并回读 profile，然后原子切换到准备好的二进制。安装器兼容原有 v1 收据和事务日志。相同组件树复用引擎。软件更新使用已部署的引擎，引擎维护由上述命令显式启动。
 
 原有 Homebrew HEAD-sync 日志仍可由 Rust 入口恢复。收到 TERM 或 HUP 时，更新器持锁等待正在运行的子进程，随后恢复两份公式并以相应的退出状态结束。如果只有父进程被强制杀死，请先确认原来的 Homebrew 和构建子进程均已退出，再运行恢复。
 

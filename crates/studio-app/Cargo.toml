@@ -28,3 +28,8 @@ studio-legacy.workspace = true
 studio-platform.workspace = true
 eframe = { version = "0.37.0", default-features = false, features = ["accesskit", "default_fonts", "system_fonts", "wgpu", "x11", "wayland", "links", "clipboard"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+libc = "0.2"
+sha2 = "0.10"
+tempfile = "3"

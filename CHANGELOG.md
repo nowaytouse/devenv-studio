@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Topgrade profile 安装、核验及回退由 Studio 的 Rust 安装器执行，兼容既有收据和事务日志，并在临时主目录验证整套资产的应用与恢复。
+
 - 更新中心分为更新任务、Homebrew 已安装和执行记录。读取本机 Formula、Cask、版本、链接和固定状态，显示读取命令；审核步骤展示运行方式，完成后进入执行记录。
 - macOS profile 的 Homebrew HEAD-sync、SQLite CLI、Python 3.15 SQLite 和 Gradle Nightly 改由 Rust 运行。保留成对公式恢复、SQLite 发布回退、Gradle 下载校验及旧版回退资产。
 
