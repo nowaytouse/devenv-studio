@@ -306,6 +306,13 @@ def different_full_revision(f):
     f.assert_restored()
 
 
+def mismatched_pair_stops_remaining(f):
+    different_full_revision(f)
+    events = f.events()
+    assert "brew upgrade --formula --fetch-HEAD llama.cpp" in events, events
+    assert not any(line.startswith("brew outdated ") for line in events), events
+
+
 def pin_scan_exclusions(f):
     result = f.run(TEST_INSTALLED="llvm\nnyamiiko/tools/llvm-head\ntopgrade\nz3\natuin",
                    TEST_OUTDATED="topgrade\nz3")
@@ -530,6 +537,7 @@ cases = [
 ]
 if native:
     cases += [
+        ("mismatched active pair stops before remaining enumeration", mismatched_pair_stops_remaining),
         ("tap-qualified formula name survives the exact scan and upgrade", exact_tap_name),
         ("restored formulae retain original mode and nanosecond mtime", preserve_formula_metadata),
         ("legacy POSIX lock excludes the Rust updater", refuses_posix_lock_contention),

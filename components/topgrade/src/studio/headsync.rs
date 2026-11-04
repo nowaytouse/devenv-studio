@@ -149,6 +149,8 @@ impl Headsync {
             println!("\n== Upgrade {formula} at {revision} ==");
             status(&mut self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula]))?;
         }
+        println!("\n== Verify active pair before remaining formulae ==");
+        self.verify_pair(&revision)?;
         self.remaining(&installed, &pins)?;
         self.verify_runtime(&revision)
     }
@@ -264,8 +266,7 @@ impl Headsync {
         Ok(())
     }
 
-    fn verify_runtime(&self, revision: &str) -> Result<()> {
-        println!("\n== Verify matched runtime ==");
+    fn verify_pair(&self, revision: &str) -> Result<Vec<PathBuf>> {
         let expected_keg = format!("HEAD-{}", &revision[..7]);
         let mut active = Vec::with_capacity(PAIR.len());
         for formula in PAIR {
@@ -301,6 +302,12 @@ impl Headsync {
             active.push(keg);
         }
         println!("Both active receipts record full revision {revision}");
+        Ok(active)
+    }
+
+    fn verify_runtime(&self, revision: &str) -> Result<()> {
+        println!("\n== Verify matched runtime ==");
+        let active = self.verify_pair(revision)?;
         const SYMBOL: &str = "ggml_backend_sched_set_copy_callback";
         ensure!(
             fs::read_to_string(active[0].join("include/ggml-backend.h"))?.contains(SYMBOL),
