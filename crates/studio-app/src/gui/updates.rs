@@ -111,7 +111,11 @@ impl UiState {
         match check {
             Ok(check) => {
                 let notice = Notice {
-                    text: check.detail.clone(),
+                    text: if check.available {
+                        tx("更新入口已核验", "Update capability verified").into()
+                    } else {
+                        check.detail.clone()
+                    },
                     error: !check.available,
                 };
                 self.check = Some(check);
@@ -134,6 +138,20 @@ impl UiState {
             return cancelled_notice();
         }
         match review {
+            Ok(review)
+                if self.check.as_ref().and_then(|check| check.engine.as_ref())
+                    != Some(&review.engine) =>
+            {
+                self.invalidate_check();
+                Notice {
+                    text: tx(
+                        "引擎在检查后已切换。请重新检查并选择步骤。",
+                        "The engine changed after the check. Check again and select steps.",
+                    )
+                    .into(),
+                    error: true,
+                }
+            }
             Ok(review) if self.can_review(false) && self.matches_review(&review.steps) => {
                 self.review = Some(review);
                 Notice {
@@ -416,14 +434,11 @@ impl Studio {
         }
         let mut selection_change = None;
         if let Some(check) = &self.updates.check {
-            if check.available {
-                ui.label(tx(
-                    "已核验本机 Topgrade 引擎和配置。",
-                    "Local Topgrade engine and profile verified.",
-                ));
-            } else {
+            if !check.available {
                 ui.colored_label(palette().danger, &check.detail);
             }
+            engine_card(ui, check, busy);
+            ui.add_space(12.0);
             if !check.steps.is_empty() {
                 ui.heading(tx("可在 Studio 执行", "Run in Studio"));
             }
@@ -446,6 +461,15 @@ impl Studio {
                 });
                 ui.label(RichText::new(step_detail(step)).color(palette().muted));
             }
+        }
+        if self.updates.check.is_none() && !busy {
+            ui.label(
+                RichText::new(tx(
+                    "检查后可看到当前引擎、可用任务和上一次运行。",
+                    "Check to see the current engine, available tasks, and the last run.",
+                ))
+                .color(palette().muted),
+            );
         }
         if let Some((id, selected)) = selection_change {
             self.updates.select_step(&id, selected);
@@ -470,6 +494,7 @@ impl Studio {
             surface_frame().show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.heading(tx("即将执行的步骤", "Steps to run"));
+                engine_summary(ui, &review.engine);
                 for step in &review.steps {
                     ui.strong(step_label(&step.id, &step.label));
                     ui.label(RichText::new(step_detail(step)).color(palette().muted));
@@ -564,13 +589,19 @@ impl UiState {
                     {
                         continue;
                     }
-                    egui::CollapsingHeader::new(format!(
-                        "{} · {}",
-                        run_status_label(&report.status),
-                        report.run_id
-                    ))
-                    .id_salt(("update-history", &report.run_id))
-                    .show(ui, |ui| report_details(ui, report));
+                    let status = run_status_label(&report.status);
+                    let title = match &report.engine {
+                        Some(engine) => format!(
+                            "{status} · Topgrade {} / {} · {}",
+                            engine.upstream_version,
+                            short_id(&engine.binary_sha256),
+                            report.run_id
+                        ),
+                        None => format!("{status} · {}", report.run_id),
+                    };
+                    egui::CollapsingHeader::new(title)
+                        .id_salt(("update-history", &report.run_id))
+                        .show(ui, |ui| report_details(ui, report));
                 }
             }
         }
@@ -592,6 +623,142 @@ fn cancelled_notice() -> Notice {
     }
 }
 
+fn engine_card(ui: &mut egui::Ui, check: &maintenance::Check, busy: bool) {
+    surface_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.heading(tx("当前更新引擎", "Current update engine"));
+        let Some(engine) = &check.engine else {
+            ui.label(tx("当前引擎身份未核验。", "The current engine identity is unverified."));
+            return;
+        };
+        engine_summary(ui, engine);
+        ui.label(if check.available {
+            tx(
+                "DevEnv Studio 受管构建 · 本次已核验",
+                "DevEnv Studio managed build · Verified in this check",
+            )
+        } else {
+            tx("查看上方检查结果，确认当前配置状态。", "See the check result above for the current profile status.")
+        });
+        engine_details(ui, tx("当前引擎详情", "Current engine details"), engine);
+        ui.separator();
+        ui.strong(tx("上一版回退候选", "Previous rollback candidate"));
+        if let Some(previous) = &check.rollback {
+            engine_summary(ui, previous);
+            engine_details(ui, tx("回退候选详情", "Rollback candidate details"), previous);
+            ui.horizontal_wrapped(|ui| {
+                if let Ok(exe) = std::env::current_exe()
+                    && let Some(command) =
+                        rollback_command(&exe, &engine.component_tree, &previous.component_tree)
+                {
+                    if ui.add_enabled(!busy, egui::Button::new(tx(
+                        "复制终端回退命令",
+                        "Copy Terminal rollback command",
+                    ))).clicked() {
+                        ui.ctx().copy_text(command);
+                    }
+                    ui.label(tx(
+                        "终端会核对两版引擎及配置，并验证恢复结果。",
+                        "Terminal rechecks both engines and the profile, then verifies what was restored.",
+                    ));
+                } else {
+                    ui.label(tx("无法生成本机回退命令。", "The local rollback command is unavailable."));
+                }
+            });
+        } else {
+            ui.label(tx("暂无已核验的回退候选。", "No verified rollback candidate."));
+        }
+        if let Some(detail) = &check.rollback_detail {
+            ui.label(detail);
+        }
+    });
+}
+
+fn engine_summary(ui: &mut egui::Ui, engine: &maintenance::EngineIdentity) {
+    ui.horizontal_wrapped(|ui| {
+        ui.strong(lf!("Topgrade {}", "Topgrade {}", engine.upstream_version));
+        ui.label(lf!(
+            "组件 {}",
+            "Component {}",
+            short_id(&engine.component_tree)
+        ));
+        ui.label(lf!("产物 {}", "Binary {}", short_id(&engine.binary_sha256)));
+        ui.label(lf!(
+            "配置清单 v{} · {}",
+            "Profile manifest v{} · {}",
+            engine.profile_version,
+            short_id(&engine.profile_sha256)
+        ));
+    });
+}
+
+fn short_id(id: &str) -> &str {
+    id.get(..12).unwrap_or(id)
+}
+
+fn engine_details(ui: &mut egui::Ui, title: &str, engine: &maintenance::EngineIdentity) {
+    egui::CollapsingHeader::new(title)
+        .id_salt(&engine.component_tree)
+        .show(ui, |ui| {
+            let details = [
+                tx(
+                    "来源 · DevEnv Studio 受管构建",
+                    "Source · DevEnv Studio managed build",
+                )
+                .to_owned(),
+                lf!("Topgrade {}", "Topgrade {}", engine.upstream_version),
+                lf!(
+                    "Studio 构建提交 · {}",
+                    "Studio build commit · {}",
+                    engine.studio_commit
+                ),
+                lf!("组件树 · {}", "Component tree · {}", engine.component_tree),
+                lf!("二进制 · {}", "Binary · {}", engine.binary.display()),
+                lf!(
+                    "二进制 SHA-256 · {}",
+                    "Binary SHA-256 · {}",
+                    engine.binary_sha256
+                ),
+                lf!(
+                    "配置清单 v{} · SHA-256 {}",
+                    "Profile manifest v{} · SHA-256 {}",
+                    engine.profile_version,
+                    engine.profile_sha256
+                ),
+            ]
+            .join("\n");
+            ui.label(RichText::new(&details).monospace());
+            if ui
+                .button(tx("复制引擎身份", "Copy engine identity"))
+                .clicked()
+            {
+                ui.ctx().copy_text(details);
+            }
+        });
+}
+
+fn rollback_command(exe: &std::path::Path, active: &str, previous: &str) -> Option<String> {
+    let valid_tree = |tree: &str| {
+        tree.len() == 40
+            && tree
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    };
+    let path = exe.to_str()?;
+    if !exe.is_absolute()
+        || path.chars().any(char::is_control)
+        || active == previous
+        || !valid_tree(active)
+        || !valid_tree(previous)
+    {
+        return None;
+    }
+    Some(format!(
+        "'{}' topgrade-engine rollback-current {active} {previous}",
+        path.replace('\'', "'\"'\"'")
+    ))
+}
+
 fn report_details(ui: &mut egui::Ui, report: &maintenance::Report) {
     let colors = palette();
     let color = if report.status == maintenance::RunStatus::Verified {
@@ -600,7 +767,33 @@ fn report_details(ui: &mut egui::Ui, report: &maintenance::Report) {
         colors.danger
     };
     ui.colored_label(color, run_status_label(&report.status));
-    ui.label(&report.detail);
+    if report.status == maintenance::RunStatus::Verified {
+        ui.label(tx(
+            "所选步骤均返回成功。是否实际更新，请核对步骤输出及更新后的状态。",
+            "All selected steps returned success. Check the output and resulting state to confirm what changed.",
+        ));
+    } else {
+        ui.label(&report.detail);
+    }
+    if let Some(engine) = &report.engine {
+        engine_summary(ui, engine);
+        engine_details(ui, tx("执行引擎详情", "Run engine details"), engine);
+    } else if let Some(tree) = &report.engine_tree {
+        ui.label(lf!(
+            "旧记录 · 组件树 {}",
+            "Earlier record · Component tree {}",
+            tree
+        ));
+    }
+    if let Some(previous) = &report.rollback {
+        ui.label(tx("当时的回退候选", "Rollback candidate at the time"));
+        engine_summary(ui, previous);
+        engine_details(
+            ui,
+            tx("历史回退候选详情", "Historical rollback candidate details"),
+            previous,
+        );
+    }
     for step in &report.steps {
         let status = match step.status {
             maintenance::StepStatus::Success => tx("完成", "Completed"),
@@ -650,7 +843,7 @@ fn report_details(ui: &mut egui::Ui, report: &maintenance::Report) {
 
 fn run_status_label(status: &maintenance::RunStatus) -> &'static str {
     match status {
-        maintenance::RunStatus::Verified => tx("执行结果已核验", "Run result verified"),
+        maintenance::RunStatus::Verified => tx("步骤成功 · 退出 0", "Steps succeeded · Exit 0"),
         maintenance::RunStatus::Failed => tx("执行失败", "Run failed"),
         maintenance::RunStatus::Cancelled => tx("执行已取消", "Run cancelled"),
         maintenance::RunStatus::TimedOut => tx("执行超时", "Run timed out"),
@@ -696,8 +889,8 @@ fn step_detail(step: &maintenance::Step) -> &str {
             "Verify or refresh existing Helm repository indexes.",
         ),
         "tldr" => tx(
-            "刷新本机 TLDR 手册缓存。",
-            "Refresh the local TLDR command reference cache.",
+            "刷新 TLDR 手册缓存。使用多语言缓存时，请先在 tealdeer 中明确配置下载语言。",
+            "Refresh the TLDR cache. If you keep multiple languages, configure tealdeer's download languages first.",
         ),
         _ => "",
     }
@@ -810,6 +1003,86 @@ mod tests {
     use super::*;
 
     #[test]
+    fn copied_rollback_pins_both_trees_and_quotes_the_app_path() {
+        let executable = std::path::Path::new("/Applications/Studio's App.app/bin/studio");
+        let active = "a".repeat(40);
+        let previous = "b".repeat(40);
+        let command = rollback_command(executable, &active, &previous).unwrap();
+        assert_eq!(
+            command,
+            format!(
+                "'/Applications/Studio'\"'\"'s App.app/bin/studio' topgrade-engine rollback-current {active} {previous}"
+            )
+        );
+        assert!(rollback_command(executable, &active, &active).is_none());
+        assert!(rollback_command(executable, "a; touch /tmp/example", &previous).is_none());
+        assert!(rollback_command(std::path::Path::new("studio"), &active, &previous).is_none());
+    }
+
+    #[test]
+    fn same_version_engines_have_distinct_accessible_ids_and_busy_rollback_is_disabled() {
+        let identity = |hex: &str| maintenance::EngineIdentity {
+            binary: PathBuf::from("/test/bin/topgrade"),
+            studio_commit: hex.repeat(40),
+            component_tree: hex.repeat(40),
+            binary_sha256: hex.repeat(64),
+            profile_sha256: hex.repeat(64),
+            profile_version: 1,
+            upstream_version: "17.15.0".into(),
+        };
+        let check = maintenance::Check {
+            available: true,
+            detail: String::new(),
+            steps: Vec::new(),
+            engine: Some(identity("a")),
+            rollback: Some(identity("b")),
+            rollback_detail: None,
+        };
+        let context = egui::Context::default();
+        context.enable_accesskit();
+        let mut output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(680.0, 520.0),
+                )),
+                ..Default::default()
+            },
+            |ui| {
+                egui::CentralPanel::default().show(ui, |ui| engine_card(ui, &check, true));
+            },
+        );
+        output.textures_delta.clear();
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        for (zh, en) in [
+            ("组件 aaaaaaaaaaaa", "Component aaaaaaaaaaaa"),
+            ("组件 bbbbbbbbbbbb", "Component bbbbbbbbbbbb"),
+            ("产物 aaaaaaaaaaaa", "Binary aaaaaaaaaaaa"),
+            ("产物 bbbbbbbbbbbb", "Binary bbbbbbbbbbbb"),
+        ] {
+            assert!(
+                nodes.iter().any(|(_, node)| {
+                    [node.label(), node.value()]
+                        .into_iter()
+                        .flatten()
+                        .any(|text| text == zh || text == en)
+                }),
+                "Missing identity {en} in {nodes:?}"
+            );
+        }
+        let button = nodes
+            .iter()
+            .find(|(_, node)| {
+                matches!(
+                    node.label(),
+                    Some("复制终端回退命令" | "Copy Terminal rollback command")
+                )
+            })
+            .expect("named rollback control");
+        assert!(button.1.is_disabled());
+    }
+
+    #[test]
     fn copied_step_preview_uses_a_fixed_launcher_and_rejects_shell_tokens() {
         let command = terminal_preview("brew_formula").unwrap();
         assert!(command.starts_with(maintenance::TERMINAL_COMMAND));
@@ -834,6 +1107,9 @@ mod tests {
             Ok(maintenance::Check {
                 available: true,
                 detail: String::new(),
+                engine: None,
+                rollback: None,
+                rollback_detail: None,
                 steps: vec![
                     step("helm", true, false),
                     step("github_cli_skills", true, false),
@@ -907,6 +1183,9 @@ mod tests {
                     status,
                     steps: Vec::new(),
                     detail: "test result".into(),
+                    engine: None,
+                    engine_tree: None,
+                    rollback: None,
                 }),
                 Ok(Vec::new()),
             );

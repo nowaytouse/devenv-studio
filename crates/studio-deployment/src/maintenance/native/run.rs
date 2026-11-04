@@ -1,11 +1,12 @@
 use super::{
-    PATH, account_home, data_dir, ensure_data, ensure_dir, open_regular, present, read_regular,
-    real_metadata, require_running, review_proof, same_file,
+    PATH, account_home, acquire_engine_activation_lock, data_dir, ensure_data, ensure_dir,
+    open_regular, present, read_regular, real_metadata, release_tree, require_running,
+    review_proof, rollback_candidate, same_file, valid_version,
 };
 use crate::{
     DeploymentEvent,
     maintenance::{
-        Report, Review, RunStatus, StepReport,
+        EngineIdentity, Report, Review, RunStatus, StepReport,
         protocol::{
             EVENT_LIMIT, Request, Trace, parse_events, valid_hex, valid_run_id, validate_request,
         },
@@ -30,6 +31,7 @@ use std::{
 const RECORD_LIMIT: u64 = 16 * 1024;
 const LOG_LIMIT: usize = 8 * 1024 * 1024;
 const MAX_HISTORY: usize = 256;
+const ENGINE_SOURCE: &str = "studio_managed_build";
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -42,6 +44,9 @@ struct Record {
     reason: Option<IncompleteReason>,
     engine_tree: Option<String>,
     elapsed_ms: Option<u64>,
+    engine_source: Option<String>,
+    engine: Option<EngineIdentity>,
+    rollback: Option<EngineIdentity>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -67,6 +72,26 @@ impl IncompleteReason {
 }
 
 impl Record {
+    fn started(
+        request: &Request,
+        engine: EngineIdentity,
+        rollback: Option<EngineIdentity>,
+    ) -> Self {
+        Self {
+            schema_version: 2,
+            run_id: request.run_id.clone(),
+            status: RunStatus::Incomplete,
+            steps: Vec::new(),
+            exit_code: None,
+            reason: Some(IncompleteReason::Interrupted),
+            engine_tree: Some(engine.component_tree.clone()),
+            elapsed_ms: Some(0),
+            engine_source: Some(ENGINE_SOURCE.into()),
+            engine: Some(engine),
+            rollback,
+        }
+    }
+
     fn report(self, path: PathBuf) -> Report {
         let detail = match self.status {
             RunStatus::Verified => {
@@ -94,6 +119,9 @@ impl Record {
                 Some(reason) => format!("{} {detail}", reason.detail()),
                 None => detail.into(),
             },
+            engine: self.engine,
+            engine_tree: self.engine_tree,
+            rollback: self.rollback,
         }
     }
 }
@@ -137,6 +165,14 @@ fn persist(path: &Path, bytes: &[u8]) -> Result<()> {
     file.write_all(bytes)?;
     file.sync_all()?;
     File::open(path.parent().context("Evidence has no parent directory")?)?.sync_all()?;
+    Ok(())
+}
+
+fn publish_record(path: &Path, record: &Record) -> Result<()> {
+    let stage = path.join(".result.pending");
+    persist(&stage, &serde_json::to_vec(record)?)?;
+    fs::rename(stage, path.join("result.json"))?;
+    File::open(path)?.sync_all()?;
     Ok(())
 }
 
@@ -343,8 +379,7 @@ fn matched_exit(status: RunStatus, exit: Option<i32>) -> bool {
 }
 
 fn outcome(
-    request: &Request,
-    engine_tree: String,
+    mut record: Record,
     elapsed_ms: u64,
     exit: Result<ExitStatus>,
     trace: Result<Trace>,
@@ -375,16 +410,12 @@ fn outcome(
             ),
         },
     };
-    Record {
-        schema_version: 1,
-        run_id: request.run_id.clone(),
-        status,
-        steps,
-        exit_code: code,
-        reason,
-        engine_tree: Some(engine_tree),
-        elapsed_ms: Some(elapsed_ms),
-    }
+    record.status = status;
+    record.steps = steps;
+    record.exit_code = code;
+    record.reason = reason;
+    record.elapsed_ms = Some(elapsed_ms);
+    record
 }
 
 pub(in crate::maintenance) fn run(
@@ -393,11 +424,18 @@ pub(in crate::maintenance) fn run(
     events: Option<&Sender<DeploymentEvent>>,
 ) -> Result<Report> {
     require_running(cancel)?;
+    // The child takes the maintenance lock. This lock prevents an activation before it does.
+    let _activation = acquire_engine_activation_lock(&review.proof.home)?;
     let proof = review_proof(&review.selected, cancel)?;
     ensure!(
         proof == review.proof,
         "Topgrade engine, profile or tools changed after review; review again"
     );
+    // A prior release is optional; a damaged rollback candidate cannot change this run's scope.
+    let rollback = rollback_candidate(&proof.home, &proof.engine, cancel)
+        .ok()
+        .flatten();
+    require_running(cancel)?;
     let (run_id, path) = new_run(&proof.home)?;
     let request = Request {
         schema_version: 1,
@@ -408,7 +446,7 @@ pub(in crate::maintenance) fn run(
     validate_request(&request, &run_id)?;
     persist(&path.join("request.json"), &serde_json::to_vec(&request)?)
         .context("Persist the reviewed request before starting Topgrade")?;
-    let mut command = Command::new(proof.binary);
+    let mut command = Command::new(&proof.engine.binary);
     command
         .arg("--studio-run")
         .arg(&path)
@@ -417,6 +455,8 @@ pub(in crate::maintenance) fn run(
         .env("HOME", &proof.home)
         .env("PATH", PATH)
         .env("HOMEBREW_NO_AUTO_UPDATE", "1");
+    let record = Record::started(&request, proof.engine, rollback);
+    publish_record(&path, &record).context("Persist engine provenance before starting Topgrade")?;
     let started = Instant::now();
     let exit = Supervisor {
         path: &path,
@@ -428,18 +468,21 @@ pub(in crate::maintenance) fn run(
     let trace = read_events(&path).and_then(|bytes| parse_events(&bytes, &request, true));
     let elapsed_ms =
         u64::try_from(started.elapsed().as_millis()).context("Invalid run duration")?;
-    let record = outcome(&request, proof.component_tree, elapsed_ms, exit, trace);
-    let stage = path.join(".result.pending");
-    persist(&stage, &serde_json::to_vec(&record)?)
-        .context("Persist terminal maintenance evidence")?;
-    fs::rename(stage, path.join("result.json")).context("Publish terminal maintenance evidence")?;
-    File::open(&path)?
-        .sync_all()
-        .context("Flush terminal maintenance evidence")?;
+    let record = outcome(record, elapsed_ms, exit, trace);
+    publish_record(&path, &record).context("Publish terminal maintenance evidence")?;
     Ok(record.report(path))
 }
 
-fn read_run(path: PathBuf, run_id: &str) -> Result<Report> {
+fn valid_identity(home: &Path, engine: &EngineIdentity) -> bool {
+    release_tree(home, &engine.binary).is_ok_and(|tree| tree == engine.component_tree)
+        && valid_hex(&engine.studio_commit, 40)
+        && valid_hex(&engine.binary_sha256, 64)
+        && valid_hex(&engine.profile_sha256, 64)
+        && valid_version(&engine.upstream_version)
+        && engine.profile_version == 1
+}
+
+fn read_run(home: &Path, path: PathBuf, run_id: &str) -> Result<Report> {
     let metadata = real_metadata(&path)?;
     ensure!(
         metadata.is_dir() && metadata.mode() & 0o077 == 0,
@@ -466,6 +509,9 @@ fn read_run(path: PathBuf, run_id: &str) -> Result<Report> {
             reason: Some(IncompleteReason::Interrupted),
             engine_tree: None,
             elapsed_ms: None,
+            engine_source: None,
+            engine: None,
+            rollback: None,
         }
         .report(path));
     }
@@ -474,8 +520,7 @@ fn read_run(path: PathBuf, run_id: &str) -> Result<Report> {
     let record: Record = serde_json::from_slice(&bytes)
         .map_err(|_| anyhow::anyhow!("Invalid maintenance history result"))?;
     ensure!(
-        record.schema_version == 1
-            && record.run_id == run_id
+        record.run_id == run_id
             && record
                 .engine_tree
                 .as_deref()
@@ -484,6 +529,26 @@ fn read_run(path: PathBuf, run_id: &str) -> Result<Report> {
             && matched_exit(record.status, record.exit_code)
             && (record.status == RunStatus::Incomplete) == record.reason.is_some(),
         "Invalid maintenance result identity or exit status"
+    );
+    ensure!(
+        match record.schema_version {
+            1 =>
+                record.engine_source.is_none()
+                    && record.engine.is_none()
+                    && record.rollback.is_none(),
+            2 =>
+                record.engine_source.as_deref() == Some(ENGINE_SOURCE)
+                    && record.engine.as_ref().is_some_and(|engine| {
+                        valid_identity(home, engine)
+                            && record.engine_tree.as_deref() == Some(engine.component_tree.as_str())
+                            && record.rollback.as_ref().is_none_or(|previous| {
+                                valid_identity(home, previous)
+                                    && previous.component_tree != engine.component_tree
+                            })
+                    }),
+            _ => false,
+        },
+        "Invalid maintenance engine provenance"
     );
     if record.status != RunStatus::Incomplete {
         let trace = parse_events(&read_events(&path)?, &request, true)?;
@@ -553,7 +618,8 @@ pub(in crate::maintenance) fn output_excerpt(report: &Report) -> Result<String> 
 }
 
 pub(in crate::maintenance) fn history() -> Result<Vec<Report>> {
-    let root = directory(&account_home()?);
+    let home = account_home()?;
+    let root = directory(&home);
     if !present(&root)? {
         return Ok(Vec::new());
     }
@@ -579,13 +645,14 @@ pub(in crate::maintenance) fn history() -> Result<Vec<Report>> {
     entries.sort_by(|left, right| right.0.cmp(&left.0));
     entries
         .into_iter()
-        .map(|(id, path)| read_run(path, &id))
+        .map(|(id, path)| read_run(&home, path, &id))
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     struct Fixture {
         root: PathBuf,
@@ -621,6 +688,64 @@ mod tests {
             steps: vec!["helm".into()],
             review_digest: "a".repeat(64),
         }
+    }
+
+    fn identity(home: &Path, byte: &str) -> EngineIdentity {
+        let tree = byte.repeat(40);
+        EngineIdentity {
+            binary: home
+                .join(".local/share/topgrade-rustup-head/releases")
+                .join(&tree)
+                .join("bin/topgrade"),
+            studio_commit: byte.repeat(40),
+            component_tree: tree,
+            binary_sha256: byte.repeat(64),
+            profile_sha256: "e".repeat(64),
+            upstream_version: "17.15.0".into(),
+            profile_version: 1,
+        }
+    }
+
+    fn release(home: &Path, byte: &str) -> EngineIdentity {
+        use super::super::{ASSETS, sha256_file, verified_engine_release};
+        let fixture = identity(home, byte);
+        let dir = fixture.binary.parent().unwrap().parent().unwrap();
+        fs::create_dir_all(fixture.binary.parent().unwrap()).unwrap();
+        fs::write(
+            &fixture.binary,
+            format!("#!/bin/sh\nprintf '%s\\n' 'topgrade 17.15.0'\n# {byte}\n"),
+        )
+        .unwrap();
+        fs::set_permissions(&fixture.binary, fs::Permissions::from_mode(0o755)).unwrap();
+        let manifest = dir.join("profile-manifest.json");
+        let assets = ASSETS.map(|name| (name, "e".repeat(64)));
+        fs::write(
+            &manifest,
+            serde_json::to_vec(&serde_json::json!({
+                "version": 1,
+                "files": assets.iter().map(|(destination, sha256)| {
+                    serde_json::json!({"destination": destination, "sha256": sha256})
+                }).collect::<Vec<_>>(),
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        fs::create_dir(dir.join("profile")).unwrap();
+        fs::copy(&manifest, dir.join("profile/manifest.json")).unwrap();
+        fs::write(
+            dir.join("studio-engine.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "schema_version": 1,
+                "studio_commit": fixture.studio_commit,
+                "component_tree": fixture.component_tree,
+                "binary_sha256": sha256_file(&fixture.binary).unwrap(),
+                "profile_sha256": sha256_file(&manifest).unwrap(),
+                "assets": assets.into_iter().collect::<std::collections::BTreeMap<_, _>>(),
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        verified_engine_release(home, &fixture.binary).unwrap()
     }
 
     fn events() -> String {
@@ -668,7 +793,14 @@ mod tests {
             .observe(command);
             let trace =
                 read_events(&fixture.root).and_then(|bytes| parse_events(&bytes, &request, true));
-            let record = outcome(&request, "b".repeat(40), 42, result, trace);
+            let current = identity(&fixture.root, "b");
+            let previous = identity(&fixture.root, "c");
+            let record = outcome(
+                Record::started(&request, current.clone(), Some(previous.clone())),
+                42,
+                result,
+                trace,
+            );
             assert_eq!(record.status, expected);
             if expected == RunStatus::Verified {
                 assert_eq!(
@@ -694,14 +826,109 @@ mod tests {
                     &serde_json::to_vec(&record).unwrap(),
                 )
                 .unwrap();
-                assert_eq!(
-                    read_run(fixture.root.clone(), &request.run_id)
-                        .unwrap()
-                        .status,
-                    RunStatus::Verified
-                );
+                let report =
+                    read_run(&fixture.root, fixture.root.clone(), &request.run_id).unwrap();
+                assert_eq!(report.status, RunStatus::Verified);
+                assert_eq!(report.engine, Some(current));
+                assert_eq!(report.rollback, Some(previous));
             }
         }
+    }
+
+    #[test]
+    fn reads_old_history_and_preserves_provenance_on_interruption() {
+        let fixture = Fixture::new();
+        let request = request();
+        persist(
+            &fixture.root.join("request.json"),
+            &serde_json::to_vec(&request).unwrap(),
+        )
+        .unwrap();
+        let current = identity(&fixture.root, "b");
+        let initial = Record::started(&request, current.clone(), None);
+        let mut legacy = serde_json::to_value(&initial).unwrap();
+        legacy["schema_version"] = 1.into();
+        for key in ["engine_source", "engine", "rollback"] {
+            legacy.as_object_mut().unwrap().remove(key);
+        }
+        persist(
+            &fixture.root.join("result.json"),
+            &serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
+        let read = || read_run(&fixture.root, fixture.root.clone(), &request.run_id).unwrap();
+        let old = read();
+        assert_eq!(old.status, RunStatus::Incomplete);
+        assert_eq!(old.engine_tree, Some(current.component_tree.clone()));
+        assert!(old.engine.is_none());
+        publish_record(&fixture.root, &initial).unwrap();
+        let interrupted = read();
+        assert_eq!(interrupted.status, RunStatus::Incomplete);
+        assert_eq!(interrupted.engine, Some(current));
+    }
+
+    #[test]
+    fn same_version_releases_are_distinct_and_tampered_rollback_is_rejected() {
+        let fixture = Fixture::new();
+        let current = release(&fixture.root, "a");
+        let previous = release(&fixture.root, "b");
+        assert_eq!(current.upstream_version, previous.upstream_version);
+        assert_ne!(current.binary_sha256, previous.binary_sha256);
+        let journal = fixture
+            .root
+            .join(".local/share/topgrade-rustup-head")
+            .join(format!("studio-activation-{}.json", current.component_tree));
+        fs::write(
+            journal,
+            serde_json::to_vec(&serde_json::json!({
+                "schema_version": 1,
+                "target": current.binary,
+                "previous": previous.binary,
+                "profile_transaction": null,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let cancel = AtomicBool::new(false);
+        assert_eq!(
+            rollback_candidate(&fixture.root, &current, &cancel).unwrap(),
+            Some(previous.clone())
+        );
+        fs::write(&previous.binary, "changed").unwrap();
+        assert!(rollback_candidate(&fixture.root, &current, &cancel).is_err());
+    }
+
+    #[test]
+    fn engine_activation_lock_conflicts_with_managed_and_legacy_switches() {
+        let fixture = Fixture::new();
+        let base = fixture.root.join(".local/share/topgrade-rustup-head");
+        fs::create_dir_all(&base).unwrap();
+        let path = base.join("lock");
+        let legacy_attempt = || {
+            Command::new("/bin/sh")
+                .args([
+                    "-c",
+                    "exec 9>>\"$1\" && /usr/bin/lockf -s -t 0 9",
+                    "fixture",
+                ])
+                .arg(&path)
+                .status()
+                .unwrap()
+                .success()
+        };
+        let running = acquire_engine_activation_lock(&fixture.root).unwrap();
+        assert!(acquire_engine_activation_lock(&fixture.root).is_err());
+        assert!(!legacy_attempt());
+        drop(running);
+        assert!(legacy_attempt());
+        assert!(acquire_engine_activation_lock(&fixture.root).is_ok());
+
+        fs::remove_file(&path).unwrap();
+        let elsewhere = fixture.root.join("unrelated-lock");
+        fs::write(&elsewhere, b"keep").unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
+        assert!(acquire_engine_activation_lock(&fixture.root).is_err());
+        assert_eq!(fs::read(elsewhere).unwrap(), b"keep");
     }
 
     #[test]
@@ -740,7 +967,13 @@ exit 1"#]).current_dir(&fixture.root);
         let trace =
             read_events(&fixture.root).and_then(|bytes| parse_events(&bytes, &request, true));
         assert_eq!(
-            outcome(&request, "b".repeat(40), 42, result, trace).status,
+            outcome(
+                Record::started(&request, identity(&fixture.root, "b"), None),
+                42,
+                result,
+                trace,
+            )
+            .status,
             RunStatus::Cancelled
         );
     }

@@ -153,6 +153,17 @@ fn receipt_rejects_duplicate_destination_keys() {
 }
 
 #[test]
+fn released_profile_lock_is_available_even_if_a_fork_retained_the_descriptor() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let (_, guard) = lock(&fixture.home)?;
+    let inherited_descriptor = guard.0.try_clone()?;
+    drop(guard);
+    let (_, _next) = lock(&fixture.home)?;
+    drop(inherited_descriptor);
+    Ok(())
+}
+
+#[test]
 fn complete_reviewed_profile_applies_and_rolls_back_in_a_fresh_home() -> Result<()> {
     let fixture = Fixture::new()?;
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
     fs::File,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, atomic::AtomicBool, mpsc::Sender},
 };
 
@@ -18,6 +18,18 @@ pub mod windows_inventory;
 pub mod windows_updates;
 
 pub const TERMINAL_COMMAND: &str = "\"$HOME/.local/bin/topgrade\"";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineIdentity {
+    pub binary: PathBuf,
+    pub studio_commit: String,
+    pub component_tree: String,
+    pub binary_sha256: String,
+    pub profile_sha256: String,
+    pub upstream_version: String,
+    pub profile_version: u32,
+}
 
 #[derive(Debug, Clone)]
 pub struct Step {
@@ -33,11 +45,15 @@ pub struct Check {
     pub available: bool,
     pub detail: String,
     pub steps: Vec<Step>,
+    pub engine: Option<EngineIdentity>,
+    pub rollback: Option<EngineIdentity>,
+    pub rollback_detail: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Review {
     pub steps: Vec<Step>,
+    pub engine: EngineIdentity,
     #[cfg(target_os = "macos")]
     proof: native::Proof,
     #[cfg(target_os = "macos")]
@@ -77,6 +93,9 @@ pub struct Report {
     pub status: RunStatus,
     pub steps: Vec<StepReport>,
     pub detail: String,
+    pub engine: Option<EngineIdentity>,
+    pub engine_tree: Option<String>,
+    pub rollback: Option<EngineIdentity>,
 }
 
 pub fn check(cancel: Arc<AtomicBool>) -> Result<Check> {
@@ -89,6 +108,9 @@ pub fn check(cancel: Arc<AtomicBool>) -> Result<Check> {
             available: false,
             detail: "Topgrade maintenance is available on macOS only.".into(),
             steps: Vec::new(),
+            engine: None,
+            rollback: None,
+            rollback_detail: None,
         })
     }
 }
@@ -144,7 +166,7 @@ pub fn account_home() -> Result<PathBuf> {
 }
 
 /// Hash a bounded, regular macOS engine or profile asset.
-pub fn sha256_file(path: &std::path::Path) -> Result<String> {
+pub fn sha256_file(path: &Path) -> Result<String> {
     #[cfg(target_os = "macos")]
     return native::sha256_file(path);
     #[cfg(not(target_os = "macos"))]
@@ -154,10 +176,29 @@ pub fn sha256_file(path: &std::path::Path) -> Result<String> {
     }
 }
 
+/// Inspect a managed release without changing the launcher or installed profile.
+pub fn verified_engine_release(home: &Path, binary: &Path) -> Result<EngineIdentity> {
+    #[cfg(target_os = "macos")]
+    return native::verified_engine_release(home, binary);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (home, binary);
+        anyhow::bail!("Managed Topgrade releases are available on macOS only")
+    }
+}
+
 /// Hold through the entire non-maintenance mutation. The engine acquires this lock itself.
 pub fn acquire_mutation_lock() -> Result<File> {
     #[cfg(target_os = "macos")]
     return native::acquire_mutation_lock();
     #[cfg(not(target_os = "macos"))]
     anyhow::bail!("The macOS maintenance lock is unavailable on this operating system")
+}
+
+/// Prevent a managed engine switch through review revalidation and execution.
+pub fn acquire_engine_activation_lock() -> Result<File> {
+    #[cfg(target_os = "macos")]
+    return native::acquire_engine_activation_lock(&native::account_home()?);
+    #[cfg(not(target_os = "macos"))]
+    anyhow::bail!("The Topgrade activation lock is unavailable on this operating system")
 }

@@ -15,7 +15,10 @@ mod mac {
         process::{Command, Output},
         time::{SystemTime, UNIX_EPOCH},
     };
-    use studio_deployment::maintenance::{account_home, acquire_mutation_lock, sha256_file};
+    use studio_deployment::maintenance::{
+        account_home, acquire_engine_activation_lock, acquire_mutation_lock, sha256_file,
+        verified_engine_release,
+    };
 
     const PROFILE: &str = "profiles/macos";
     const ASSETS: [&str; 5] = [
@@ -313,6 +316,19 @@ mod mac {
         regular(path)
     }
 
+    fn checked_launcher(home: &Path) -> Result<PathBuf> {
+        let directory = home.join(".local/bin");
+        let metadata = directory.metadata()?;
+        ensure!(
+            directory.canonicalize()? == directory
+                && metadata.is_dir()
+                && metadata.uid() == home.metadata()?.uid()
+                && metadata.mode() & 0o022 == 0,
+            "Expected a real user-owned Topgrade launcher directory"
+        );
+        Ok(directory.join("topgrade"))
+    }
+
     fn swap_link(link: &Path, expected: &Path, target: &Path) -> Result<()> {
         ensure!(
             fs::read_link(link)? == expected,
@@ -324,25 +340,6 @@ mod mac {
         fs::rename(&pending_link, link)?;
         fs::File::open(link.parent().context("Missing launcher parent")?)?.sync_all()?;
         Ok(())
-    }
-
-    fn legacy_lock(base: &Path) -> Result<fs::File> {
-        let lock = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .custom_flags(0x0100) // Darwin O_NOFOLLOW
-            .open(base.join("lock"))?;
-        let metadata = lock.metadata()?;
-        ensure!(
-            metadata.is_file() && metadata.nlink() == 1 && metadata.mode() & 0o077 == 0,
-            "Unsafe legacy Topgrade release lock"
-        );
-        lock.try_lock()
-            .map_err(|error| anyhow::anyhow!("Legacy Topgrade maintenance is busy: {error}"))?;
-        Ok(lock)
     }
 
     fn require_topgrade_idle() -> Result<()> {
@@ -361,12 +358,146 @@ mod mac {
             .context("Topgrade profile transaction")
     }
 
+    fn restore_activation(home: &Path, tree: &str, expected_previous: Option<&str>) -> Result<()> {
+        let base = home.join(".local/share/topgrade-rustup-head");
+        let releases = base.join("releases");
+        let link = checked_launcher(home)?;
+        let target = releases.join(tree).join("bin/topgrade");
+        let pending = base.join("studio-activation.pending.json");
+        let journal = base.join(format!("studio-activation-{tree}.json"));
+        ensure!(
+            fs::read_link(&link)? == target && !optional(&pending)?,
+            "The reviewed engine is no longer active or a pending activation needs recovery"
+        );
+        regular(&journal)?;
+        ensure!(
+            journal.metadata()?.mode() & 0o077 == 0,
+            "Expected a private activation receipt"
+        );
+        let saved: Activation =
+            profile::read_json(&journal)?.context("Missing current engine activation")?;
+        ensure!(
+            saved.schema_version == 1 && saved.target == target && saved.previous != target,
+            "This activation is not current or has no distinct rollback target"
+        );
+        let current = verified_engine_release(home, &target)?;
+        let previous = verified_engine_release(home, &saved.previous)?;
+        ensure!(
+            expected_previous.is_none_or(|tree| tree == previous.component_tree),
+            "The rollback target changed since review"
+        );
+        ensure!(
+            saved.profile_transaction.is_some()
+                || current.profile_sha256 == previous.profile_sha256,
+            "Different profiles require a recorded rollback transaction"
+        );
+        let current_profile = releases.join(&current.component_tree).join("profile");
+        let previous_profile = releases.join(&previous.component_tree).join("profile");
+        let (state, _profile_lock) = profile::lock(home)?;
+        profile::rollback_activation(
+            &current_profile,
+            &previous_profile,
+            home,
+            &state,
+            saved.profile_transaction.as_deref(),
+            || write_json(&pending, &saved),
+        )?;
+        swap_link(&link, &target, &saved.previous)?;
+        let restored = verified_engine_release(home, &link.canonicalize()?)?;
+        ensure!(
+            fs::read_link(&link)? == saved.previous && restored == previous,
+            "Restored launcher or receipt changed during rollback"
+        );
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        fs::rename(
+            &journal,
+            base.join(format!("studio-rollback-{tree}-{timestamp}.json")),
+        )?;
+        fs::remove_file(&pending)?;
+        fs::File::open(&base)?.sync_all()?;
+        println!(
+            "Restored Topgrade {} (Studio {}, tree {}, binary SHA-256 {}) and verified installed profile {} (SHA-256 {})",
+            restored.upstream_version,
+            restored.studio_commit,
+            restored.component_tree,
+            restored.binary_sha256,
+            restored.profile_version,
+            restored.profile_sha256,
+        );
+        Ok(())
+    }
+
+    fn rollback_current(tree: &str, previous_tree: &str) -> Result<()> {
+        ensure!(
+            hexadecimal(tree, 40) && hexadecimal(previous_tree, 40) && tree != previous_tree,
+            "Supply the distinct full active and previous component tree SHAs"
+        );
+        let home = account_home()?;
+        let base = home.join(".local/share/topgrade-rustup-head");
+        ensure!(
+            base.canonicalize()? == base,
+            "Unexpected managed engine directory"
+        );
+        let _lock = acquire_mutation_lock()?;
+        let _activation = acquire_engine_activation_lock()?;
+        require_topgrade_idle()?;
+        restore_activation(&home, tree, Some(previous_tree))
+    }
+
+    fn verify_current(tree: &str) -> Result<()> {
+        ensure!(
+            hexadecimal(tree, 40),
+            "Supply the full active component tree SHA"
+        );
+        let home = account_home()?;
+        let base = home.join(".local/share/topgrade-rustup-head");
+        let release = base.join("releases").join(tree);
+        let target = release.join("bin/topgrade");
+        let link = checked_launcher(&home)?;
+        let pending = base.join("studio-activation.pending.json");
+        let current = || -> Result<()> {
+            ensure!(
+                fs::read_link(&link)? == target && !optional(&pending)?,
+                "The reviewed engine is no longer active or a pending activation needs recovery"
+            );
+            Ok(())
+        };
+        current()?;
+        let identity = verified_engine_release(&home, &target)?;
+        let packaged = release.join("profile");
+        let count = profile::verify_installed(&packaged, &home)?;
+        ensure!(
+            sha256_file(&packaged.join("manifest.json"))? == identity.profile_sha256,
+            "Packaged profile changed during verification"
+        );
+        current()?;
+        println!(
+            "Verified Topgrade {} (Studio {}, tree {}, binary SHA-256 {}) and installed profile {} ({} assets, SHA-256 {})",
+            identity.upstream_version,
+            identity.studio_commit,
+            identity.component_tree,
+            identity.binary_sha256,
+            identity.profile_version,
+            count,
+            identity.profile_sha256,
+        );
+        Ok(())
+    }
+
     pub(super) fn execute(args: &[String]) -> Result<()> {
+        if let [mode, tree] = args
+            && mode == "verify-current"
+        {
+            return verify_current(tree);
+        }
         let [mode, checkout_arg, revision] = args else {
             bail!(
-                "Usage: devenv-studio topgrade-engine <plan|prepare|install|rollback> <absolute checkout> <full commit>"
+                "Usage: devenv-studio topgrade-engine <plan|prepare|install|rollback> <absolute checkout> <full commit>\n       devenv-studio topgrade-engine rollback-current <active component tree> <previous component tree>\n       devenv-studio topgrade-engine verify-current <active component tree>"
             );
         };
+        if mode == "rollback-current" {
+            return rollback_current(checkout_arg, revision);
+        }
         ensure!(
             matches!(mode.as_str(), "plan" | "prepare" | "install" | "rollback"),
             "Unknown engine maintenance action"
@@ -399,7 +530,7 @@ mod mac {
         let base = home.join(".local/share/topgrade-rustup-head");
         let releases = base.join("releases");
         let release = releases.join(&tree);
-        let link = home.join(".local/bin/topgrade");
+        let link = checked_launcher(&home)?;
         let previous =
             fs::read_link(&link).context("Expected the existing managed Topgrade launcher")?;
         managed_target(&previous, &releases)?;
@@ -432,7 +563,7 @@ mod mac {
             return Ok(());
         }
         let _lock = acquire_mutation_lock()?;
-        let _legacy_lock = legacy_lock(&base)?;
+        let _activation = acquire_engine_activation_lock()?;
         ensure!(
             fs::read_link(&link)? == previous && !optional(&pending)?,
             "Engine changed while acquiring the maintenance lock"
@@ -441,32 +572,7 @@ mod mac {
             require_topgrade_idle()?;
             verify_release(&release, &tree)?;
             verify_profile(checkout, &tree, &release)?;
-            regular(&journal)?;
-            let saved: Activation = serde_json::from_slice(&fs::read(&journal)?)?;
-            ensure!(
-                saved.schema_version == 1 && saved.target == target && previous == target,
-                "This activation is not current"
-            );
-            managed_target(&saved.previous, &releases)?;
-            status(
-                Command::new(&saved.previous).arg("--version"),
-                "Verify rollback binary",
-            )?;
-            write_json(&pending, &saved)?;
-            if let Some(tx) = saved.profile_transaction.as_deref() {
-                ensure!(hexadecimal(tx, 32), "Invalid profile rollback transaction");
-                profile(&release, &home, &["--rollback", tx])?;
-            }
-            swap_link(&link, &previous, &saved.previous)?;
-            let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-            fs::rename(
-                &journal,
-                base.join(format!("studio-rollback-{tree}-{timestamp}.json")),
-            )?;
-            fs::remove_file(&pending)?;
-            fs::File::open(&base)?.sync_all()?;
-            println!("Restored {}", saved.previous.display());
-            return Ok(());
+            return restore_activation(&home, &tree, None);
         }
         prepare(checkout, revision, &tree, &release, &home)?;
         if mode == "prepare" {
@@ -552,6 +658,9 @@ mod mac {
         println!("Activation record: {}", journal.display());
         Ok(())
     }
+
+    #[cfg(test)]
+    mod tests;
 }
 
 pub(super) fn execute(args: &[String]) -> anyhow::Result<()> {

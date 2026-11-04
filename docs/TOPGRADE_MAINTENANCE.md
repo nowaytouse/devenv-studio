@@ -17,6 +17,8 @@ Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来�
 
 「更新任务」的审核视图显示每项的命令或运行方式。任务结束后进入「执行记录」，可查看结果和本地输出，也可以独立刷新历史。
 
+检查后，「当前更新引擎」显示实际运行版本、组件树短标识及 profile 清单版本和摘要。展开来源可查看二进制路径、Studio 构建提交、完整组件树和两份 SHA-256。组件树区分同一个 Topgrade 版本下的不同源码，二进制摘要进一步区分产物。执行记录保留当时的引擎身份及可用回退候选。旧记录保留已写入的组件树，缺失字段保持未知。
+
 Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受管配置和选中工具的身份。受限入口用 Rust 子进程执行白名单步骤，通过独立请求和事件记录汇报。运行记录和有界日志位于现有 Studio 数据目录的 `maintenance/runs`。普通终端入口、Studio 的相应 Mac 写操作和引擎切换共用维护锁。
 
 当前 Rust 迁移的范围：
@@ -55,6 +57,14 @@ devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 
 原有 Homebrew HEAD-sync 日志仍可由 Rust 入口恢复。收到 TERM 或 HUP 时，更新器持锁等待正在运行的子进程，随后恢复两份公式并以相应的退出状态结束。如果只有父进程被强制杀死，请先确认原来的 Homebrew 和构建子进程均已退出，再运行恢复。
 
-回退同一次部署时，使用相同 checkout 和 SHA，把 `install` 换成 `rollback`。命令从激活记录找到原二进制和独立的 profile 回滚事务，若较新的修改使回滚不安全则停止。若过程报告 pending 激活，请保留文件、启动器和 profile 事务，核对实际生效版本后再恢复。私人记录在 `~/.local/share/topgrade-rustup-head` 和 `~/.local/state/topgrade-macos-profile`。
+检查显示上一版时，可复制绑定两版组件树的终端回退命令。请关闭其他维护任务后运行。回退重新核对当前与上一版引擎、profile 和事务，若身份或配置发生漂移则停止。回退完成后重新检查更新中心，或用 `devenv-studio topgrade-engine verify-current FULL_COMPONENT_TREE` 核对启动器及全部受管资产。相同 checkout 和 SHA 的 `topgrade-engine rollback` 仍可用于维护入口。若过程报告 pending 激活，请保留文件、启动器和 profile 事务，核对实际生效版本后再恢复。私人记录在 `~/.local/share/topgrade-rustup-head` 和 `~/.local/state/topgrade-macos-profile`。
+
+## 设备验收
+
+macOS 先独立核对每个写入任务的目标、版本或缓存摘要，再运行已审核的单项，保存退出状态和读回结果。用相同范围复跑，记录成功变更、已是最新、跳过或失败。完整终端运行前另行核对有效 profile 的前置、后置和自定义命令，以及需要授权的任务。完整运行通过后重复同一范围，核对第二轮变化。
+
+TLDR 刷新会按 tealdeer 选择的下载语言替换缓存。多语言用户应在 `tldr --show-paths` 显示的配置文件中显式指定 `[updates]` 下的 `download_languages`，例如 `["en", "zh"]`。受管 GUI 进程使用受限环境，单靠交互 shell 的语言变量可能让刷新丢失中文等缓存。验收时分别核对各语言页面。 [tealdeer 下载配置](https://docs.tealdeer.org/latest/config_updates.html)
+
+Windows 在 LTSC 2021 和 LTSC 2024 分开记录系统版本、预览产物摘要、Studio 启动、WinGet 清单和实际权限提示。对同一来源中有唯一 ID 的非关键包，先记录已安装版本和明确目标版本，再执行 Studio 显示的单包终端命令，核对退出码和升级后的版本。两代设备各自通过后再开放 GUI 单包写入。
 
 Studio 预览包包含 Studio 自己的可执行文件。引擎由本机单独构建。仓库内保留 Topgrade 源代码、第三方声明及 GPL 许可；分发引擎时须一并处理对应源码与构建材料。

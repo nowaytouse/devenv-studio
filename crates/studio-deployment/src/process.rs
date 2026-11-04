@@ -571,9 +571,9 @@ fn configure_inventory(command: &mut Command) {
         .env("UV_OFFLINE", "1")
         .env("UV_PYTHON_DOWNLOADS", "never");
 }
-fn run_configured(
+pub(crate) fn run_configured(
     invocation: &Invocation,
-    cancel: &Arc<AtomicBool>,
+    cancel: &AtomicBool,
     timeout: Duration,
     configure: impl FnOnce(&mut Command),
 ) -> Result<Output> {

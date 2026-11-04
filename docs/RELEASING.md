@@ -21,6 +21,10 @@ DevEnv Studio 覆盖 macOS 与 Windows 开发环境备份、配置、网络方�
 
 发布前审核 Unreleased 的实际范围与兼容性说明，一次性同步工作区包版本和锁文件中的本地包版本，并记录对应源码提交。按变更范围完成仓库规定检查，分别写明本地测试、目标编译、原生界面、设备验收、签名和公证的实际证据；未执行的检查保留为未验证。然后整理该版本变更记录，保留后续 Unreleased 区域。
 
+1. 从干净 checkout 构建。记录完整 Studio 提交、Cargo.lock 摘要、Rust 工具链、目标三元组及 SDK 版本。若交付 Topgrade 引擎，另记录组件树、引擎锁文件、profile 清单、二进制摘要及对应源码与许可材料。
+2. 使用 Developer ID 签名 macOS 产物，完成 Apple 公证后装订票据，在干净的目标环境验证签名、Gatekeeper、安装与启动。Windows 安装包使用 Authenticode 和 SHA-256 时间戳，按标准用户场景在两代 LTSC 核验签名、启动及权限提示。 [Apple 公证](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) · [Microsoft SignTool](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool)
+3. 在最终签名和封装完成后记录对外产物的 SHA-256。保留已验证上一版及其摘要，在目标设备验证升级和回退。发布记录关联签名验证结果与设备验收记录。
+
 ## 更名兼容性
 
 `devenv-studio` 是新的主命令；`ltsc-studio` 保留为调用同一实现的兼容入口。源码目录、`studio-*` 内部 crate 名称不必随产品名移动或更名。

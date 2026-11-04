@@ -626,16 +626,16 @@ impl Studio {
                 tx("更新本机开发工具", "Update local developer tools"),
                 [
                     tx(
-                        "检查本机 Topgrade 的身份、可用步骤和执行记录。",
-                        "Check the local Topgrade identity, available steps, and run history.",
+                        "检查当前 Topgrade。可展开构建详情，核对上一版并复制终端回退命令。",
+                        "Check the active Topgrade. Expand its build details, review the previous version, and copy the rollback command when available.",
                     ),
                     tx(
                         "选择可在 Studio 执行的步骤，核对范围后单独确认。",
                         "Select steps supported in Studio, review their scope, then confirm separately.",
                     ),
                     tx(
-                        "在本页查看实际结果。需要交互或管理员授权的步骤请在终端处理。",
-                        "Review actual results here. Use Terminal for steps that require interaction or administrator authorization.",
+                        "在执行记录核对步骤结果和实际使用的引擎。需要交互或管理员授权的步骤请在终端处理。",
+                        "Use Run history to verify step outcomes and the engine used. Run steps requiring interaction or administrator authorization in Terminal.",
                     ),
                 ],
             ),
