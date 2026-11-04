@@ -1,5 +1,5 @@
 //! Native managed-profile operations that keep terminal authorization semantics.
-use super::{gradle, headsync, sqlite, xcode};
+use super::{gradle, headsync, npm_guard, preview, rolling, skills_profile, sqlite, xcode};
 use crate::{command::CommandExt, execution_context::RunType, executor::ExecutorOutput, utils::require};
 use color_eyre::eyre::{Result, WrapErr, bail, ensure};
 use serde::Deserialize;
@@ -11,17 +11,28 @@ const START: &str = "Beginning update. This process may take several minutes.";
 
 pub(super) fn run(id: &str, mode: RunType) -> Result<()> {
     let action: fn() -> Result<()> = match id {
+        "betterdisplay_preview" => preview::betterdisplay,
         "brew_headsync" => headsync::run,
         "gcloud_verified" => gcloud,
         "gradle_nightly" => gradle::run,
+        "krita_next" => preview::krita_next,
         "mas_verified" => mas,
+        "npm_bundled_security" => npm_guard::run,
+        "rolling_projects" => || rolling::run(false),
+        "skills_unattended" => skills_profile::update,
+        "skills_coverage" => skills_profile::coverage,
         "sqlite_trunk" => || sqlite::run(false),
         "sqlite_python_trunk" => || sqlite::run(true),
+        "tourbox_beta" => preview::tourbox_beta,
         "xcode_select_beta" => xcode::run,
+        "xcode_beta_install" => preview::xcode_beta,
         _ => bail!("Unknown native profile operation: {id}"),
     };
     if mode.dry() {
         println!("Dry running: {id}");
+        if id == "rolling_projects" {
+            return rolling::run(true);
+        }
         return Ok(());
     }
     action()

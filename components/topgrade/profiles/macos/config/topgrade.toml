@@ -13,20 +13,20 @@ disable = ["mamba", "conda", "gcloud", "mas"]
 "gcloud (verified)" = "@studio:gcloud_verified"
 "SQLite Python trunk" = "@studio:sqlite_python_trunk"
 "SQLite trunk" = "@studio:sqlite_trunk"
-"TourBox Beta Update" = "$HOME/.local/bin/update-tourbox-beta --apply"
-"Xcode Beta Update" = "$HOME/.local/bin/update-preview-extras --xcode"
+"TourBox Beta Update" = "@studio:tourbox_beta"
+"Xcode Beta Update" = "@studio:xcode_beta_install"
 
-"BetterDisplay Internal Update" = "$HOME/.local/bin/update-preview-extras --betterdisplay"
+"BetterDisplay Internal Update" = "@studio:betterdisplay_preview"
 
-"Preview macOS Apps" = "$HOME/.local/bin/update-preview-apps --topgrade"
+"Preview macOS Apps" = "@studio:krita_next"
 "Conda frozen base" = "conda self update --yes"
 "Conda default" = "conda update --all -n default --yes"
 
 "Gradle Nightly Toolchain" = "@studio:gradle_nightly"
-"Rolling Project Dependencies" = "~/.local/bin/proxy-auto-run ~/.local/bin/update-project-deps --topgrade"
+"Rolling Project Dependencies" = "@studio:rolling_projects"
 "Homebrew Linkage Audit" = "@studio:brew_linkage_audit"
 "CLI Tool Versions" = "@studio:cli_versions"
-"npm Bundled Dependency Security" = "$HOME/.local/bin/proxy-auto-run /opt/homebrew/bin/npm update --global npm --ignore-scripts --registry=https://registry.npmjs.org && $HOME/.local/bin/proxy-auto-run /opt/homebrew/opt/python@3.15/bin/python3.15 $HOME/.local/bin/npm-bundled-security-guard.py"
+"npm Bundled Dependency Security" = "@studio:npm_bundled_security"
 [github_cli]
 skills_native = true
 

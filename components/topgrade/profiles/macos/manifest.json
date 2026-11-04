@@ -193,7 +193,7 @@
     {
       "source": "config/topgrade.d/90-skills-coverage.toml",
       "destination": ".config/topgrade.d/90-skills-coverage.toml",
-      "sha256": "f52d26bbcc5894d56e141e0e4c3727624d69ae13c57c0be09811f941e7e8eb6e",
+      "sha256": "5bce6c1f39ef24be9f3bde9dea08215941640dfe2496161e0dbf22184676fe3a",
       "mode": 420,
       "adoptSha256": "196df7ba6f8472add48e03f60a18d52e257163e893bce74c989cc2eab89e795b"
     },
@@ -207,14 +207,14 @@
     {
       "source": "config/topgrade.d/95-skills-unattended.toml",
       "destination": ".config/topgrade.d/95-skills-unattended.toml",
-      "sha256": "cb4cc30a112cfb0091b3514019450897be14c2ee69b94d52b7da8cf8ecbd05ec",
+      "sha256": "9fc48beb065c25c5f52935375df398e6f92e64016d5f338c7384a704f8c27038",
       "mode": 420,
       "adoptSha256": "cb4cc30a112cfb0091b3514019450897be14c2ee69b94d52b7da8cf8ecbd05ec"
     },
     {
       "source": "config/topgrade.toml",
       "destination": ".config/topgrade.toml",
-      "sha256": "3ccc5558a9ef9eab77d56f913f85963826689520650ba1aa320cd23fdbb9d9bc",
+      "sha256": "b3ea9e9bea173e4fc1fd4258a6c84aa5b746c2cd686bb6864e721a997c4d496c",
       "mode": 384,
       "adoptSha256": "27bdb0f36bd9172ac626e2f96ca19051e6327206e6e13fd734513262608d58ba"
     },

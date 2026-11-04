@@ -19,9 +19,14 @@ Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受�
 | Homebrew HEAD-sync | Rust 保留兼容事务日志、固定 LLVM、成对完整 SHA 校验和恢复 | 终端入口 |
 | SQLite CLI、Python 3.15 SQLite | Rust 共享源码版本与更新锁，保留事务和运行时验证 | 终端入口 |
 | Gradle Nightly | Rust 核对下载和安全解包，验证运行时后切换启动器 | 终端入口 |
-| Preview/Beta 应用安装、项目滚动依赖、NPX/设计包和 npm 安全修复 | 继续使用受管脚本 | 终端入口 |
+| Krita Next、BetterDisplay、TourBox Beta、Xcode Beta 安装 | Rust 核对来源、包身份和安装回读，保留备份或厂商安装机制 | 终端入口 |
+| 项目滚动依赖 | Rust 识别项目和依赖面，写入变更前备份与历史，执行受管工具并验证结果 | 终端入口 |
+| NPX、设计包和 Cursor 覆盖检查 | Rust 管理归属、镜像、锁和可恢复激活，使用已固定版本的 NPX 更新工具 | 终端入口 |
+| npm 捆绑依赖安全 | Rust 验证两份包目录、公告范围及交换事务 | 终端入口 |
 
-旧验证器文件仍随 profile 保存，用于兼容及回退。新引擎的六个受控步骤不调用这些 Python 或 Shell 验证器。Profile 安装器和上表剩余任务继续依赖原有运行时。
+旧的 Shell 和 Python 文件随 profile 保留，供兼容入口和回退使用。受管 Topgrade 流程使用 Rust 任务，按需调用 Homebrew、GitHub CLI、npm、Gradle 和厂商安装工具。Python 3.15 SQLite 的 ABI 验证继续通过目标解释器执行。
+
+项目滚动更新保留既有依赖面和每仓库策略。npm 检查使用本机已安装的 ncu，禁用依赖安装脚本。Gradle 依赖报告固定使用 0.67.0 插件；wrapper 仅更新校验通过的版本与分发属性，保留原启动脚本和 JAR。共享版本引用影响范围无法证明时，只记录发现的候选。旧独立滚动更新命令和预览应用手动启动选项仍可作为兼容入口。
 
 取消在当前步骤结束后生效。超时或无法证明子进程结束时，保留中断记录，暂停新的维护操作。先检查任务和现存变更，再在终端运行已安装 Topgrade 的 `--studio-acknowledge-interruption`。如果中断记录缺少可核验的进程组信息，先人工确认没有残余进程并核验更新器状态，再保留该记录作恢复依据。
 

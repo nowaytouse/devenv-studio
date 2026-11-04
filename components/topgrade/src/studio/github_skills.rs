@@ -12,7 +12,7 @@ use std::{
 };
 
 mod lock;
-mod ownership;
+pub(super) mod ownership;
 mod remote;
 
 #[cfg(test)]

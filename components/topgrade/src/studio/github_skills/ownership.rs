@@ -12,7 +12,7 @@ use std::{
 
 const SKILL_LIMIT: u64 = 4 * 1024 * 1024;
 const TREE_FILE_LIMIT: u64 = 32 * 1024 * 1024;
-const CURSOR_NAMES: &[&str] = &[
+pub(in crate::studio) const CURSOR_NAMES: &[&str] = &[
     "automate",
     "autopilot",
     "canvas",
@@ -40,7 +40,7 @@ const CURSOR_NAMES: &[&str] = &[
     "update-cursor-settings",
     "visualize",
 ];
-const USER_CONFIG: &[&str] = &[
+pub(in crate::studio) const USER_CONFIG: &[&str] = &[
     ".env",
     ".env.local",
     ".env.production",
@@ -68,14 +68,14 @@ pub(super) struct Row {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) struct Metadata {
+pub(in crate::studio) struct Metadata {
     pub name: String,
     pub source: String,
     pub directory: String,
     pub tree: String,
 }
 
-pub(super) fn repository(url: &str) -> Result<String> {
+pub(in crate::studio) fn repository(url: &str) -> Result<String> {
     let path = url
         .strip_prefix("https://github.com/")
         .context("Skill source must be a canonical GitHub repository URL")?;
@@ -93,7 +93,7 @@ fn component(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte))
 }
 
-pub(super) fn directory(value: &str) -> Result<&str> {
+pub(in crate::studio) fn directory(value: &str) -> Result<&str> {
     if matches!(value, "" | ".") {
         return Ok("");
     }
@@ -132,7 +132,7 @@ fn header(path: &Path) -> Result<String> {
         .context("Invalid SKILL.md frontmatter")
 }
 
-pub(super) fn metadata(path: &Path) -> Result<Metadata> {
+pub(in crate::studio) fn metadata(path: &Path) -> Result<Metadata> {
     let header = header(path).wrap_err_with(|| format!("Incomplete GitHub skill metadata: {}", path.display()))?;
     let value = |field: &str, nested: bool| -> Result<String> {
         let mut matches = header.lines().filter_map(|line| {
@@ -165,7 +165,7 @@ pub(super) fn metadata(path: &Path) -> Result<Metadata> {
     Ok(result)
 }
 
-fn name_matches(path: &Path, name: &str) -> Result<bool> {
+pub(in crate::studio) fn name_matches(path: &Path, name: &str) -> Result<bool> {
     static NAME: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r#"(?m)^name:\s*['"]?([\w-]+)"#).expect("static skill name regex"));
     let header = header(path)?;

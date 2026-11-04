@@ -29,7 +29,13 @@ mod gradle;
 mod headsync;
 mod helm;
 mod inventory;
+mod npm_guard;
+mod preview;
+mod proxy;
+mod rolling;
+mod skills_profile;
 mod sqlite;
+mod strict_json;
 mod terminal_profile;
 #[cfg(test)]
 mod tests;
