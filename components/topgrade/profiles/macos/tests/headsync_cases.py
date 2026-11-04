@@ -34,6 +34,8 @@ if args == ["--repo", "homebrew/core"]:
  print(root/"core")
 elif args == ["update"]:
  if os.environ.get("HOMEBREW_NO_AUTO_UPDATE") != "1": print("auto-update guard missing",file=sys.stderr); sys.exit(30)
+ if (root/"state/brew-headsync/active").exists(): print("journal was not recovered",file=sys.stderr); sys.exit(38)
+ if os.environ.get("TEST_FAIL") == "update": print("injected brew update failure",file=sys.stderr); sys.exit(39)
 elif args == ["list", "--formula", "--pinned"]:
  if os.environ.get("TEST_FAIL_LIST") == "pinned": print("simulated pinned list error",file=sys.stderr); sys.exit(36)
  print(os.environ.get("TEST_PINNED", "llvm"))
@@ -102,8 +104,8 @@ else:
  print("unexpected git call: "+repr(args),file=sys.stderr); sys.exit(42)
 '''
 helper = r'''#!/bin/sh
-printf '%s\n' 'helper update' >> "$TEST_ROOT/events"
-if [ "${TEST_FAIL:-}" = helper ]; then exit 43; fi
+printf '%s\n' 'unexpected engine update' >> "$TEST_ROOT/events"
+exit 43
 '''
 
 
@@ -153,8 +155,10 @@ class Fixture:
 
     def run(self, **overrides):
         env = self.env | overrides
-        return subprocess.run(["/bin/zsh", str(script)], env=env, text=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+        result = subprocess.run(["/bin/zsh", str(script)], env=env, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+        assert "unexpected engine update" not in self.events(), result.stdout
+        return result
 
     def events(self):
         path = self.root / "events"
@@ -203,10 +207,10 @@ def clean_guard(f, status):
 
 def recover(f):
     f.journal()
-    result = f.run(TEST_FAIL="helper")
-    assert result.returncode != 0, result.stdout
+    result = f.run(TEST_FAIL="update")
+    assert result.returncode != 0 and "injected brew update failure" in result.stdout, result.stdout
     f.assert_restored()
-    assert "brew update" not in f.events(), f.events()
+    assert "brew update" in f.events(), f.events()
 
 
 def refusal(f, kind):
@@ -216,7 +220,7 @@ def refusal(f, kind):
     assert result.returncode != 0, result.stdout
     assert (f.state / "active").is_dir()
     assert all(p.read_text() == contents for p, contents in before.items())
-    assert "helper update" not in f.events() and "brew update" not in f.events()
+    assert "brew update" not in f.events()
 
 
 def upgrade_failure(f, name):
@@ -353,13 +357,13 @@ def malformed_git_config_count_recovers_first(f):
     result = f.run(GIT_CONFIG_COUNT="not-a-number")
     assert result.returncode != 0 and "malformed inherited GIT_CONFIG_COUNT" in result.stdout, result.stdout
     f.assert_restored()
-    assert "brew update" not in f.events() and "helper update" not in f.events(), f.events()
+    assert "brew update" not in f.events(), f.events()
 
 
 def missing_llvm_pin_stops_before_updates(f):
     result = f.run(TEST_PINNED="")
     assert result.returncode != 0 and "Homebrew llvm must remain pinned" in result.stdout, result.stdout
-    assert "brew update" not in f.events() and "helper update" not in f.events(), f.events()
+    assert "brew update" not in f.events(), f.events()
     f.assert_restored()
 
 
@@ -367,7 +371,7 @@ def list_failure_propagates(f, which):
     result = f.run(TEST_FAIL_LIST=which)
     expected = "unable to enumerate pinned" if which == "pinned" else "unable to enumerate installed"
     assert result.returncode != 0 and expected in result.stdout, result.stdout
-    assert "brew update" not in f.events() and "helper update" not in f.events(), f.events()
+    assert "brew update" not in f.events(), f.events()
     f.assert_restored()
 
 

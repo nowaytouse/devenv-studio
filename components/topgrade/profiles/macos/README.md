@@ -2,7 +2,7 @@
 
 This optional Apple Silicon macOS profile versions the existing journal-protected updater scripts and their declared configuration. It does not replace Homebrew's Rust with PATH tricks, remove historical kegs, disable errors, or claim that a fork can make unavailable vendor services succeed.
 
-The 26 scripts, five TOML files and two npm security patch packages are covered by `manifest.json`. The original transaction/recovery implementations remain intact. The fork updater tracks this fork's main branch, and the built-in Helm step uses the typed `[helm].repository_updater` path to avoid an extra shell owner. The fork is the sole active Topgrade installation; the former Homebrew Topgrade was backed up and uninstalled on this Mac. Binary rollback uses retained managed fork releases, independently of Homebrew. LLVM 23.1.4 remains pinned; historical LLVM HEAD is retained.
+The 26 scripts, five TOML files and two npm security patch packages are covered by `manifest.json`. The original transaction/recovery implementations remain intact. DevEnv Studio builds and activates a reviewed component tree, and the built-in Helm step uses the typed `[helm].repository_updater` path to avoid an extra shell owner. The fork is the sole active Topgrade installation; the former Homebrew Topgrade was backed up and uninstalled on this Mac. Binary rollback uses retained managed fork releases, independently of Homebrew. LLVM 23.1.4 remains pinned; historical LLVM HEAD is retained.
 
 ## Review and install
 
@@ -11,11 +11,10 @@ Use the existing Homebrew Python 3.15 (the installer requires Python 3.15 or lat
 ```sh
 python3.15 profiles/macos/install.py
 python3.15 -m unittest discover -s profiles/macos/tests -v
-# After the reviewed fork main has been pushed, build/verify/switch its binary first:
-bash profiles/macos/bin/topgrade-rustup-headsync --dry-run
-bash profiles/macos/bin/topgrade-rustup-headsync update
-python3.15 profiles/macos/install.py --apply
-python3.15 profiles/macos/install.py --verify
+# Run the Studio maintainer commands from the reviewed checkout:
+devenv-studio topgrade-engine plan /absolute/studio-checkout FULL_STUDIO_SHA
+devenv-studio topgrade-engine prepare /absolute/studio-checkout FULL_STUDIO_SHA
+devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 ```
 
 The default command is a **read-only plan**, including on an empty test home. `--apply` is the only installation action. It accepts only fixed destination names and verified source bytes; initial adoption of an existing file requires its recorded preimage hash. Subsequent upgrades require the previously installed bytes. A local edit, unknown existing file, symlink, special file, corrupt source or pending transaction stops deployment.
@@ -58,7 +57,7 @@ Skills remain updated by their existing owners and independent coverage checks. 
 
 ## Upstream maintenance and Helm
 
-Keep `origin` pointing to this fork and `upstream` to `topgrade-rs/topgrade`. Start from a reviewed clean tree, fetch upstream and merge `upstream/main` into the fork; stop and resolve conflicts without reset or force-push. Run Rust fmt/Clippy/tests and the profile tests, then push the reviewed fork branch. Build the new binary with the fork self-updater and explicitly apply/verify the matching companion profile. There is no unattended overwrite of locally edited configuration.
+Review upstream revisions against the imported Topgrade ancestry. Make component changes in Studio, then run Topgrade Rust checks and the profile tests independently. Use Studio engine maintenance to build and switch the reviewed component and its verified profile.
 
 Helm remains an enabled built-in step. The optional updater downloads the entire public Bitnami index through official HTTPS with compression and compares its complete bytes to the regular local index. Only an identical body that also passes native Helm index parsing is reported current, without writing Helm's cache. Special files are opened without blocking and rejected. Changed/absent indexes and other repositories use native Helm, and native failure remains nonzero. TLS verification, official redirect-host checks, bounded downloads, local configuration drift checks and rejected cache symlinks remain active. This addresses the unchanged large-index transfer case; it does not promise that future changed-index transfers will succeed.
 

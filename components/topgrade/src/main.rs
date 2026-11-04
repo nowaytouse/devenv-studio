@@ -43,6 +43,8 @@ mod self_renamer;
 mod self_update;
 mod step;
 mod steps;
+#[cfg(target_os = "macos")]
+mod studio;
 mod sudo;
 mod terminal;
 #[cfg(unix)]
@@ -153,6 +155,9 @@ fn run() -> Result<()> {
             return Ok(());
         }
     }
+
+    #[cfg(target_os = "macos")]
+    let _maintenance_lock = studio::lock_cli_run()?;
 
     // Some steps (like mise or pi) have different behavior when ran in a project directory.
     //  Since Topgrade only handles global updates, run all commands in a temporary directory.
@@ -384,6 +389,17 @@ fn spawn_sudo_loop(
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    if let Some(result) = studio::dispatch() {
+        match result {
+            Ok(success) => exit(i32::from(!success)),
+            Err(error) => {
+                eprintln!("Topgrade Studio: {error:#}");
+                exit(1);
+            }
+        }
+    }
+
     match run() {
         Ok(()) => {
             exit(0);

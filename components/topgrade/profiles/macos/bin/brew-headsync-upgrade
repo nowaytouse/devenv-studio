@@ -172,9 +172,6 @@ INSTALLED_FORMULAE="$(brew list --formula --full-name)" || {
 }
 
 echo
-echo "== Update Rustup Nightly Topgrade HEAD =="
-"$HOME/.local/bin/topgrade-rustup-headsync" update
-
 echo "== Homebrew update =="
 
 brew update

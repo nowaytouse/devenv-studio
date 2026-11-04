@@ -4,7 +4,7 @@
     {
       "source": "bin/brew-headsync-upgrade",
       "destination": ".local/bin/brew-headsync-upgrade",
-      "sha256": "1ff9234f9d5ac5153656c008e16722ded0109926af4da85fdd771f61d602e2de",
+      "sha256": "c5230c5189cf1ae7d07af78278491986223e0c8113f65b83711415bac9f02e75",
       "mode": 493,
       "adoptSha256": "03e25d54209906258318fb257df6bca0a2477ba8904d36b1436d0abc6d155aeb"
     },
@@ -81,7 +81,7 @@
     {
       "source": "bin/topgrade-rustup-headsync",
       "destination": ".local/bin/topgrade-rustup-headsync",
-      "sha256": "8a917381f4406218f678aa512a23960385c486952ed5f6e75913505b6ac7e16a",
+      "sha256": "0391e5e1dce6e5f34407a40193fb36b10a2a070a76fc26ee3685d2779cc74f13",
       "mode": 448,
       "adoptSha256": "80187478567b1625e1be033feee1c9278118e3b2c8f5afad785ff52fa0b24bec"
     },

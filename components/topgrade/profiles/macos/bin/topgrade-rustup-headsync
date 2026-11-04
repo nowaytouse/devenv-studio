@@ -177,6 +177,15 @@ case "$MODE" in
     *) printf 'Usage: %s [update|--dry-run|rollback]\n' "$0" >&2; exit 2 ;;
 esac
 
+read_active_target
+if [[ -n "$ACTIVE_TARGET" && -e "${ACTIVE_TARGET%/bin/topgrade}/studio-engine.json" ]]; then
+    if [[ "$MODE" == --dry-run ]]; then
+        printf 'This engine is managed by DevEnv Studio: %s\n' "$ACTIVE_TARGET"
+        exit 0
+    fi
+    die "This engine is managed by DevEnv Studio. Use devenv-studio topgrade-engine for installation or rollback."
+fi
+
 [[ "$BASE" == /* ]] || die "XDG_DATA_HOME must be an absolute path"
 [[ ! -L "$BASE" ]] || die "refusing symlinked release directory: $BASE"
 [[ ! -L "$RELEASES" ]] || die "refusing symlinked release directory: $RELEASES"

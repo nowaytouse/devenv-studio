@@ -233,7 +233,20 @@ def dry_run_current_noop(f):
     assert not (f.base / "lock").exists()
 
 
+def studio_managed_release_is_not_changed_by_legacy_helper(f):
+    target = f.release(new_sha)
+    (target.parent.parent / "studio-engine.json").write_text("{}\n")
+    f.activate(target)
+    for mode in ("update", "rollback", "--dry-run"):
+        result = f.run(mode)
+        assert (result.returncode == 0) == (mode == "--dry-run"), result.stdout
+        assert "managed by DevEnv Studio" in result.stdout, result.stdout
+        assert f.link.readlink() == target
+    assert not (f.home / "git-calls").exists()
+
+
 CASES = [
+    ("leave Studio-managed engines to Studio", studio_managed_release_is_not_changed_by_legacy_helper),
     ("repeat update and rollback", normal),
     ("rollback from missing current release", broken_active),
     ("fallback from missing first release", broken_active_fallback),

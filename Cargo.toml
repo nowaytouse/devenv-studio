@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/studio-core", "crates/studio-platform", "crates/studio-deployment", "crates/studio-legacy", "crates/studio-app"]
+exclude = ["components/topgrade"]
 resolver = "2"
 
 [workspace.package]
