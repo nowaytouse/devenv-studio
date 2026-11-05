@@ -1230,22 +1230,25 @@ mod tests {
             rollback: Some(identity("b")),
             rollback_detail: None,
         };
-        let context = egui::Context::default();
-        context.enable_accesskit();
-        let mut output = context.run_ui(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(680.0, 520.0),
-                )),
-                ..Default::default()
-            },
-            |ui| {
-                egui::CentralPanel::default().show(ui, |ui| engine_card(ui, &check, true));
-            },
-        );
-        output.textures_delta.clear();
-        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        let render = |check: &maintenance::Check| {
+            let context = egui::Context::default();
+            context.enable_accesskit();
+            let mut output = context.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(680.0, 900.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| engine_card(ui, check, true));
+                },
+            );
+            output.textures_delta.clear();
+            output.platform_output.accesskit_update.unwrap().nodes
+        };
+        let nodes = render(&check);
         for (zh, en) in [
             ("组件 aaaaaaaaaaaa", "Component aaaaaaaaaaaa"),
             ("组件 bbbbbbbbbbbb", "Component bbbbbbbbbbbb"),
@@ -1272,11 +1275,26 @@ mod tests {
             assert!(button.expect("named rollback control").1.is_disabled());
         } else {
             assert!(button.is_none(), "unsupported host offers rollback");
-            assert!(nodes.iter().any(|(_, node)| matches!(
-                node.label(),
-                Some("无法生成本机回退命令。" | "The local rollback command is unavailable.")
-            )));
         }
+        let mut unavailable = check;
+        unavailable
+            .rollback
+            .as_mut()
+            .unwrap()
+            .component_tree
+            .clear();
+        let nodes = render(&unavailable);
+        assert!(nodes.iter().any(|(_, node)| {
+            [node.label(), node.value()]
+                .into_iter()
+                .flatten()
+                .any(|text| {
+                    matches!(
+                        text,
+                        "无法生成本机回退命令。" | "The local rollback command is unavailable."
+                    )
+                })
+        }));
     }
 
     #[test]
