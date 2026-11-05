@@ -1,21 +1,26 @@
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
+#[cfg(any(windows, target_os = "macos"))]
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, OpenOptions},
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
+    sync::{Arc, atomic::AtomicBool},
+};
+#[cfg(any(windows, target_os = "macos", test))]
+use std::{
+    io::Write,
     process,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
-    },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 const MAX_TOOLS: usize = 512;
 const MAX_REQUEST_BYTES: u64 = 1024 * 1024;
+#[cfg(any(windows, target_os = "macos", test))]
 const MAX_LOCK_BYTES: u64 = 4 * 1024 * 1024;
+#[cfg(any(windows, target_os = "macos", test))]
 const LOCK_PLATFORMS: &str = "macos-arm64,macos-x64,windows-x64";
 
 pub const CORE_RUNTIMES: &[&str] = &[
@@ -115,6 +120,7 @@ fn validate_version_request(version: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn version_is_concrete(version: &str) -> bool {
     version.matches('.').count() >= 2
 }
@@ -305,6 +311,7 @@ pub fn capture(cancel: Arc<AtomicBool>) -> Result<Vec<InstalledRuntime>> {
     }
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn list_args() -> Vec<String> {
     [
         "--no-config",
@@ -353,21 +360,27 @@ impl crate::process::Runner for InventoryRunner {
     }
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 struct Cancelled;
+#[cfg(any(windows, target_os = "macos", test))]
 impl std::fmt::Display for Cancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("mise runtime deployment was cancelled")
     }
 }
+#[cfg(any(windows, target_os = "macos", test))]
 impl std::fmt::Debug for Cancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Cancelled")
     }
 }
+#[cfg(any(windows, target_os = "macos", test))]
 impl std::error::Error for Cancelled {}
 
+#[cfg(any(windows, target_os = "macos"))]
 struct Workspace(PathBuf);
 
+#[cfg(any(windows, target_os = "macos"))]
 impl Workspace {
     fn create() -> Result<Self> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -408,12 +421,14 @@ impl Workspace {
     }
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 impl Drop for Workspace {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn write_new(path: &Path, contents: &[u8]) -> Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
@@ -426,6 +441,7 @@ fn write_new(path: &Path, contents: &[u8]) -> Result<()> {
         .with_context(|| format!("Sync {}", path.display()))
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn copy_generated(source: &Path, destination: &Path, max_bytes: u64) -> Result<()> {
     let metadata = fs::symlink_metadata(source)
         .with_context(|| format!("Inspect generated mise file {}", source.display()))?;
@@ -453,6 +469,7 @@ fn copy_generated(source: &Path, destination: &Path, max_bytes: u64) -> Result<(
         .with_context(|| format!("Sync evidence file {}", destination.display()))
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn step(
     runner: &mut impl crate::process::Runner,
     program: &Path,
@@ -486,6 +503,7 @@ fn step(
     Ok(output.stdout)
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn latest_args(runtime: &RuntimeRequest) -> Vec<String> {
     [
         "--no-config".to_owned(),
@@ -496,6 +514,7 @@ fn latest_args(runtime: &RuntimeRequest) -> Vec<String> {
     .collect()
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn workspace_args(workspace: &Path, command: &str, tail: &[&str]) -> Vec<String> {
     let mut args = vec![
         "--cd".to_owned(),
@@ -510,6 +529,7 @@ fn workspace_args(workspace: &Path, command: &str, tail: &[&str]) -> Vec<String>
     args
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn resolved_toml(runtimes: &[RuntimeResult]) -> Result<String> {
     let resolved = runtimes
         .iter()

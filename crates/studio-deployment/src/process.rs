@@ -1,8 +1,10 @@
 //! Bounded capture of both pipes. No shell, downloaded script or inherited stdin.
 use anyhow::{Context, Result, ensure};
+#[cfg(any(windows, target_os = "macos"))]
+use std::path::Path;
 use std::{
     io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, Stdio},
     sync::{
         Arc,
@@ -357,7 +359,7 @@ pub(crate) fn run_inventory(
 ) -> Result<Output> {
     run_configured(invocation, cancel, timeout, configure_inventory)
 }
-#[cfg(any(windows, target_os = "macos", test))]
+#[cfg(any(windows, target_os = "macos"))]
 pub(crate) fn run_toolchain(
     invocation: &Invocation,
     cancel: &Arc<AtomicBool>,
@@ -411,7 +413,7 @@ pub(crate) fn run_mise(
             .env("NO_COLOR", "1");
     })
 }
-#[cfg(any(windows, target_os = "macos", test))]
+#[cfg(any(windows, target_os = "macos"))]
 pub(crate) fn run_python_tools(
     invocation: &Invocation,
     cancel: &Arc<AtomicBool>,
@@ -494,6 +496,7 @@ pub(crate) fn run_git_tools(
     })
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 pub(crate) fn run_git_config(
     invocation: &Invocation,
     cancel: &Arc<AtomicBool>,
@@ -546,7 +549,7 @@ fn configure_python_inventory(command: &mut Command) {
     configure_python_tools(command);
     command.env("UV_OFFLINE", "1");
 }
-#[cfg(any(windows, target_os = "macos", test))]
+#[cfg(any(windows, target_os = "macos"))]
 pub(crate) fn run_python_inventory(
     invocation: &Invocation,
     cancel: &Arc<AtomicBool>,

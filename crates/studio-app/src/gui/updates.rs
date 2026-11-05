@@ -851,7 +851,8 @@ fn rollback_command(exe: &std::path::Path, active: &str, previous: &str) -> Opti
                 .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     };
     let path = exe.to_str()?;
-    if !exe.is_absolute()
+    if !cfg!(target_os = "macos")
+        || !exe.is_absolute()
         || path.chars().any(char::is_control)
         || active == previous
         || !valid_tree(active)
@@ -1147,6 +1148,7 @@ fn copy_profile_preview(ui: &mut egui::Ui, name: &str, label: &str, busy: bool) 
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn copied_rollback_pins_both_trees_and_quotes_the_app_path() {
         let executable = std::path::Path::new("/Applications/Studio's App.app/bin/studio");
@@ -1162,6 +1164,13 @@ mod tests {
         assert!(rollback_command(executable, &active, &active).is_none());
         assert!(rollback_command(executable, "a; touch /tmp/example", &previous).is_none());
         assert!(rollback_command(std::path::Path::new("studio"), &active, &previous).is_none());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn copied_rollback_is_unavailable_on_unsupported_hosts() {
+        let executable = std::env::current_exe().unwrap();
+        assert!(rollback_command(&executable, &"a".repeat(40), &"b".repeat(40)).is_none());
     }
 
     #[test]

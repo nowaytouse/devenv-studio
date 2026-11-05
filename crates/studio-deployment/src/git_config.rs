@@ -1,20 +1,21 @@
 use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
+#[cfg(any(windows, target_os = "macos", test))]
+use std::sync::atomic::Ordering;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
+    sync::{Arc, atomic::AtomicBool},
 };
+#[cfg(any(windows, target_os = "macos"))]
+use std::{sync::Mutex, time::Duration};
 
 const SCHEMA_VERSION: u32 = 1;
 const MAX_PROFILE_BYTES: u64 = 64 * 1024;
 const MAX_VALUE_BYTES: usize = 512;
+#[cfg(any(windows, target_os = "macos"))]
 const GIT_TIMEOUT: Duration = Duration::from_secs(10);
 pub const KEYS: [&str; 9] = [
     "user.name",
@@ -28,6 +29,7 @@ pub const KEYS: [&str; 9] = [
     "push.default",
 ];
 
+#[cfg(any(windows, target_os = "macos"))]
 static APPLY_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -232,6 +234,7 @@ fn read_profile(path: &Path) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn capture_with(
     runner: &mut impl crate::process::Runner,
     git: &Path,
@@ -248,6 +251,7 @@ fn capture_with(
     Ok(profile)
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn read_value(
     runner: &mut impl crate::process::Runner,
     git: &Path,
@@ -272,6 +276,7 @@ fn read_value(
     parse_get_value(output.code, &output.stdout, &output.stderr, key)
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn parse_get_value(code: u32, stdout: &str, stderr: &str, key: &str) -> Result<Option<String>> {
     if code == 1 && stdout.is_empty() && stderr.is_empty() {
         return Ok(None);
@@ -293,6 +298,7 @@ fn parse_get_value(code: u32, stdout: &str, stderr: &str, key: &str) -> Result<O
     Ok(Some(value))
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn check_branch(
     runner: &mut impl crate::process::Runner,
     git: &Path,
@@ -314,6 +320,7 @@ fn check_branch(
     Ok(())
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn apply_with(
     profile: &Profile,
     selected: &BTreeSet<String>,
@@ -463,6 +470,7 @@ fn apply_with(
     Ok(report)
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn select(profile: &Profile, selected: &BTreeSet<String>) -> Profile {
     Profile {
         schema_version: profile.schema_version,
@@ -475,6 +483,7 @@ fn select(profile: &Profile, selected: &BTreeSet<String>) -> Profile {
     }
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn invocation(program: &Path, args: &[String]) -> crate::process::Invocation {
     crate::process::Invocation {
         program: program.to_path_buf(),
@@ -484,8 +493,10 @@ fn invocation(program: &Path, args: &[String]) -> crate::process::Invocation {
     }
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 struct NativeRunner;
 
+#[cfg(any(windows, target_os = "macos"))]
 impl crate::process::Runner for NativeRunner {
     fn run(
         &mut self,
@@ -496,6 +507,7 @@ impl crate::process::Runner for NativeRunner {
     }
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 fn git_program() -> Result<PathBuf> {
     let executable = if cfg!(windows) { "git.exe" } else { "git" };
     let mut candidates = Vec::new();

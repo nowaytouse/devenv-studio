@@ -172,7 +172,7 @@ pub(super) fn run_versions() -> Result<()> {
     let home = account_home()?;
     let mut failed = Vec::new();
     println!("{:<18} Installed / Reported", "Tool");
-    let mut report = |label: &str, program, arg, prefix, formula: Option<&str>, show_absent| {
+    let mut report = |label: &str, program, arg, prefix, formula: Option<&str>, show_absent: bool| {
         let executable = resolve(&home, program);
         if executable.is_none() && !show_absent {
             return;

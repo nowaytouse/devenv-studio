@@ -5,15 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 #[cfg(any(windows, target_os = "macos"))]
 use std::time::Duration;
+#[cfg(any(windows, target_os = "macos", test))]
+use std::{collections::BTreeMap, sync::atomic::Ordering};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fs::{self, File},
     io::Read,
     path::Path,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, atomic::AtomicBool},
 };
 
 const MAX_TOOLS: usize = 512;
@@ -188,6 +187,7 @@ fn step(
     );
     Ok(output.stdout)
 }
+#[cfg(any(windows, target_os = "macos", test))]
 fn list_args() -> Vec<String> {
     [
         "tool",
