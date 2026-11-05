@@ -1262,16 +1262,21 @@ mod tests {
                 "Missing identity {en} in {nodes:?}"
             );
         }
-        let button = nodes
-            .iter()
-            .find(|(_, node)| {
-                matches!(
-                    node.label(),
-                    Some("复制终端回退命令" | "Copy Terminal rollback command")
-                )
-            })
-            .expect("named rollback control");
-        assert!(button.1.is_disabled());
+        let button = nodes.iter().find(|(_, node)| {
+            matches!(
+                node.label(),
+                Some("复制终端回退命令" | "Copy Terminal rollback command")
+            )
+        });
+        if cfg!(target_os = "macos") {
+            assert!(button.expect("named rollback control").1.is_disabled());
+        } else {
+            assert!(button.is_none(), "unsupported host offers rollback");
+            assert!(nodes.iter().any(|(_, node)| matches!(
+                node.label(),
+                Some("无法生成本机回退命令。" | "The local rollback command is unavailable.")
+            )));
+        }
     }
 
     #[test]
