@@ -18,6 +18,7 @@ use transaction::{Journal, read_private, recover, state_digest, swap, write_priv
 
 const ID: &str = "org.krita";
 const MAX_STATE: u64 = 256 * 1024;
+const MIN_QT: [u32; 3] = [6, 11, 3];
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct Fingerprint {
@@ -36,6 +37,7 @@ struct Prior {
     executable_sha256: String,
     info_plist_sha256: Option<String>,
     team: Option<String>,
+    installed_utc: Option<String>,
     #[serde(default)]
     allow_unsigned: bool,
 }
@@ -52,6 +54,17 @@ impl Prior {
                 .as_ref()
                 .is_none_or(|sha| sha == &installed.info_plist_sha256)
     }
+}
+
+fn rebuilt_since_install(prior: &Prior, release: &Release) -> Result<bool> {
+    let (Some(installed), Some(published)) = (&prior.installed_utc, &release.modified_utc) else {
+        return Ok(false);
+    };
+    let installed =
+        chrono::DateTime::parse_from_rfc3339(installed).wrap_err("Invalid Krita receipt installation timestamp")?;
+    let published =
+        chrono::DateTime::parse_from_rfc3339(published).wrap_err("Invalid official Krita publication timestamp")?;
+    Ok(published > installed)
 }
 
 fn app_info(app: &Path) -> Result<Value> {
@@ -98,6 +111,82 @@ fn bounded_file(path: &Path, limit: u64) -> Result<File> {
         path.display()
     );
     Ok(file)
+}
+
+fn parse_qt_version(version: &str) -> Result<[u32; 3]> {
+    let version = version.trim();
+    ensure!(
+        version.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.'),
+        "Invalid Krita Qt CFBundleVersion"
+    );
+    let parts = version
+        .split('.')
+        .map(str::parse)
+        .collect::<std::result::Result<Vec<u32>, _>>()
+        .wrap_err("Invalid Krita Qt CFBundleVersion")?;
+    ensure!(
+        parts.len() == 3,
+        "Krita Qt CFBundleVersion must include major, minor and patch"
+    );
+    Ok([parts[0], parts[1], parts[2]])
+}
+
+fn qt_version(app: &Path) -> Result<[u32; 3]> {
+    let mut versions = Vec::new();
+    for framework in ["QtCore", "QtGui"] {
+        let info = app
+            .join(format!(
+                "Contents/Frameworks/{framework}.framework/Resources/Info.plist"
+            ))
+            .canonicalize()
+            .wrap_err_with(|| format!("Krita {framework} metadata is missing"))?;
+        ensure!(
+            info.starts_with(app),
+            "Krita {framework} metadata escapes the application"
+        );
+        bounded_file(&info, super::PLIST_LIMIT)?;
+        let (status, stdout, _) = bounded_output(
+            tool_command(Path::new("/usr/bin/plutil"))?
+                .args(["-extract", "CFBundleVersion", "raw", "-o", "-"])
+                .arg(&info),
+            Duration::from_secs(15),
+            64 * 1024,
+        )?;
+        ensure!(status.success(), "Krita {framework} has no complete Qt CFBundleVersion");
+        versions.push(parse_qt_version(&stdout)?);
+    }
+    ensure!(versions[0] == versions[1], "Krita QtCore and QtGui versions differ");
+    Ok(versions[0])
+}
+
+fn compatible_qt(version: [u32; 3]) -> Result<()> {
+    ensure!(
+        version >= MIN_QT,
+        "Krita Next {}: BLOCKED_INCOMPATIBLE_QT — Qt {}.{}.{} is below 6.11.3; waiting for a compatible official 6.1.x build",
+        source::CHANNEL,
+        version[0],
+        version[1],
+        version[2]
+    );
+    Ok(())
+}
+
+fn current(app: &Path, installed: &Fingerprint, sha: &str) -> Result<()> {
+    ensure!(
+        source::in_channel(&installed.version),
+        "Installed Krita is outside the fixed {} channel",
+        source::CHANNEL
+    );
+    let qt = qt_version(app)?;
+    compatible_qt(qt)?;
+    println!(
+        "Krita Next {}: CURRENT — Git {sha}, Qt {}.{}.{}",
+        source::CHANNEL,
+        qt[0],
+        qt[1],
+        qt[2]
+    );
+    Ok(())
 }
 
 fn identity(app: &Path) -> Result<Option<String>> {
@@ -312,7 +401,7 @@ fn publish(activation: Activation<'_>, release: &Release, image: &Path) -> Resul
         .prefix(".krita.preview-")
         .tempdir_in(applications)?;
     let staged = staging.path().join("Krita.app");
-    let (candidate, trust_mode) = with_mounted(image, |mount| {
+    let (candidate, trust_mode, candidate_qt) = with_mounted(image, |mount| {
         let incoming = mounted_app(mount)?;
         let incoming_fp = fingerprint(&incoming)?;
         ensure!(
@@ -320,6 +409,8 @@ fn publish(activation: Activation<'_>, release: &Release, image: &Path) -> Resul
             "Official Krita image version differs from the listing"
         );
         let trust = verify_publisher(&incoming, before, &incoming_fp, prior.allow_unsigned)?;
+        let incoming_qt = qt_version(&incoming)?;
+        compatible_qt(incoming_qt)?;
         tool_command(Path::new("/usr/bin/ditto"))?
             .arg(&incoming)
             .arg(&staged)
@@ -334,7 +425,11 @@ fn publish(activation: Activation<'_>, release: &Release, image: &Path) -> Resul
             verify_publisher(&staged, before, &staged_fp, prior.allow_unsigned)? == trust,
             "Krita copy changed publisher trust"
         );
-        Ok((staged_fp, trust))
+        ensure!(
+            qt_version(&staged)? == incoming_qt,
+            "Krita copy changed Qt framework versions"
+        );
+        Ok((staged_fp, trust, incoming_qt))
     })?;
     ensure!(
         !running(app, "/krita")?
@@ -349,6 +444,8 @@ fn publish(activation: Activation<'_>, release: &Release, image: &Path) -> Resul
         "info_plist_sha256": candidate.info_plist_sha256,
         "source_url": release.url, "modified_utc": release.modified_utc,
         "installed_utc": chrono::Utc::now().to_rfc3339(),
+        "channel": source::CHANNEL,
+        "qt_version": format!("{}.{}.{}", candidate_qt[0], candidate_qt[1], candidate_qt[2]),
     });
     let mut next_state = serde_json::to_vec_pretty(&state)?;
     next_state.push(b'\n');
@@ -400,6 +497,10 @@ fn publish(activation: Activation<'_>, release: &Release, image: &Path) -> Resul
 
 pub(in crate::studio) fn krita_next() -> Result<()> {
     super::super::user_only()?;
+    println!(
+        "Krita Next channel: {} (official master/macOS Universal; Qt >= 6.11.3)",
+        source::CHANNEL
+    );
     let home = super::super::account_home()?;
     let _lock = super::lock(&home, "krita-preview.lock")?;
     let root = private_path(&home, "Library/Application Support/PreviewAppsUpdater")?;
@@ -423,26 +524,37 @@ pub(in crate::studio) fn krita_next() -> Result<()> {
     let scratch = tempfile::tempdir()?;
     let release = source::release(scratch.path())?;
     println!(
-        "Krita Next: installed {} (Git {}), official {}",
-        installed.version, prior.sha, release.name
+        "Krita Next: installed {} (Git {}), official {}, published {}",
+        installed.version,
+        prior.sha,
+        release.name,
+        release.modified_utc.as_deref().unwrap_or("unverified")
     );
-    if prior.sha.eq_ignore_ascii_case(&release.sha) {
-        println!("Krita Next: CURRENT — Git {}", release.sha);
-        return Ok(());
-    }
-    match source::relation(&prior.sha, &release.sha, scratch.path())? {
+    let relation = if prior.sha.eq_ignore_ascii_case(&release.sha) {
+        Relation::Same
+    } else {
+        source::relation(&prior.sha, &release.sha, scratch.path())?
+    };
+    match relation {
         Relation::Same => {
-            println!("Krita Next: CURRENT — same verified Git commit {}", release.sha);
-            return Ok(());
+            if !rebuilt_since_install(&prior, &release)? {
+                return current(&app, &installed, &release.sha);
+            }
+            println!(
+                "Krita Next {}: official rebuild published after installation; verifying bundled Qt",
+                source::CHANNEL
+            );
         }
         Relation::Newer => {}
         Relation::Older => {
+            compatible_qt(qt_version(&app)?)?;
             println!("Krita Next: DEFERRED_NOT_NEWER — official Git {} is older", release.sha);
             return Ok(());
         }
         Relation::Diverged => bail!("Krita Next: DEFERRED — official and installed Git histories diverged"),
     }
     if base_version(&installed.version)? > base_version(&release.version)? {
+        compatible_qt(qt_version(&app)?)?;
         println!("Krita Next: DEFERRED_NOT_NEWER — official app version is older");
         return Ok(());
     }
@@ -481,5 +593,96 @@ fn receipt_requires_build_bytes_and_never_assumes_the_same_version_is_the_same_b
     current.executable_sha256 = "replacement".into();
     assert!(!prior.identifies(&current));
     assert_eq!(base_version("6.1.0-prealpha")?, [6, 1, 0]);
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn qt_admission_requires_a_complete_compatible_patch_version() -> Result<()> {
+    for version in ["6.11.3", "6.11.4", "6.12.0"] {
+        compatible_qt(parse_qt_version(version)?)?;
+    }
+    for version in ["6.11.0", "6.11.2", "6.8.3"] {
+        assert!(compatible_qt(parse_qt_version(version)?).is_err());
+    }
+    for version in ["", "6.11", "6.11.3.0", "6.11.x", "6.11.+3", "6.11.3-dev"] {
+        assert!(parse_qt_version(version).is_err());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn same_git_rebuilds_require_newer_official_publication_evidence() -> Result<()> {
+    let mut prior: Prior = serde_json::from_value(serde_json::json!({
+        "sha": "2687e5d", "inode": 1, "version": "6.1.0", "executable_sha256": "original",
+        "team": null, "installed_utc": "2026-10-28T12:00:00+00:00"
+    }))?;
+    let mut release = Release {
+        name: "krita-6.1.0-prealpha-2687e5d.dmg".into(),
+        version: "6.1.0-prealpha".into(),
+        sha: "2687e5d".into(),
+        url: format!("{}krita-6.1.0-prealpha-2687e5d.dmg", source::CDN),
+        modified_utc: Some("2026-10-24T02:22:46+00:00".into()),
+    };
+    assert!(!rebuilt_since_install(&prior, &release)?);
+    release.modified_utc = Some("2026-11-06T02:22:46+00:00".into());
+    assert!(rebuilt_since_install(&prior, &release)?);
+    release.modified_utc = Some("invalid".into());
+    assert!(rebuilt_since_install(&prior, &release).is_err());
+    release.modified_utc = None;
+    assert!(!rebuilt_since_install(&prior, &release)?);
+    release.modified_utc = Some("2026-11-06T02:22:46+00:00".into());
+    prior.installed_utc = Some("invalid".into());
+    assert!(rebuilt_since_install(&prior, &release).is_err());
+    prior.installed_utc = None;
+    assert!(!rebuilt_since_install(&prior, &release)?);
+    Ok(())
+}
+
+#[cfg(test)]
+fn write_qt_fixture(app: &Path, framework: &str, version: &str) -> Result<PathBuf> {
+    let root = app.join(format!("Contents/Frameworks/{framework}.framework"));
+    let resources = root.join("Versions/A/Resources");
+    fs::create_dir_all(&resources)?;
+    let shortcut = root.join("Resources");
+    if !shortcut.exists() {
+        std::os::unix::fs::symlink("Versions/A/Resources", shortcut)?;
+    }
+    let plist = resources.join("Info.plist");
+    fs::write(
+        &plist,
+        format!("<plist version=\"1.0\"><dict><key>CFBundleVersion</key><string>{version}</string></dict></plist>"),
+    )?;
+    Ok(plist)
+}
+
+#[cfg(test)]
+#[test]
+fn current_build_checks_qt_and_framework_metadata_cannot_escape_the_bundle() -> Result<()> {
+    let workspace = tempfile::tempdir()?;
+    let root = workspace.path().canonicalize()?;
+    let app = root.join("Krita.app");
+    write_qt_fixture(&app, "QtCore", "6.11.0")?;
+    write_qt_fixture(&app, "QtGui", "6.11.0")?;
+    let installed = Fingerprint {
+        inode: 1,
+        version: "6.1.0".into(),
+        executable_sha256: "unchanged".into(),
+        info_plist_sha256: "unchanged".into(),
+        team: None,
+    };
+    let error = current(&app, &installed, "2687e5d").unwrap_err();
+    assert!(format!("{error:#}").contains("BLOCKED_INCOMPATIBLE_QT"));
+    write_qt_fixture(&app, "QtCore", "6.11.3")?;
+    write_qt_fixture(&app, "QtGui", "6.11.3")?;
+    current(&app, &installed, "2687e5d")?;
+    write_qt_fixture(&app, "QtGui", "6.12.0")?;
+    assert!(qt_version(&app).is_err());
+    let core = write_qt_fixture(&app, "QtCore", "6.11.3")?;
+    let outside = root.join("outside.plist");
+    fs::rename(&core, &outside)?;
+    std::os::unix::fs::symlink(outside, core)?;
+    assert!(format!("{:#}", qt_version(&app).unwrap_err()).contains("escapes the application"));
     Ok(())
 }

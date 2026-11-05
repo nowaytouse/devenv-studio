@@ -75,15 +75,17 @@ fn download_to(
             "--max-time",
         ])
         .arg(max_time.to_string())
-        .arg("--max-filesize")
-        .arg(limit.to_string())
         .args(["--user-agent", "PreviewAppsWorkflow", "--output"])
         .arg(path)
         .args(["--write-out", "%{http_code}\n%{redirect_url}\n%header{last-modified}\n"]);
         if head {
+            // HEAD advertises artifact bytes; limit still bounds the saved header file.
             curl.arg("--head");
-        } else if compressed {
-            curl.arg("--compressed");
+        } else {
+            curl.arg("--max-filesize").arg(limit.to_string());
+            if compressed {
+                curl.arg("--compressed");
+            }
         }
         curl.args(["--", &url]);
         let (status, report, _) = bounded_output(&mut curl, Duration::from_secs(max_time * 3 + 20), 64 * 1024)?;

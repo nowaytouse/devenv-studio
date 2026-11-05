@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, fs, path::Path, process::Command, sync::LazyLoc
 use super::super::{bounded_output, download_to, tool_command, trusted_https};
 
 pub(super) const CDN: &str = "https://cdn.kde.org/ci-builds/graphics/krita/master/macos-universal/";
+pub(super) const CHANNEL: &str = "6.1.x";
 const GIT: &str = "https://invent.kde.org/graphics/krita.git";
 const INVENT: &[&str] = &["invent.kde.org"];
 const CDN_HOSTS: &[&str] = &["cdn.kde.org", "origin.cdn.kde.org"];
@@ -21,9 +22,16 @@ pub(super) struct Release {
     pub(super) modified_utc: Option<String>,
 }
 
+pub(super) fn in_channel(version: &str) -> bool {
+    static VERSION: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\A6\.1\.[0-9]+(?:[-+][a-zA-Z0-9][a-zA-Z0-9.+_-]*)?\z").expect("valid Krita 6.1 release series")
+    });
+    VERSION.is_match(version)
+}
+
 fn releases(html: &str) -> Result<Vec<Release>> {
     static LINK: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"(?i)<a\b[^>]*?\bhref\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>[^<]*</a>\s*([0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9]{2}:[0-9]{2})?"#)
+        Regex::new(r#"(?i)<a\b[^>]*?\bhref\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>[^<]*</a>"#)
             .expect("valid KDE artifact link pattern")
     });
     static NAME: LazyLock<Regex> = LazyLock::new(|| {
@@ -35,17 +43,24 @@ fn releases(html: &str) -> Result<Vec<Release>> {
         let href = entry.get(1).or_else(|| entry.get(2)).expect("href capture").as_str();
         let name = href.strip_prefix(CDN).unwrap_or(href);
         let Some(parts) = NAME.captures(name) else { continue };
+        if !in_channel(&parts[1]) {
+            continue;
+        }
         releases.entry(name).or_insert_with(|| Release {
             name: name.into(),
             version: parts[1].into(),
             sha: parts[2].to_ascii_lowercase(),
             url: format!("{CDN}{name}"),
-            modified_utc: entry.get(3).map(|value| value.as_str().into()),
+            modified_utc: None,
         });
     }
     ensure!(
-        !releases.is_empty() && releases.len() <= 20,
-        "Official KDE Nightly DMG listing is empty or ambiguous"
+        !releases.is_empty(),
+        "Official Krita Next {CHANNEL} (master) has no matching macOS build; channel changes require review"
+    );
+    ensure!(
+        releases.len() <= 20,
+        "Official Krita Next {CHANNEL} DMG listing is ambiguous"
     );
     Ok(releases.into_values().collect())
 }
@@ -53,16 +68,14 @@ fn releases(html: &str) -> Result<Vec<Release>> {
 pub(super) fn release(workspace: &Path) -> Result<Release> {
     let html = workspace.join("krita-index.html");
     download_to(CDN, CDN_HOSTS, &html, MAX_LISTING, 30, false, true)?;
-    let mut candidates = releases(&fs::read_to_string(html)?)?;
-    if candidates.len() == 1 {
-        return Ok(candidates.pop().expect("verified one release"));
-    }
+    let candidates = releases(&fs::read_to_string(html)?)?;
     let mut by_date = BTreeMap::new();
     let headers = workspace.join("krita-headers");
-    for release in candidates {
+    for mut release in candidates {
         let modified = download_to(&release.url, CDN_HOSTS, &headers, 64 * 1024, 25, true, false)?;
         let date = chrono::DateTime::parse_from_rfc2822(&modified)
-            .wrap_err("Cannot order official Krita snapshots without valid Last-Modified")?;
+            .wrap_err("Cannot verify official Krita publication without valid Last-Modified")?;
+        release.modified_utc = Some(date.with_timezone(&chrono::Utc).to_rfc3339());
         ensure!(
             by_date.insert(date, release).is_none(),
             "Multiple Krita snapshots share one modification time"
@@ -230,7 +243,22 @@ fn official_listing_and_merge_base_do_not_guess_from_hash_order() -> Result<()> 
     let found = releases(html)?;
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].sha, "32bfa3f");
-    assert_eq!(found[0].modified_utc.as_deref(), Some("2026-10-03 14:11"));
+    assert!(found[0].modified_utc.is_none());
+    let apache = "<tr><td><a href=\"krita-6.1.0-prealpha-2687e5d.dmg\">krita-6.1.0-prealpha-2687e5d.dmg</a></td><td align=\"right\">2026-10-24 02:22</td></tr>";
+    assert_eq!(releases(apache)?[0].sha, "2687e5d");
+    let mixed = format!(
+        "{html} <a href=\"krita-6.0.5-prealpha-123abcd.dmg\">older</a> \
+         <a href=\"krita-6.2.0-prealpha-123abcd.dmg\">next series</a> \
+         <a href=\"krita-6.10.0-prealpha-123abcd.dmg\">different series</a>"
+    );
+    assert_eq!(releases(&mixed)?.len(), 1);
+    assert!(releases("<a href=\"krita-6.2.0-prealpha-123abcd.dmg\">moved</a>").is_err());
+    for version in ["6.1.0", "6.1.12-prealpha", "6.1.2+build.4"] {
+        assert!(in_channel(version));
+    }
+    for version in ["6.1", "6.10.0", "6.2.0", "6.0.5", "6.1.0.1", "6.1.0other"] {
+        assert!(!in_channel(version));
+    }
     assert!(
         relation_from_base("32bfa3f", "ff12345", "32bfa3f000000000000000000000000000000000")
             .is_ok_and(|value| value == Relation::Newer)

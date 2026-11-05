@@ -19,6 +19,7 @@ from pathlib import Path
 import plistlib
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,8 @@ TOURBOX_URLS = [
 ]
 USER_AGENT = "PreviewAppsUpdater/1.0 (+macOS; KDE & TourBox public downloads)"
 KRITA_IMAGE_RE = re.compile(r"^krita-([A-Za-z0-9][A-Za-z0-9.+_-]*)-([0-9a-f]{7,40})\.dmg$", re.I)
+KRITA_VERSION_RE = re.compile(r"6\.1\.[0-9]+(?:[-+][A-Za-z0-9][A-Za-z0-9.+_-]*)?")
+KRITA_MIN_QT = (6, 11, 3)
 TOURBOX_VERSION_RE = re.compile(r"\bv?([0-9]+(?:\.[0-9]+){2})\s+Beta\s+([0-9]+(?:\.[0-9]+)*)\b", re.I)
 
 
@@ -88,6 +91,10 @@ def run(*args: str, check=True) -> subprocess.CompletedProcess:
 
 class AppMetadataError(RuntimeError):
     """Bundle Info.plist cannot be independently parsed; not a network outage."""
+
+
+class KritaCompatibilityError(RuntimeError):
+    """The selected Krita series or bundled Qt does not meet the fixed policy."""
 
 
 _NATIVE_PLIST_REPORTS: set[str] = set()
@@ -191,6 +198,63 @@ def numeric_base_version(value: str) -> tuple[int, ...]:
     return tuple(int(v) for v in re.findall(r"\d+", value.split("-", 1)[0]))
 
 
+def require_krita_compatibility(app: Path) -> str:
+    version = app_info(app).get("version", "")
+    if not KRITA_VERSION_RE.fullmatch(version):
+        raise KritaCompatibilityError(f"Krita {version!r} is outside the fixed 6.1.x rolling channel")
+    versions = []
+    for framework in ("QtCore", "QtGui"):
+        try:
+            root = app.resolve(strict=True)
+            info = (app / f"Contents/Frameworks/{framework}.framework/Resources/Info.plist").resolve(strict=True)
+            if not info.is_relative_to(root):
+                raise ValueError("framework metadata escapes the application")
+            with os.fdopen(os.open(info, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
+                metadata = os.fstat(stream.fileno())
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1_000_000:
+                    raise ValueError("framework metadata is not a bounded regular file")
+                data = stream.read(1_000_001)
+                if len(data) > 1_000_000:
+                    raise ValueError("framework metadata grew beyond the size limit")
+                values = plistlib.loads(data)
+            value = values.get("CFBundleVersion") if isinstance(values, dict) else None
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value):
+                raise ValueError("missing or invalid complete CFBundleVersion")
+            numbers = tuple(map(int, value.split(".")))
+            if any(part > 4_294_967_295 for part in numbers):
+                raise ValueError("CFBundleVersion component is out of range")
+        except (OSError, RuntimeError, ValueError, TypeError, ExpatError, plistlib.InvalidFileException) as exc:
+            raise KritaCompatibilityError(f"Cannot verify bundled {framework}: {exc}") from exc
+        if numbers < KRITA_MIN_QT:
+            raise KritaCompatibilityError(f"Bundled {framework} {value} is below the required Qt 6.11.3")
+        versions.append(".".join(map(str, numbers)))
+    if versions[0] != versions[1]:
+        raise KritaCompatibilityError(f"Bundled QtCore {versions[0]} and QtGui {versions[1]} differ")
+    return versions[0]
+
+
+def krita_rebuilt_after_install(release: dict, recorded: dict) -> bool:
+    dates = []
+    for field, value in (("artifact modified_utc", release.get("modified_utc")),
+                         ("receipt installed_utc", recorded.get("installed_utc"))):
+        if value is None:
+            dates.append(None)
+            continue
+        try:
+            if (not isinstance(value, str) or
+                    not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+                                     r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})", value, re.I)):
+                raise ValueError("expected a complete RFC3339 timestamp with timezone")
+            parsed = datetime.fromisoformat(value.replace("z", "Z"))
+            if parsed.utcoffset() is None:
+                raise ValueError("timestamp has no timezone")
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise KritaCompatibilityError(f"Invalid Krita {field}: {exc}") from exc
+        dates.append(parsed)
+    modified_time, installed_time = dates
+    return modified_time is not None and installed_time is not None and modified_time > installed_time
+
+
 def status(name: str, label: str, detail: str) -> None:
     STATUS[name] = label
     print(f"{name}: {label} — {detail}", flush=True)
@@ -219,34 +283,33 @@ def krita_releases() -> list[dict]:
     p.feed(html)
     found = {}
     for href in p.hrefs:
-        name = Path(urllib.parse.urlsplit(href).path).name
+        name = href.removeprefix(KRITA_URL)
         m = KRITA_IMAGE_RE.fullmatch(name)
-        if not m:
+        if not m or not KRITA_VERSION_RE.fullmatch(m.group(1)):
             continue
-        url = urllib.parse.urljoin(KRITA_URL, href)
-        parsed = urllib.parse.urlsplit(url)
-        if parsed.scheme != "https" or parsed.hostname != "cdn.kde.org":
-            continue
+        url = KRITA_URL + name
         found[name] = {"name": name, "version": m.group(1), "sha": m.group(2), "url": url}
-        # Apache/KDE directory listing displays build time next to each artifact.
-        mt = re.search(re.escape(name) + r"</a>\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})", html, re.I)
-        if mt:
-            found[name]["modified_utc"] = mt.group(1)
     if not found:
-        raise RuntimeError("KDE Nightly DMG listing is empty or changed structure")
-    if len(found) == 1:
-        return list(found.values())
-    # If multiple artifacts are listed, use HTTP modification times rather than
-    # guessing which Git hash is newer.
+        raise KritaCompatibilityError("Official KDE master listing has no Krita 6.1.x DMG; the fixed rolling channel will not fall back")
+    if len(found) > 20:
+        raise RuntimeError("Official KDE Nightly DMG listing is ambiguous (more than 20 candidates)")
+    # A dependency rebuild can retain its Git SHA, even with one listed artifact.
+    dates = set()
     for info in found.values():
         req = urllib.request.Request(info["url"], headers={"User-Agent": USER_AGENT}, method="HEAD")
         with urllib.request.urlopen(req, timeout=25) as response:
-            info["modified"] = response.headers.get("Last-Modified", "")
-    for info in found.values():
+            modified = response.headers.get("Last-Modified", "")
         try:
-            info["sort_date"] = parsedate_to_datetime(info["modified"]).timestamp()
-        except (ValueError, TypeError, OverflowError):
-            info["sort_date"] = 0.0
+            modified = parsedate_to_datetime(modified)
+            if modified.utcoffset() is None:
+                raise ValueError("Last-Modified has no timezone")
+            info["sort_date"] = modified.timestamp()
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise RuntimeError("Cannot order official Krita snapshots without valid Last-Modified") from exc
+        if info["sort_date"] in dates:
+            raise RuntimeError("Multiple official Krita snapshots share one modification time")
+        dates.add(info["sort_date"])
+        info["modified_utc"] = modified.astimezone(timezone.utc).isoformat()
     return sorted(found.values(), key=lambda x: x["sort_date"], reverse=True)
 
 
@@ -400,6 +463,7 @@ def usable_krita_candidate(candidate: Path, local: Path, *, allow_unsigned: bool
     """
     if app_info(candidate).get("bundle_id") != "org.krita":
         return False, None, "unexpected Krita bundle identifier"
+    require_krita_compatibility(candidate)
     incoming = identity(candidate)
     existing = identity(local)
     if existing and incoming and existing == incoming:
@@ -515,6 +579,7 @@ def apply_krita(release: dict, state: dict, *, allow_unsigned: bool = False,
             if not admitted:
                 status("Krita Next", "DEFERRED", trust_mode)
                 return "deferred"
+            candidate_qt = require_krita_compatibility(candidate)
             nonce = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             staged = KRITA_APP.with_name(".krita.preview-stage-" + nonce + ".app")
             backup = KRITA_APP.with_name(".krita.preview-backup-" + nonce + ".app")
@@ -524,6 +589,8 @@ def apply_krita(release: dict, state: dict, *, allow_unsigned: bool = False,
                 run("/usr/bin/ditto", str(candidate), str(staged))
                 if app_info(staged).get("bundle_id") != "org.krita":
                     raise RuntimeError("staged app identity mismatch")
+                if require_krita_compatibility(staged) != candidate_qt:
+                    raise KritaCompatibilityError("Krita copy changed its verified bundled Qt version")
                 if trust_mode == "developer-id":
                     run("/usr/bin/codesign", "--verify", "--deep", "--strict", str(staged))
                 if bundle_fingerprint(staged) != bundle_fingerprint(candidate):
@@ -550,6 +617,8 @@ def apply_krita(release: dict, state: dict, *, allow_unsigned: bool = False,
                 "allow_unsigned": bool(allow_unsigned),
                 "info_plist_sha256": bundle_fingerprint(KRITA_APP)[1],
                 "source_url": release["url"],
+                "channel": "6.1.x",
+                "qt_version": candidate_qt,
                 "sha256": digest,
                 "modified_utc": release.get("modified_utc"),
                 "installed_utc": datetime.now(timezone.utc).isoformat(),
@@ -706,6 +775,7 @@ def check_krita(args, state: dict) -> bool:
         return False
     print(f"Installed: {installed.get('version')} (no Git SHA in Info.plist)")
     print(f"Official:  {release['name']} — {release['url']}")
+    print("Channel:   Krita 6.1.x rolling; matching QtCore/QtGui >= 6.11.3 required")
     recorded = state.get("krita", {})
     unsigned_approved = bool(args.allow_unsigned_krita or recorded.get("allow_unsigned"))
     trusted = (recorded.get("inode") == KRITA_APP.stat().st_ino
@@ -758,6 +828,9 @@ def check_krita(args, state: dict) -> bool:
                         installed["version"] != app_info(candidate).get("version")):
                     status("Krita Next", "UNVERIFIED", "installed build differs from official DMG; explicit --bootstrap-krita required")
                     return False
+                candidate_qt = require_krita_compatibility(candidate)
+                if require_krita_compatibility(KRITA_APP) != candidate_qt:
+                    raise KritaCompatibilityError("Installed bundled Qt differs from the verified official image")
                 state["krita"] = {
                     "sha": release["sha"], "version": installed["version"],
                     "inode": KRITA_APP.stat().st_ino,
@@ -766,6 +839,7 @@ def check_krita(args, state: dict) -> bool:
                     "allow_unsigned": unsigned_approved,
                     "info_plist_sha256": bundle_fingerprint(KRITA_APP)[1],
                     "source_url": release["url"],
+                    "channel": "6.1.x", "qt_version": candidate_qt,
                     "modified_utc": release.get("modified_utc"),
                     "verified_by": "same-codesign-cdhash",
                     "installed_utc": datetime.now(timezone.utc).isoformat(),
@@ -793,10 +867,13 @@ def check_krita(args, state: dict) -> bool:
     if not trusted and not bootstrap:
         status("Krita Next", "UNVERIFIED", "unknown Git SHA; use --initialize to compare signed build, or explicit --bootstrap-krita")
         return False
-    if trusted and recorded["sha"].lower() == release["sha"].lower():
+    same_sha = trusted and recorded["sha"].lower() == release["sha"].lower()
+    rebuilt = trusted and krita_rebuilt_after_install(release, recorded)
+    if same_sha and not bootstrap and not rebuilt:
+        require_krita_compatibility(KRITA_APP)
         status("Krita Next", "CURRENT", f"Git {release['sha']}")
         return False
-    if trusted and args.topgrade and not bootstrap:
+    if trusted and args.topgrade and not bootstrap and not same_sha:
         try:
             relation = krita_commit_relation(recorded["sha"], release["sha"])
         except (ValueError, RuntimeError, KeyError, TimeoutError,
@@ -805,16 +882,18 @@ def check_krita(args, state: dict) -> bool:
                    f"cannot verify Git ancestry: {exc}")
             return False
 
-        if relation in {"older", "same"}:
+        if relation in {"older", "same"} and not (relation == "same" and rebuilt):
+            require_krita_compatibility(KRITA_APP)
             status("Krita Next", "DEFERRED_NOT_NEWER",
                    f"official Git {release['sha']} is not newer than installed Git {recorded['sha']}")
             return False
 
-        if relation != "newer":
+        if relation != "newer" and not (relation == "same" and rebuilt):
             status("Krita Next", "DEFERRED",
                    "Git history diverged; refusing unattended replacement")
             return False
     if not bootstrap and recorded.get("version") and numeric_base_version(recorded["version"]) > numeric_base_version(release["version"]):
+        require_krita_compatibility(KRITA_APP)
         status("Krita Next", "DEFERRED_NOT_NEWER", "official build version is older than installed version")
         return False
     if not (args.apply or args.topgrade or bootstrap):
@@ -1141,10 +1220,195 @@ def check_betterdisplay(args, state: dict) -> None:
 
 
 def self_test() -> None:
+    from contextlib import nullcontext, redirect_stdout
+    from io import StringIO
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+
     p = Links()
     p.feed('<a href="krita-6.1.0-prealpha-32bfa3f.dmg">x</a>')
     assert len(p.hrefs) == 1
     assert KRITA_IMAGE_RE.fullmatch(p.hrefs[0]).group(2) == "32bfa3f"
+    listing = "<table>" + "".join(
+        f'<tr><td><a href="krita-{version}-32bfa3f.dmg">krita-{version}-32bfa3f.dmg</a>'
+        '</td><td align="right">2026-11-06 09:00</td></tr>'
+        for version in ("6.0.0", "6.1.0-prealpha", "6.2.0", "6.10.0", "6.1")) + "</table>"
+    listing += '<a href="https://cdn.kde.org/other/krita-6.1.9-abcdef0.dmg">wrong directory</a>'
+    valid_date = "Fri, 06 Nov 2026 01:00:00 GMT"
+    with patch.dict(globals(), {"fetch_text": lambda _url: listing}), \
+            patch.object(urllib.request, "urlopen", return_value=nullcontext(
+                SimpleNamespace(headers={"Last-Modified": valid_date}))) as head:
+        found = krita_releases()
+        assert [item["version"] for item in found] == ["6.1.0-prealpha"]
+        apache_release = found[0]
+        assert apache_release["modified_utc"] == "2026-11-06T01:00:00+00:00"
+        assert head.call_count == 1 and head.call_args.args[0].get_method() == "HEAD"
+    with patch.dict(globals(), {"fetch_text": lambda _url: '<a href="krita-6.2.0-32bfa3f.dmg">x</a>'}):
+        try:
+            krita_releases()
+        except KritaCompatibilityError:
+            pass
+        else:
+            raise AssertionError("the fixed channel fell back outside 6.1.x")
+    excessive = "".join(f'<a href="krita-6.1.{index}-32bfa3f.dmg">x</a>' for index in range(21))
+    with patch.dict(globals(), {"fetch_text": lambda _url: excessive}), \
+            patch.object(urllib.request, "urlopen", side_effect=AssertionError("unbounded HEAD requests")) as head:
+        try:
+            krita_releases()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("excessive Krita candidates were accepted")
+        assert not head.called
+
+    multiple = ('<a href="krita-6.1.0-prealpha-32bfa3f.dmg">older</a>'
+                '<a href="krita-6.1.1-prealpha-abcdef0.dmg">newer</a>')
+    for dates, ordered in (([valid_date, "Fri, 06 Nov 2026 02:00:00 GMT"], True),
+                           (["", valid_date], False), (["invalid", valid_date], False),
+                           (["Fri, 06 Nov 2026 01:00:00", valid_date], False),
+                           ([valid_date, "Fri, 06 Nov 2026 02:00:00 +0100"], False)):
+        replies = [nullcontext(SimpleNamespace(headers={"Last-Modified": value})) for value in dates]
+        with patch.dict(globals(), {"fetch_text": lambda _url: multiple}), \
+                patch.object(urllib.request, "urlopen", side_effect=replies):
+            try:
+                found = krita_releases()
+            except RuntimeError:
+                assert not ordered
+            else:
+                assert ordered and [item["sha"] for item in found] == ["abcdef0", "32bfa3f"]
+
+    receipt = {"installed_utc": "2026-11-06T01:00:00+00:00"}
+    for modified, expected in (("2026-11-06T01:01:00+00:00", True), ("2026-11-06T01:00:00Z", False),
+                               ("2026-11-06T00:59:00+00:00", False), (None, False)):
+        assert krita_rebuilt_after_install({"modified_utc": modified}, receipt) == expected
+    assert not krita_rebuilt_after_install(apache_release, {})
+    for invalid in ("invalid", "", "2026-11-06 01:01", "2026-11-06T01:00:00",
+                    "2026-11-06T01:00:00+99:00", "2026-02-30T02:00:00Z", 123):
+        for release_time, installed_time in ((invalid, receipt["installed_utc"]),
+                                             (apache_release["modified_utc"], invalid)):
+            try:
+                krita_rebuilt_after_install({"modified_utc": release_time}, {"installed_utc": installed_time})
+            except KritaCompatibilityError:
+                pass
+            else:
+                raise AssertionError("invalid rebuild timestamp was silently ignored")
+    assert krita_rebuilt_after_install({"modified_utc": "2026-11-06T01:01:00Z"},
+                                      {"installed_utc": "2026-11-06T09:00:00+08:00"})
+
+    with tempfile.TemporaryDirectory(prefix="krita-policy-selftest-") as directory:
+        app = Path(directory) / "Krita.app"
+        (app / "Contents").mkdir(parents=True)
+        (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+            "CFBundleIdentifier": "org.krita", "CFBundleShortVersionString": "6.1.0"}))
+        metadata = []
+        for framework in ("QtCore", "QtGui"):
+            root = app / f"Contents/Frameworks/{framework}.framework"
+            resources = root / "Versions/A/Resources"
+            resources.mkdir(parents=True)
+            (root / "Resources").symlink_to("Versions/A/Resources")
+            metadata.append(resources / "Info.plist")
+
+        def write_qt(core, gui):
+            for path, value in zip(metadata, (core, gui)):
+                path.write_bytes(plistlib.dumps({"CFBundleVersion": value} if value is not None else {}))
+
+        for value in ("6.11.3", "6.11.4", "6.12.0"):
+            write_qt(value, value)
+            assert require_krita_compatibility(app) == value
+        for core, gui in (("6.11.0", "6.11.0"), ("6.11.2", "6.11.2"),
+                          ("6.11", "6.11"), (None, None), ("invalid", "invalid"),
+                          ("4294967296.0.0", "4294967296.0.0"),
+                          ("6.11.3", "6.11.4"), ("6.11.3", "6.11.0")):
+            write_qt(core, gui)
+            try:
+                require_krita_compatibility(app)
+            except KritaCompatibilityError:
+                pass
+            else:
+                raise AssertionError(f"invalid Qt pair was admitted: {(core, gui)}")
+
+        write_qt("6.11.0", "6.11.0")
+        try:
+            usable_krita_candidate(app, app, allow_unsigned=True, permit_signing_transition=True)
+        except KritaCompatibilityError:
+            pass
+        else:
+            raise AssertionError("explicit bootstrap bypassed the candidate Qt floor")
+        recorded = {"sha": "32bfa3f", "inode": app.stat().st_ino, "version": "6.1.0",
+                    "executable_sha256": "exe", "info_plist_sha256": "info", "team": "TEAM"}
+        state = {"krita": recorded}
+        release = dict(apache_release)
+        applied = []
+
+        def apply_fixture(*_args, **_kwargs):
+            applied.append(True)
+            status("Krita Next", "UPDATED", "fixture candidate")
+            return "updated"
+
+        def reject_write(_state):
+            raise AssertionError("blocked check wrote a receipt")
+
+        with patch.dict(globals(), {"KRITA_APP": app, "STATUS": {}, "state_read": lambda: state,
+                                   "state_write": reject_write, "krita_releases": lambda: [release],
+                                   "executable_digest": lambda _app: "exe", "identity": lambda _app: "TEAM",
+                                   "bundle_fingerprint": lambda _app: ("exe", "info", "code"),
+                                   "krita_commit_relation": lambda _local, _remote: "older",
+                                   "apply_krita": apply_fixture}), patch.object(sys, "platform", "darwin"), \
+                patch.object(sys, "argv", [__file__, "--topgrade"]):
+            before = json.dumps(state, sort_keys=True)
+            output = StringIO()
+            with redirect_stdout(output):
+                assert main() == 1
+            assert STATUS["Krita Next"] == "BLOCKED" and "BLOCKED" in output.getvalue()
+            assert not applied and json.dumps(state, sort_keys=True) == before
+            release["sha"] = "abcdef0"
+            with redirect_stdout(StringIO()):
+                assert main() == 1
+            assert STATUS["Krita Next"] == "BLOCKED" and not applied
+            with patch.dict(globals(), {"krita_commit_relation": lambda _local, _remote: "newer"}), \
+                    redirect_stdout(StringIO()):
+                assert main() == 0
+            assert len(applied) == 1
+            release["sha"] = recorded["sha"]
+            with patch.object(sys, "argv", [__file__, "--topgrade", "--bootstrap-krita"]), \
+                    redirect_stdout(StringIO()):
+                assert main() == 0
+            assert len(applied) == 2
+            recorded["installed_utc"] = "2026-11-06T00:59:00+00:00"
+            receipt_before = json.dumps(state, sort_keys=True)
+            for modified in ("2026-11-06T00:58:00Z", None, "invalid", "2026-11-06T01:00:00"):
+                release["modified_utc"] = modified
+                with redirect_stdout(StringIO()):
+                    assert main() == 1
+                assert STATUS["Krita Next"] == "BLOCKED" and len(applied) == 2
+                assert json.dumps(state, sort_keys=True) == receipt_before
+            release.update(apache_release)
+            no_history = Mock(side_effect=AssertionError("same SHA queried Git history"))
+            with patch.dict(globals(), {"krita_commit_relation": no_history}), redirect_stdout(StringIO()):
+                assert main() == 0
+            assert len(applied) == 3 and not no_history.called
+            assert json.dumps(state, sort_keys=True) == receipt_before
+            release["sha"] = "abcdef0"
+            with patch.dict(globals(), {"krita_commit_relation": lambda _local, _remote: "same"}), \
+                    redirect_stdout(StringIO()):
+                assert main() == 0
+            assert len(applied) == 4 and json.dumps(state, sort_keys=True) == receipt_before
+            with redirect_stdout(StringIO()):
+                assert main() == 1
+            assert STATUS["Krita Next"] == "BLOCKED" and len(applied) == 4
+
+        write_qt("6.11.3", "6.11.3")
+        outside = Path(directory) / "Info.plist"
+        outside.write_bytes(metadata[0].read_bytes())
+        link = app / "Contents/Frameworks/QtCore.framework/Resources"
+        link.unlink()
+        link.symlink_to(Path(directory))
+        try:
+            require_krita_compatibility(app)
+        except KritaCompatibilityError:
+            pass
+        else:
+            raise AssertionError("framework metadata escaped the application")
     h = StripHTML()
     h.feed('<h2>TourBox Console</h2><p>v5.12.0 Beta 10.2|2026-09-30</p>')
     assert TOURBOX_VERSION_RE.search(" ".join(h.text)).groups() == ("5.12.0", "10.2")
@@ -1165,7 +1429,7 @@ def self_test() -> None:
               b'</channel></rss>')
     assert parse_betterdisplay_feed(sample, "27.0")[0]["channel"] == "arm64_internal"
     assert parse_betterdisplay_feed(sample, "26.0") == []
-    print("SELF-TEST: PASS (Krita; TourBox; BetterDisplay channel filtering)")
+    print("SELF-TEST: PASS (Krita 6.1.x/Qt compatibility; TourBox; BetterDisplay channel filtering)")
 
 
 def main() -> int:
@@ -1214,6 +1478,9 @@ def main() -> int:
     if not only_tourbox:
         try:
             check_krita(args, state)
+        except KritaCompatibilityError as e:
+            status("Krita Next", "BLOCKED", str(e))
+            errors.append("krita-compatibility")
         except AppMetadataError as e:
             status("Krita Next", "FAILED_METADATA", str(e))
             errors.append("krita-metadata")
