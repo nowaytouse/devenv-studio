@@ -356,6 +356,10 @@ fn inspect_path(path: &Path) -> Result<Option<Metadata>> {
     let mut last = None;
     for component in path.components() {
         prefix.push(component.as_os_str());
+        // A Windows drive prefix is incomplete until its root component is appended.
+        if matches!(component, Component::Prefix(_)) {
+            continue;
+        }
         let metadata = match fs::symlink_metadata(&prefix) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -365,6 +369,15 @@ fn inspect_path(path: &Path) -> Result<Option<Metadata>> {
             !metadata.file_type().is_symlink(),
             "Topgrade paths cannot contain symlinks"
         );
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            ensure!(
+                // FILE_ATTRIBUTE_REPARSE_POINT includes directory junctions.
+                metadata.file_attributes() & 0x400 == 0,
+                "Topgrade paths cannot contain reparse points"
+            );
+        }
         last = Some(metadata);
     }
     Ok(last)
@@ -525,6 +538,26 @@ mod tests {
                 0o700
             );
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn junction_ancestors_are_rejected() {
+        let home = Directory::new();
+        let target = home.0.join("target");
+        let junction = home.0.join("junction");
+        fs::create_dir(&target).unwrap();
+        assert!(
+            std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(&junction)
+                .arg(&target)
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(inspect_path(&junction.join("missing")).is_err());
+        fs::remove_dir(&junction).unwrap();
     }
 
     #[test]

@@ -956,7 +956,11 @@ mod tests {
                 .get_envs()
                 .map(|(k, v)| {
                     (
-                        k.to_string_lossy().into_owned(),
+                        if cfg!(windows) {
+                            k.to_string_lossy().to_ascii_uppercase()
+                        } else {
+                            k.to_string_lossy().into_owned()
+                        },
                         v.map(|v| v.to_string_lossy().into_owned()),
                     )
                 })
@@ -966,7 +970,13 @@ mod tests {
                 values["CARGO_HTTP_PROXY"].as_deref(),
                 Some(profile.proxy_url.as_str())
             );
-            assert_eq!(values["http_proxy"], values["HTTPS_PROXY"]);
+            // Windows command environments merge differently cased names.
+            let http_key = if cfg!(windows) {
+                "HTTP_PROXY"
+            } else {
+                "http_proxy"
+            };
+            assert_eq!(values[http_key], values["HTTPS_PROXY"]);
             assert_eq!(
                 values["NO_PROXY"].as_deref(),
                 Some(if mode == ProxyMode::Direct { "*" } else { "" })
