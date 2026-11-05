@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
     fs::{self, File, OpenOptions},
-    io::{Read, Write},
+    io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
 
@@ -186,10 +186,12 @@ impl FileJournal {
         })
     }
     pub fn resume(path: PathBuf, key: [u8; 32], loaded: &Loaded) -> Result<Self> {
-        let file = OpenOptions::new().append(true).open(&path)?;
+        // Windows append-only handles cannot truncate an incomplete journal tail.
+        let mut file = OpenOptions::new().write(true).truncate(false).open(&path)?;
         // Discard only the incomplete trailing event, whose content was never trusted.
         file.set_len(loaded.valid_len)?;
         file.sync_all()?;
+        file.seek(SeekFrom::Start(loaded.valid_len))?;
         Ok(Self {
             file: Some(file),
             key,
@@ -359,6 +361,12 @@ mod tests {
         assert!(!path.exists());
         store.append(&Event::Header(header())).unwrap();
         drop(store);
+        OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b"incomplete")
+            .unwrap();
         let loaded = load(&path, &key).unwrap();
         assert_eq!(loaded.count, 1);
         assert_eq!(loaded.header.id, "aa-11");
