@@ -484,7 +484,18 @@ pub fn run_brew_cask(ctx: &ExecutionContext, variant: BrewVariant) -> Result<()>
         }
     }
 
-    brew.execute(ctx)?.args(&brew_args).status_checked()?;
+    let mut upgrade = brew.execute(ctx)?;
+    #[cfg(target_os = "macos")]
+    if matches!(variant, BrewVariant::MacArm)
+        && ctx
+            .config()
+            .commands()
+            .as_ref()
+            .is_some_and(|commands| commands.values().any(|command| command == "@studio:brew_headsync"))
+    {
+        upgrade.env("HOMEBREW_NO_AUTO_UPDATE", "1");
+    }
+    upgrade.args(&brew_args).status_checked()?;
 
     if ctx.config().cleanup() {
         brew.execute(ctx)?.arg("cleanup").status_checked()?;
