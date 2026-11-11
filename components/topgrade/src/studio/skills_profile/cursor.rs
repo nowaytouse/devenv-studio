@@ -1,7 +1,8 @@
 use super::*;
 use crate::studio::{
     github_skills::ownership::{
-        CURSOR_NAMES, USER_CONFIG, lean_ctx_mirror, lean_ctx_mirror_path, name_matches, repository,
+        CURSOR_NAMES, REVIEWED_REX_SHA, USER_CONFIG, lean_ctx_mirror, lean_ctx_mirror_path, name_matches, repository,
+        reviewed_local_rex,
     },
     is_hex,
 };
@@ -252,6 +253,17 @@ fn origin_matches(source: &str, entry: &Value) -> bool {
     })
 }
 
+fn retained_local_rex(home: &Path, row: &Row, sha: &str) -> Result<bool> {
+    if row.skill_name != "rex"
+        || row.scope.as_deref() != Some("user")
+        || row.pinned
+        || row.source_url.as_deref().is_some_and(|source| !source.is_empty())
+    {
+        return Ok(false);
+    }
+    reviewed_local_rex(home, &row.path, sha)
+}
+
 fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
     let rows = rows(home, None)?;
     let lock_path = lock_path(home)?;
@@ -318,6 +330,8 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
             "NPX_MIRROR_VERIFIED"
         } else if npx {
             "NPX_TRACKED"
+        } else if retained_local_rex(home, row, REVIEWED_REX_SHA)? {
+            "REVIEWED_LOCAL_RETAINED_NOT_UPDATED"
         } else if CURSOR_NAMES.contains(&name.as_str()) && row.path == shared.join(name) {
             let native = native.join(name);
             if name_matches(&native, name)? && equivalent(&tree(&native)?, &tree(&row.path)?) {
@@ -387,7 +401,7 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
             "unresolved": unresolved,
             "all_entries": all,
             "errors": errors,
-            "note": "Ownership audit. Separate updater steps must still succeed.",
+            "note": "Ownership audit. Reviewed local retained entries were not updated or checked for newer versions. Separate updater steps must still succeed.",
         }))?,
         0o600,
     )?;
@@ -498,6 +512,7 @@ fn coverage_requires_exact_lean_ctx_mirror_and_owner() -> Result<()> {
             source_url: None,
             path: mirror.clone(),
             pinned: false,
+            scope: None,
         };
         fs::write(mirror.join("SKILL.md"), skill)?;
         fs::write(mirror.join("SKILL.md.bak"), "Local backup")?;
@@ -510,6 +525,49 @@ fn coverage_requires_exact_lean_ctx_mirror_and_owner() -> Result<()> {
         fs::write(mirror.join("SKILL.md.v4-migration.lock"), "Unexpected")?;
         assert!(npx_lean_ctx_mirror(&home, &row, &entry).is_err());
     }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn reviewed_local_rex_coverage_requires_both_exact_copies_and_user_scope() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let home = temp.path().canonicalize()?;
+    let canonical = home.join(".agents/skills/rex");
+    let mirror = home.join(".claude/skills/rex");
+    fs::create_dir_all(&canonical)?;
+    fs::create_dir_all(&mirror)?;
+    let content = b"synthetic reviewed fixture";
+    fs::write(canonical.join("SKILL.md"), content)?;
+    fs::write(mirror.join("SKILL.md"), content)?;
+    let hash = digest(content);
+    let mut row = Row {
+        skill_name: "rex".into(),
+        source_url: None,
+        path: canonical.clone(),
+        pinned: false,
+        scope: Some("user".into()),
+    };
+    assert!(retained_local_rex(&home, &row, &hash)?);
+    row.path = mirror.clone();
+    assert!(retained_local_rex(&home, &row, &hash)?);
+    row.scope = Some("project".into());
+    assert!(!retained_local_rex(&home, &row, &hash)?);
+    row.scope = Some("user".into());
+    row.pinned = true;
+    assert!(!retained_local_rex(&home, &row, &hash)?);
+    row.pinned = false;
+    row.source_url = Some("https://example.invalid/repo".into());
+    assert!(!retained_local_rex(&home, &row, &hash)?);
+    row.source_url = None;
+    row.path = home.join("rex");
+    assert!(!retained_local_rex(&home, &row, &hash)?);
+    row.path = mirror.clone();
+    fs::write(mirror.join("extra"), b"unknown")?;
+    assert!(!retained_local_rex(&home, &row, &hash)?);
+    fs::remove_file(mirror.join("extra"))?;
+    fs::write(mirror.join("SKILL.md"), b"unknown")?;
+    assert!(!retained_local_rex(&home, &row, &hash)?);
     Ok(())
 }
 

@@ -493,6 +493,7 @@ mod tests {
             source_url: Some(SOURCE_URL.into()),
             path,
             pinned: false,
+            scope: None,
         };
         let (normalized, changes) = plan(original.clone(), std::slice::from_ref(&row), &home)?;
         assert_eq!(changes.len(), 1);

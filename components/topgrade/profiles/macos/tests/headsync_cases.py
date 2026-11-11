@@ -38,10 +38,16 @@ root=pathlib.Path(os.environ["TEST_ROOT"])
 with (root/"events").open("a") as f: f.write("brew " + " ".join(args) + "\n")
 if args == ["--repo", "homebrew/core"]:
  print(root/"core")
+elif args == ["--prefix"]:
+ print(root)
+elif args == ["--cellar", "llvm"]:
+ print(root/"Cellar/llvm")
 elif args == ["update"]:
  if os.environ.get("HOMEBREW_NO_AUTO_UPDATE") != "1": print("auto-update guard missing",file=sys.stderr); sys.exit(30)
  if (root/"state/brew-headsync/active").exists(): print("journal was not recovered",file=sys.stderr); sys.exit(38)
  if os.environ.get("TEST_FAIL") == "update": print("injected brew update failure",file=sys.stderr); sys.exit(39)
+ if os.environ.get("TEST_SWITCH_LLVM_PIN_AFTER_UPDATE") == "1":
+  keg = root/"Cellar/llvm/23.1.4"; keg.mkdir(); pin = root/"var/homebrew/pinned/llvm"; pin.unlink(); pin.symlink_to(keg)
 elif args == ["list", "--formula", "--pinned"]:
  if os.environ.get("TEST_FAIL_LIST") == "pinned": print("simulated pinned list error",file=sys.stderr); sys.exit(36)
  print(os.environ.get("TEST_PINNED", "llvm"))
@@ -133,9 +139,13 @@ class Fixture:
         self.bin = root / "bin"
         for directory in (self.core / "Formula/g", self.core / "Formula/l", self.state,
                           self.home / ".local/bin", self.bin, root / "opt", root / "rust-prefix/bin",
+                          root / "Cellar/llvm/23.1.5", root / "var/homebrew/pinned",
                           root / "Cellar/ggml" / ("HEAD-" + sha[:7]) / "include",
                           root / "Cellar/llama.cpp" / ("HEAD-" + sha[:7]) / "bin"):
             directory.mkdir(parents=True, exist_ok=True)
+        (root / "Cellar/llvm/23.1.5/INSTALL_RECEIPT.json").write_text(json.dumps({"source": {"spec": "stable"}}))
+        (root / "opt/llvm").symlink_to(root / "Cellar/llvm/23.1.5")
+        (root / "var/homebrew/pinned/llvm").symlink_to(root / "Cellar/llvm/23.1.5")
         self.original = {self.core / "Formula/g/ggml.rb": ggml,
                          self.core / "Formula/l/llama.cpp.rb": llama}
         for path, content in self.original.items():
@@ -456,6 +466,75 @@ def refuses_symlinked_journal(f):
     assert "brew update" not in f.events(), f.events()
 
 
+def llvm_link_rejected(f, mode):
+    pin = f.root / "var/homebrew/pinned/llvm"
+    opt = f.root / "opt/llvm"
+    if mode == "mismatch":
+        keg = f.root / "Cellar/llvm/23.1.4"
+        keg.mkdir()
+        pin.unlink()
+        pin.symlink_to(keg)
+    elif mode == "head":
+        keg = f.root / "Cellar/llvm/HEAD-deadbee"
+        keg.mkdir()
+        (keg / "INSTALL_RECEIPT.json").write_text(json.dumps({"source": {"spec": "head"}}))
+        pin.unlink()
+        opt.unlink()
+        pin.symlink_to(keg)
+        opt.symlink_to(keg)
+    elif mode == "receipt":
+        (f.root / "Cellar/llvm/23.1.5/INSTALL_RECEIPT.json").write_text(json.dumps({"source": {"spec": "head"}}))
+    elif mode == "dangling":
+        pin.unlink()
+        pin.symlink_to(f.root / "Cellar/llvm/missing")
+    elif mode == "outside":
+        keg = f.root / "outside/23.1.5"
+        keg.mkdir(parents=True)
+        pin.unlink()
+        opt.unlink()
+        pin.symlink_to(keg)
+        opt.symlink_to(keg)
+    elif mode == "missing_receipt":
+        (f.root / "Cellar/llvm/23.1.5/INSTALL_RECEIPT.json").unlink()
+    elif mode == "not_link":
+        pin.unlink()
+        pin.mkdir()
+    elif mode == "receipt_symlink":
+        receipt = f.root / "Cellar/llvm/23.1.5/INSTALL_RECEIPT.json"
+        target = f.root / "other-receipt.json"
+        target.write_text(json.dumps({"source": {"spec": "stable"}}))
+        receipt.unlink()
+        receipt.symlink_to(target)
+    elif mode == "receipt_oversize":
+        (f.root / "Cellar/llvm/23.1.5/INSTALL_RECEIPT.json").write_bytes(b" " * (256 * 1024 + 1))
+    result = f.run()
+    assert result.returncode != 0 and "LLVM" in result.stdout, result.stdout
+    assert "brew update" not in f.events(), f.events()
+    assert not any(line.startswith("brew upgrade ") for line in f.events()), f.events()
+    f.assert_restored()
+
+
+def llvm_mismatch_still_recovers_existing_journal(f):
+    f.journal()
+    keg = f.root / "Cellar/llvm/23.1.4"
+    keg.mkdir()
+    pin = f.root / "var/homebrew/pinned/llvm"
+    pin.unlink()
+    pin.symlink_to(keg)
+    result = f.run()
+    assert result.returncode != 0 and "same LLVM Cellar keg" in result.stdout, result.stdout
+    assert "brew update" not in f.events(), f.events()
+    f.assert_restored()
+
+
+def llvm_pin_changed_during_update(f):
+    result = f.run(TEST_SWITCH_LLVM_PIN_AFTER_UPDATE="1")
+    assert result.returncode != 0 and "same LLVM Cellar keg" in result.stdout, result.stdout
+    assert "brew update" in f.events(), f.events()
+    assert not any(line.startswith("brew upgrade ") for line in f.events()), f.events()
+    f.assert_restored()
+
+
 def refuses_pinned_pair(f):
     result = f.run(TEST_PINNED="llvm\nllama.cpp")
     assert result.returncode != 0 and "cannot be upgraded while either formula is pinned" in result.stdout, result.stdout
@@ -549,6 +628,17 @@ cases = [
 ]
 if native:
     cases += [
+        ("LLVM mismatched pin stops before mutation", lambda f: llvm_link_rejected(f, "mismatch")),
+        ("LLVM mismatch still recovers existing journal", llvm_mismatch_still_recovers_existing_journal),
+        ("LLVM pin change during update stops before formula patch", llvm_pin_changed_during_update),
+        ("LLVM HEAD pin stops before mutation", lambda f: llvm_link_rejected(f, "head")),
+        ("LLVM non-stable receipt stops before mutation", lambda f: llvm_link_rejected(f, "receipt")),
+        ("LLVM dangling pin stops before mutation", lambda f: llvm_link_rejected(f, "dangling")),
+        ("LLVM keg outside cellar stops before mutation", lambda f: llvm_link_rejected(f, "outside")),
+        ("LLVM missing receipt stops before mutation", lambda f: llvm_link_rejected(f, "missing_receipt")),
+        ("LLVM non-symlink pin stops before mutation", lambda f: llvm_link_rejected(f, "not_link")),
+        ("LLVM symlinked receipt stops before mutation", lambda f: llvm_link_rejected(f, "receipt_symlink")),
+        ("LLVM oversized receipt stops before mutation", lambda f: llvm_link_rejected(f, "receipt_oversize")),
         ("pinned dependency failure stops both keg upgrades", blocked_pair_does_not_upgrade),
         ("mismatched active pair stops before remaining enumeration", mismatched_pair_stops_remaining),
         ("tap-qualified formula name survives the exact scan and upgrade", exact_tap_name),

@@ -213,11 +213,13 @@ struct Row {
     source_url: Option<String>,
     path: PathBuf,
     pinned: bool,
+    #[serde(default)]
+    scope: Option<String>,
 }
 
 fn rows(home: &Path, route: Option<&Route>) -> Result<Vec<Row>> {
     let out = capture(
-        command(home, "gh", route)?.args(["skill", "list", "--json", "skillName,sourceURL,pinned,path"]),
+        command(home, "gh", route)?.args(["skill", "list", "--json", "skillName,sourceURL,pinned,path,scope"]),
         Duration::from_secs(90),
         DATA_LIMIT,
     )?;

@@ -260,7 +260,9 @@ pub(super) struct Delegated {
     pub local: usize,
 }
 
-fn reviewed_local_rex(home: &Path, path: &Path, sha: &str) -> Result<bool> {
+pub(in crate::studio) const REVIEWED_REX_SHA: &str = "8ceee7ec6e022deec6080f1dc03729e320eba969db28476c5922b2fbfae5cde4";
+
+pub(in crate::studio) fn reviewed_local_rex(home: &Path, path: &Path, sha: &str) -> Result<bool> {
     let canonical = home.join(".agents/skills/rex");
     let mirror = home.join(".claude/skills/rex");
     if path != canonical && path != mirror {
@@ -335,14 +337,7 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
                 row.path.display()
             );
             delegated.cursor += 1;
-        } else if row.scope == "user"
-            && name == "rex"
-            && reviewed_local_rex(
-                home,
-                &row.path,
-                "8ceee7ec6e022deec6080f1dc03729e320eba969db28476c5922b2fbfae5cde4",
-            )?
-        {
+        } else if row.scope == "user" && name == "rex" && reviewed_local_rex(home, &row.path, REVIEWED_REX_SHA)? {
             delegated.local += 1;
         } else {
             color_eyre::eyre::bail!(

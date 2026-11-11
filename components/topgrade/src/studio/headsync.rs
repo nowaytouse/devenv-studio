@@ -147,7 +147,7 @@ impl Headsync {
         println!("HEAD-sync transaction prepared and applied");
         println!("\n== Check upgrade requirements for both synchronized formulae ==");
         status(self.brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"]).args(PAIR))
-            .wrap_err("Synchronized formula preflight failed before either keg was upgraded; inspect the requirements above and preserve the LLVM pin")?;
+            .wrap_err("Synchronized formula preflight failed before either keg was upgraded; inspect the requirements above and preserve the LLVM pin. The official stable LLVM revision may have advanced since the pinned keg was installed")?;
         for formula in PAIR {
             println!("\n== Upgrade {formula} at {revision} ==");
             status(&mut self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula]))?;
@@ -185,6 +185,42 @@ impl Headsync {
         ensure!(
             !pinned.iter().any(|name| PAIR.contains(&basename(name))),
             "The synchronized ggml/llama.cpp pair cannot be upgraded while either formula is pinned"
+        );
+        let prefix = command_path(self.brew(&["--prefix"]))?;
+        let opt = prefix.join("opt/llvm");
+        let pin = prefix.join("var/homebrew/pinned/llvm");
+        for link in [&opt, &pin] {
+            ensure!(
+                link.symlink_metadata()
+                    .wrap_err_with(|| format!("cannot inspect LLVM link {}", link.display()))?
+                    .is_symlink(),
+                "LLVM opt and pin must be valid symlinks"
+            );
+        }
+        let active = opt.canonicalize().wrap_err("cannot resolve active LLVM keg")?;
+        let pinned_keg = pin.canonicalize().wrap_err("cannot resolve pinned LLVM keg")?;
+        let cellar = command_path(self.brew(&["--cellar", "llvm"]))?.canonicalize()?;
+        ensure!(
+            active.is_dir() && active == pinned_keg && active.parent() == Some(cellar.as_path()),
+            "LLVM pin and opt must resolve to the same LLVM Cellar keg"
+        );
+        let name = active
+            .file_name()
+            .and_then(OsStr::to_str)
+            .context("invalid LLVM keg name")?;
+        ensure!(
+            name.as_bytes().first().is_some_and(u8::is_ascii_digit),
+            "LLVM must be pinned to a stable keg, not HEAD"
+        );
+        let receipt_path = active.join("INSTALL_RECEIPT.json");
+        let mut file =
+            super::open_file(&receipt_path, false, super::MAX_JSON).wrap_err("cannot read pinned LLVM receipt")?;
+        let receipt_bytes = super::read_json_bytes(&mut file).wrap_err("cannot read pinned LLVM receipt")?;
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&receipt_bytes).wrap_err("invalid pinned LLVM receipt")?;
+        ensure!(
+            receipt.pointer("/source/spec").and_then(serde_json::Value::as_str) == Some("stable"),
+            "LLVM must be pinned to a stable keg, not HEAD"
         );
         Ok(pinned)
     }
