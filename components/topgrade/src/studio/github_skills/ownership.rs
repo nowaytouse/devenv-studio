@@ -262,10 +262,11 @@ pub(super) struct Delegated {
 
 pub(in crate::studio) const REVIEWED_REX_SHA: &str = "8ceee7ec6e022deec6080f1dc03729e320eba969db28476c5922b2fbfae5cde4";
 
-pub(in crate::studio) fn reviewed_local_rex(home: &Path, path: &Path, sha: &str) -> Result<bool> {
+pub(in crate::studio) fn reviewed_local_rex(home: &Path, path: &Path, scope: &str, sha: &str) -> Result<bool> {
     let canonical = home.join(".agents/skills/rex");
     let mirror = home.join(".claude/skills/rex");
-    if path != canonical && path != mirror {
+    // GH reports home-relative skills as project scope when invoked from home.
+    if !matches!(scope, "user" | "project") || (path != canonical && path != mirror) {
         return Ok(false);
     }
     let reviewed = BTreeMap::from([(PathBuf::from("SKILL.md"), sha.to_owned())]);
@@ -337,7 +338,7 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
                 row.path.display()
             );
             delegated.cursor += 1;
-        } else if row.scope == "user" && name == "rex" && reviewed_local_rex(home, &row.path, REVIEWED_REX_SHA)? {
+        } else if name == "rex" && reviewed_local_rex(home, &row.path, &row.scope, REVIEWED_REX_SHA)? {
             delegated.local += 1;
         } else {
             color_eyre::eyre::bail!(
@@ -365,11 +366,11 @@ mod tests {
             fs::write(path.join("SKILL.md"), content)?;
         }
         let sha = super::super::super::sha256(fs::File::open(canonical.join("SKILL.md"))?)?;
-        assert!(reviewed_local_rex(&home, &canonical, &sha)?);
-        assert!(reviewed_local_rex(&home, &mirror, &sha)?);
-        assert!(!reviewed_local_rex(&home, &home.join("rex"), &sha)?);
+        assert!(reviewed_local_rex(&home, &canonical, "user", &sha)?);
+        assert!(reviewed_local_rex(&home, &mirror, "project", &sha)?);
+        assert!(!reviewed_local_rex(&home, &home.join("rex"), "project", &sha)?);
         fs::write(mirror.join("SKILL.md"), b"changed")?;
-        assert!(!reviewed_local_rex(&home, &canonical, &sha)?);
+        assert!(!reviewed_local_rex(&home, &canonical, "user", &sha)?);
         Ok(())
     }
 }

@@ -254,14 +254,10 @@ fn origin_matches(source: &str, entry: &Value) -> bool {
 }
 
 fn retained_local_rex(home: &Path, row: &Row, sha: &str) -> Result<bool> {
-    if row.skill_name != "rex"
-        || row.scope.as_deref() != Some("user")
-        || row.pinned
-        || row.source_url.as_deref().is_some_and(|source| !source.is_empty())
-    {
+    if row.skill_name != "rex" || row.pinned || row.source_url.as_deref().is_some_and(|source| !source.is_empty()) {
         return Ok(false);
     }
-    reviewed_local_rex(home, &row.path, sha)
+    reviewed_local_rex(home, &row.path, row.scope.as_deref().unwrap_or_default(), sha)
 }
 
 fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
@@ -530,7 +526,7 @@ fn coverage_requires_exact_lean_ctx_mirror_and_owner() -> Result<()> {
 
 #[cfg(test)]
 #[test]
-fn reviewed_local_rex_coverage_requires_both_exact_copies_and_user_scope() -> Result<()> {
+fn reviewed_local_rex_coverage_accepts_home_relative_project_scope_for_exact_copies() -> Result<()> {
     let temp = tempfile::tempdir()?;
     let home = temp.path().canonicalize()?;
     let canonical = home.join(".agents/skills/rex");
@@ -552,6 +548,10 @@ fn reviewed_local_rex_coverage_requires_both_exact_copies_and_user_scope() -> Re
     row.path = mirror.clone();
     assert!(retained_local_rex(&home, &row, &hash)?);
     row.scope = Some("project".into());
+    assert!(retained_local_rex(&home, &row, &hash)?);
+    row.scope = Some("unknown".into());
+    assert!(!retained_local_rex(&home, &row, &hash)?);
+    row.scope = None;
     assert!(!retained_local_rex(&home, &row, &hash)?);
     row.scope = Some("user".into());
     row.pinned = true;
