@@ -29,7 +29,7 @@ Inspect selected current states: devenv-studio inspect --target win11-ltsc-2024 
 Preview JSON plan: devenv-studio plan --target win11-ltsc-2024 --select explorer-extensions,privacy-advertising-id
 Write new plan file: devenv-studio plan --target win10-ltsc-2021 --select explorer-extensions --output plan.json
 Preview saved profile: devenv-studio plan --profile profile.json
-Capture native preview: devenv-studio --screenshot preview.png
+Capture synthetic native preview: devenv-studio --screenshot preview.png
 Apple Silicon Topgrade engine: devenv-studio topgrade-engine <plan|prepare|install|rollback> <absolute checkout> <full commit>
 Apple Silicon rollback: devenv-studio topgrade-engine rollback-current <active component tree> <previous component tree>
 Apple Silicon verification: devenv-studio topgrade-engine verify-current <active component tree>

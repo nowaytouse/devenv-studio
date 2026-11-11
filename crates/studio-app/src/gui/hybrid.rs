@@ -36,7 +36,7 @@ impl Default for HybridState {
             recipe: None,
             visible_tasks: 60,
             developer_filter: String::new(),
-            providers: studio_deployment::provider_capabilities(),
+            providers: Vec::new(),
         }
     }
 }

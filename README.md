@@ -166,6 +166,8 @@ cargo run -p devenv-studio
 
 本地打包需要 Python 3.11 或更新版本。需要应用包时，在完成构建后运行 `python3 scripts/package_macos.py --profile debug`。它首先生成 `DevEnv Studio 0.10.0.app`；同名产物已存在时，使用 `DevEnv Studio 0.10.0-preview-<UTC>.app` 保存新的预览，保留旧包。这个时间标签用于区分构建，不递增发布版本；源码提交标识用于追溯实际代码，签名和公证另行处理。
 
+开发截图使用 `cargo run -p devenv-studio -- --screenshot preview.png`。此入口用内置清单和默认界面数据渲染，屏蔽交互，只在指定的新路径保存 PNG。用户偏好、网络配置、工具探测和恢复记录都不会进入截图会话。
+
 命令行也可以查看清单或生成计划：
 
 ```sh

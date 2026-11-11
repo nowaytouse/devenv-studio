@@ -328,12 +328,38 @@ struct Studio {
 
 impl Studio {
     fn new(screenshot: Option<PathBuf>) -> Self {
-        let host = studio_platform::host();
-        let target = host.target.unwrap_or(Target::Win11Ltsc2024);
-        let (preferences, preferences_error) = match crate::prefs::load() {
-            Ok(prefs) => (prefs, None),
-            Err(error) => (Preferences::default(), Some(format!("{error:#}"))),
+        let capture = screenshot.is_some();
+        let (host, preferences, preferences_error, winget) = if capture {
+            (
+                HostInfo {
+                    name: "Preview".into(),
+                    target: None,
+                    can_apply: false,
+                    explanation: "Synthetic screenshot fixture".into(),
+                },
+                Preferences {
+                    appearance: Appearance::Light,
+                    ..Preferences::default()
+                },
+                None,
+                studio_deployment::Capability {
+                    available: false,
+                    detail: "Synthetic screenshot fixture".into(),
+                },
+            )
+        } else {
+            let (preferences, error) = match crate::prefs::load() {
+                Ok(prefs) => (prefs, None),
+                Err(error) => (Preferences::default(), Some(format!("{error:#}"))),
+            };
+            (
+                studio_platform::host(),
+                preferences,
+                error,
+                studio_deployment::winget_capability(),
+            )
         };
+        let target = host.target.unwrap_or(Target::Win11Ltsc2024);
         let mut app = Self {
             updates: updates::UiState::default(),
             compatibility: compatibility::UiState::default(),
@@ -349,7 +375,7 @@ impl Studio {
             history: Ok(Vec::new()),
             catalog: studio_core::load_catalog().map_err(|e| format!("{e:#}")),
             deployment_catalog: studio_deployment::catalog().map_err(|e| format!("{e:#}")),
-            winget: studio_deployment::winget_capability(),
+            winget,
             host,
             target,
             selected: BTreeSet::new(),
@@ -372,8 +398,11 @@ impl Studio {
             screenshot,
             frames: 0,
         };
-        app.network = network::NetworkUiState::load();
-        app.refresh_recovery();
+        if !capture {
+            app.hybrid.providers = studio_deployment::provider_capabilities();
+            app.network = network::NetworkUiState::load();
+            app.refresh_recovery();
+        }
         app
     }
 
@@ -2645,6 +2674,10 @@ impl eframe::App for Studio {
         let ctx = ui.ctx().clone();
         i18n::set_language(self.preferences.language);
         theme::apply(&ctx, &self.preferences);
+        if self.screenshot.is_some() {
+            ui.visuals_mut().disabled_alpha = 1.0;
+            ui.disable();
+        }
         if ctx.input_mut(|input| {
             input.consume_key(egui::Modifiers::COMMAND, egui::Key::Q)
                 || input.consume_key(egui::Modifiers::COMMAND, egui::Key::W)
@@ -2701,7 +2734,7 @@ impl eframe::App for Studio {
         self.dialogs(&ctx);
         self.frames += 1;
         if self.frames == 4
-            && let Some(path) = self.screenshot.take()
+            && let Some(path) = self.screenshot.clone()
         {
             let screenshot_ctx = ctx.clone();
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
@@ -2725,14 +2758,14 @@ impl eframe::App for Studio {
                         Ok(())
                     })();
                     if let Err(error) = result {
-                        eprintln!("Screenshot failed ({}): {error}", path.display());
+                        eprintln!("Screenshot failed: {error}");
                     }
                     screenshot_ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     screenshot_ctx.request_repaint();
                 }),
             ));
         }
-        if self.screenshot.is_some() {
+        if self.frames < 4 && self.screenshot.is_some() {
             ctx.request_repaint();
         }
     }
@@ -3218,6 +3251,24 @@ mod tests {
             screenshot: None,
             frames: 0,
         }
+    }
+
+    #[test]
+    fn screenshot_uses_synthetic_session_state() {
+        let app = Studio::new(Some(PathBuf::from("synthetic-preview.png")));
+
+        assert_eq!(app.preferences.appearance, Appearance::Light);
+        assert!(app.preferences_error.is_none());
+        assert!(app.history.as_ref().unwrap().is_empty());
+        assert!(app.recovery.is_empty());
+        assert_eq!(
+            app.network.active.as_ref().unwrap(),
+            &studio_deployment::network::NetworkProfile::default()
+        );
+        assert!(app.network.last_history.is_none());
+        assert!(app.hybrid.providers.is_empty());
+        assert!(!app.winget.available);
+        assert!(!app.mutation_available());
     }
 
     #[test]
