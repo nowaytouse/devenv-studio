@@ -179,7 +179,7 @@
     {
       "source": "libexec/preview-apps/update-preview-apps.py",
       "destination": ".local/libexec/preview-apps/update-preview-apps.py",
-      "sha256": "35431eeda6456079ae6c474ab4a25b4d914290228278e29433f9f658ba4f3449",
+      "sha256": "ecaecbc1eac3c14a5009860e53c51cc1945e5523b136e3835efda1b4085cad44",
       "mode": 493,
       "adoptSha256": "3c3ca0be6f31e5a442f4403e0c255e2f65f37cf723a2771bfaeb79857213a2ef"
     },
