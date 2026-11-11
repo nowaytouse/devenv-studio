@@ -162,7 +162,7 @@ fn qt_version(app: &Path) -> Result<[u32; 3]> {
 fn compatible_qt(version: [u32; 3]) -> Result<()> {
     ensure!(
         version >= MIN_QT,
-        "Krita Next {}: BLOCKED_INCOMPATIBLE_QT — Qt {}.{}.{} is below 6.11.3; waiting for a compatible official 6.1.x build",
+        "Krita Next {}: BLOCKED_INCOMPATIBLE_QT — Qt {}.{}.{} is below 6.11.3; waiting for a compatible official Next build",
         source::CHANNEL,
         version[0],
         version[1],
@@ -173,8 +173,8 @@ fn compatible_qt(version: [u32; 3]) -> Result<()> {
 
 fn current(app: &Path, installed: &Fingerprint, sha: &str) -> Result<()> {
     ensure!(
-        source::in_channel(&installed.version),
-        "Installed Krita is outside the fixed {} channel",
+        source::valid_next_version(&installed.version),
+        "Installed Krita version does not match the {} format",
         source::CHANNEL
     );
     let qt = qt_version(app)?;
@@ -497,10 +497,7 @@ fn publish(activation: Activation<'_>, release: &Release, image: &Path) -> Resul
 
 pub(in crate::studio) fn krita_next() -> Result<()> {
     super::super::user_only()?;
-    println!(
-        "Krita Next channel: {} (official master/macOS Universal; Qt >= 6.11.3)",
-        source::CHANNEL
-    );
+    println!("Krita Next channel: KDE {} (Qt >= 6.11.3)", source::CHANNEL);
     let home = super::super::account_home()?;
     let _lock = super::lock(&home, "krita-preview.lock")?;
     let root = private_path(&home, "Library/Application Support/PreviewAppsUpdater")?;

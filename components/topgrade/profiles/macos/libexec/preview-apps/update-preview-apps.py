@@ -51,7 +51,8 @@ TOURBOX_URLS = [
 ]
 USER_AGENT = "PreviewAppsUpdater/1.0 (+macOS; KDE & TourBox public downloads)"
 KRITA_IMAGE_RE = re.compile(r"^krita-([A-Za-z0-9][A-Za-z0-9.+_-]*)-([0-9a-f]{7,40})\.dmg$", re.I)
-KRITA_VERSION_RE = re.compile(r"6\.1\.[0-9]+(?:[-+][A-Za-z0-9][A-Za-z0-9.+_-]*)?")
+KRITA_CHANNEL = "master/macos-universal"
+KRITA_VERSION_RE = re.compile(r"(?:[6-9]|[1-9][0-9]+)\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9][A-Za-z0-9.+_-]*)?")
 KRITA_MIN_QT = (6, 11, 3)
 TOURBOX_VERSION_RE = re.compile(r"\bv?([0-9]+(?:\.[0-9]+){2})\s+Beta\s+([0-9]+(?:\.[0-9]+)*)\b", re.I)
 
@@ -201,7 +202,7 @@ def numeric_base_version(value: str) -> tuple[int, ...]:
 def require_krita_compatibility(app: Path) -> str:
     version = app_info(app).get("version", "")
     if not KRITA_VERSION_RE.fullmatch(version):
-        raise KritaCompatibilityError(f"Krita {version!r} is outside the fixed 6.1.x rolling channel")
+        raise KritaCompatibilityError(f"Krita {version!r} does not match the Next version format")
     versions = []
     for framework in ("QtCore", "QtGui"):
         try:
@@ -290,7 +291,7 @@ def krita_releases() -> list[dict]:
         url = KRITA_URL + name
         found[name] = {"name": name, "version": m.group(1), "sha": m.group(2), "url": url}
     if not found:
-        raise KritaCompatibilityError("Official KDE master listing has no Krita 6.1.x DMG; the fixed rolling channel will not fall back")
+        raise KritaCompatibilityError("Official KDE Next macos-universal listing has no matching DMG")
     if len(found) > 20:
         raise RuntimeError("Official KDE Nightly DMG listing is ambiguous (more than 20 candidates)")
     # A dependency rebuild can retain its Git SHA, even with one listed artifact.
@@ -617,7 +618,7 @@ def apply_krita(release: dict, state: dict, *, allow_unsigned: bool = False,
                 "allow_unsigned": bool(allow_unsigned),
                 "info_plist_sha256": bundle_fingerprint(KRITA_APP)[1],
                 "source_url": release["url"],
-                "channel": "6.1.x",
+                "channel": KRITA_CHANNEL,
                 "qt_version": candidate_qt,
                 "sha256": digest,
                 "modified_utc": release.get("modified_utc"),
@@ -775,7 +776,7 @@ def check_krita(args, state: dict) -> bool:
         return False
     print(f"Installed: {installed.get('version')} (no Git SHA in Info.plist)")
     print(f"Official:  {release['name']} — {release['url']}")
-    print("Channel:   Krita 6.1.x rolling; matching QtCore/QtGui >= 6.11.3 required")
+    print(f"Channel:   KDE {KRITA_CHANNEL}; matching QtCore/QtGui >= 6.11.3 required")
     recorded = state.get("krita", {})
     unsigned_approved = bool(args.allow_unsigned_krita or recorded.get("allow_unsigned"))
     trusted = (recorded.get("inode") == KRITA_APP.stat().st_ino
@@ -839,7 +840,7 @@ def check_krita(args, state: dict) -> bool:
                     "allow_unsigned": unsigned_approved,
                     "info_plist_sha256": bundle_fingerprint(KRITA_APP)[1],
                     "source_url": release["url"],
-                    "channel": "6.1.x", "qt_version": candidate_qt,
+                    "channel": KRITA_CHANNEL, "qt_version": candidate_qt,
                     "modified_utc": release.get("modified_utc"),
                     "verified_by": "same-codesign-cdhash",
                     "installed_utc": datetime.now(timezone.utc).isoformat(),
@@ -1232,8 +1233,8 @@ def self_test() -> None:
     listing = "<table>" + "".join(
         f'<tr><td><a href="krita-{version}-32bfa3f.dmg">krita-{version}-32bfa3f.dmg</a>'
         '</td><td align="right">2026-11-06 09:00</td></tr>'
-        for version in ("6.0.0", "6.1.0-prealpha", "6.2.0", "6.10.0", "6.1")) + "</table>"
-    listing += '<a href="https://cdn.kde.org/other/krita-6.1.9-abcdef0.dmg">wrong directory</a>'
+        for version in ("5.4.0", "6.1.0-prealpha", "6.1")) + "</table>"
+    listing += '<a href="../macos-universal-qt5/krita-6.1.9-abcdef0.dmg">wrong directory</a>'
     valid_date = "Fri, 06 Nov 2026 01:00:00 GMT"
     with patch.dict(globals(), {"fetch_text": lambda _url: listing}), \
             patch.object(urllib.request, "urlopen", return_value=nullcontext(
@@ -1243,13 +1244,13 @@ def self_test() -> None:
         apache_release = found[0]
         assert apache_release["modified_utc"] == "2026-11-06T01:00:00+00:00"
         assert head.call_count == 1 and head.call_args.args[0].get_method() == "HEAD"
-    with patch.dict(globals(), {"fetch_text": lambda _url: '<a href="krita-6.2.0-32bfa3f.dmg">x</a>'}):
+    with patch.dict(globals(), {"fetch_text": lambda _url: '<a href="krita-5.4.0-32bfa3f.dmg">x</a>'}):
         try:
             krita_releases()
         except KritaCompatibilityError:
             pass
         else:
-            raise AssertionError("the fixed channel fell back outside 6.1.x")
+            raise AssertionError("the Qt 5 candidate was accepted")
     excessive = "".join(f'<a href="krita-6.1.{index}-32bfa3f.dmg">x</a>' for index in range(21))
     with patch.dict(globals(), {"fetch_text": lambda _url: excessive}), \
             patch.object(urllib.request, "urlopen", side_effect=AssertionError("unbounded HEAD requests")) as head:
@@ -1262,7 +1263,7 @@ def self_test() -> None:
         assert not head.called
 
     multiple = ('<a href="krita-6.1.0-prealpha-32bfa3f.dmg">older</a>'
-                '<a href="krita-6.1.1-prealpha-abcdef0.dmg">newer</a>')
+                '<a href="krita-7.0.0-prealpha-abcdef0.dmg">newer major</a>')
     for dates, ordered in (([valid_date, "Fri, 06 Nov 2026 02:00:00 GMT"], True),
                            (["", valid_date], False), (["invalid", valid_date], False),
                            (["Fri, 06 Nov 2026 01:00:00", valid_date], False),
@@ -1367,6 +1368,9 @@ def self_test() -> None:
             assert STATUS["Krita Next"] == "BLOCKED" and not applied
             with patch.dict(globals(), {"krita_commit_relation": lambda _local, _remote: "newer"}), \
                     redirect_stdout(StringIO()):
+                release["version"] = "6.0.5-prealpha"
+                assert main() == 1 and not applied
+                release["version"] = "6.2.0-prealpha"
                 assert main() == 0
             assert len(applied) == 1
             release["sha"] = recorded["sha"]
@@ -1429,7 +1433,7 @@ def self_test() -> None:
               b'</channel></rss>')
     assert parse_betterdisplay_feed(sample, "27.0")[0]["channel"] == "arm64_internal"
     assert parse_betterdisplay_feed(sample, "26.0") == []
-    print("SELF-TEST: PASS (Krita 6.1.x/Qt compatibility; TourBox; BetterDisplay channel filtering)")
+    print("SELF-TEST: PASS (Krita Next rolling/Qt compatibility; TourBox; BetterDisplay channel filtering)")
 
 
 def main() -> int:

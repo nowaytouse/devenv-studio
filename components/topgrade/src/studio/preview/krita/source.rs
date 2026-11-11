@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, fs, path::Path, process::Command, sync::LazyLoc
 use super::super::{bounded_output, download_to, tool_command, trusted_https};
 
 pub(super) const CDN: &str = "https://cdn.kde.org/ci-builds/graphics/krita/master/macos-universal/";
-pub(super) const CHANNEL: &str = "6.1.x";
+pub(super) const CHANNEL: &str = "master/macos-universal";
 const GIT: &str = "https://invent.kde.org/graphics/krita.git";
 const INVENT: &[&str] = &["invent.kde.org"];
 const CDN_HOSTS: &[&str] = &["cdn.kde.org", "origin.cdn.kde.org"];
@@ -22,9 +22,10 @@ pub(super) struct Release {
     pub(super) modified_utc: Option<String>,
 }
 
-pub(super) fn in_channel(version: &str) -> bool {
+pub(super) fn valid_next_version(version: &str) -> bool {
     static VERSION: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\A6\.1\.[0-9]+(?:[-+][a-zA-Z0-9][a-zA-Z0-9.+_-]*)?\z").expect("valid Krita 6.1 release series")
+        Regex::new(r"\A(?:[6-9]|[1-9][0-9]+)\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9][a-zA-Z0-9.+_-]*)?\z")
+            .expect("valid Krita Next version pattern")
     });
     VERSION.is_match(version)
 }
@@ -43,7 +44,7 @@ fn releases(html: &str) -> Result<Vec<Release>> {
         let href = entry.get(1).or_else(|| entry.get(2)).expect("href capture").as_str();
         let name = href.strip_prefix(CDN).unwrap_or(href);
         let Some(parts) = NAME.captures(name) else { continue };
-        if !in_channel(&parts[1]) {
+        if !valid_next_version(&parts[1]) {
             continue;
         }
         releases.entry(name).or_insert_with(|| Release {
@@ -56,7 +57,7 @@ fn releases(html: &str) -> Result<Vec<Release>> {
     }
     ensure!(
         !releases.is_empty(),
-        "Official Krita Next {CHANNEL} (master) has no matching macOS build; channel changes require review"
+        "Official Krita Next {CHANNEL} has no matching macOS build"
     );
     ensure!(
         releases.len() <= 20,
@@ -247,17 +248,19 @@ fn official_listing_and_merge_base_do_not_guess_from_hash_order() -> Result<()> 
     let apache = "<tr><td><a href=\"krita-6.1.0-prealpha-2687e5d.dmg\">krita-6.1.0-prealpha-2687e5d.dmg</a></td><td align=\"right\">2026-10-24 02:22</td></tr>";
     assert_eq!(releases(apache)?[0].sha, "2687e5d");
     let mixed = format!(
-        "{html} <a href=\"krita-6.0.5-prealpha-123abcd.dmg\">older</a> \
+        "{html} <a href=\"krita-5.4.0-prealpha-123abcd.dmg\">Qt5</a> \
          <a href=\"krita-6.2.0-prealpha-123abcd.dmg\">next series</a> \
-         <a href=\"krita-6.10.0-prealpha-123abcd.dmg\">different series</a>"
+         <a href=\"krita-7.0.0-prealpha-abcdef0.dmg\">future major</a> \
+         <a href=\"../macos-universal-qt5/krita-7.0.0-1111111.dmg\">wrong feed</a>"
     );
-    assert_eq!(releases(&mixed)?.len(), 1);
-    assert!(releases("<a href=\"krita-6.2.0-prealpha-123abcd.dmg\">moved</a>").is_err());
-    for version in ["6.1.0", "6.1.12-prealpha", "6.1.2+build.4"] {
-        assert!(in_channel(version));
+    let versions: Vec<_> = releases(&mixed)?.into_iter().map(|release| release.version).collect();
+    assert_eq!(versions, ["6.1.0-prealpha", "6.2.0-prealpha", "7.0.0-prealpha"]);
+    assert!(releases("<a href=\"krita-5.4.0-prealpha-123abcd.dmg\">Qt5</a>").is_err());
+    for version in ["6.1.0", "6.2.12-prealpha", "6.10.2+build.4", "7.0.0", "10.0.0-rc1"] {
+        assert!(valid_next_version(version));
     }
-    for version in ["6.1", "6.10.0", "6.2.0", "6.0.5", "6.1.0.1", "6.1.0other"] {
-        assert!(!in_channel(version));
+    for version in ["6.1", "5.4.0", "6.1.0.1", "6.1.0other"] {
+        assert!(!valid_next_version(version));
     }
     assert!(
         relation_from_base("32bfa3f", "ff12345", "32bfa3f000000000000000000000000000000000")
