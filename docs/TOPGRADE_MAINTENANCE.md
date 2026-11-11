@@ -67,6 +67,10 @@ devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 
 原有 Homebrew HEAD-sync 日志仍可由 Rust 入口恢复。组件在执行两项成对升级后先验证两份活动 keg 的完整 SHA，再枚举其余公式。收到 TERM 或 HUP 时，更新器持锁等待正在运行的子进程，随后恢复两份公式并以相应的退出状态结束。若第一项 keg 升级成功而第二项失败，请保留新旧 keg 和日志，核对两个 `opt` 指向与完整收据后再审阅配对恢复。若只有父进程被强制杀死，请先确认原来的 Homebrew 和构建子进程均已退出，再运行恢复。
 
+HEAD-sync 在刷新目录前检查所有 tap。未解决的 Git 冲突会在构建前停止。有本地改动且无冲突时，暂缓 `brew update`，使用现有目录和配方继续核验。干净的 tap 完成刷新后会再次检查。两份活动 keg 已匹配目标完整 SHA 时，直接核验现有运行时，避免因后续公式失败而重建同一配对。普通批量升级保留 LLVM、LLVM HEAD 和版本化 LLVM 配方。
+
+Mac App Store 已报告安装成功后，若精确核验暂时找不到本轮刚更新的应用 ID，最多等待 15 秒并复查。网络、授权、其他应用 ID 或无法验证的结果继续返回失败。
+
 检查显示上一版时，可复制绑定两版组件树的终端回退命令。请关闭其他维护任务后运行。回退重新核对当前与上一版引擎、profile 和事务，若身份或配置发生漂移则停止。回退完成后重新检查更新中心，或用 `devenv-studio topgrade-engine verify-current FULL_COMPONENT_TREE` 核对启动器及全部受管资产。相同 checkout 和 SHA 的 `topgrade-engine rollback` 仍可用于维护入口。若过程报告 pending 激活，请保留文件、启动器和 profile 事务，核对实际生效版本后再恢复。私人记录在 `~/.local/share/topgrade-rustup-head` 和 `~/.local/state/topgrade-macos-profile`。
 
 ## 设备验收

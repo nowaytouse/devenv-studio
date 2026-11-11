@@ -134,28 +134,75 @@ impl Headsync {
             &command_text(self.brew(&["list", "--formula", "--full-name"]))
                 .wrap_err("unable to enumerate installed Homebrew formulae")?,
         )?;
-        println!("\n== Homebrew update ==");
-        status(&mut self.brew(&["update"]))?;
-        self.core_clean(txn.core(), "after Homebrew update")?;
+        let dirty = self.changed_taps()?;
+        if dirty.is_empty() {
+            println!("\n== Homebrew update ==");
+            status(&mut self.brew(&["update"]))?;
+            self.core_clean(txn.core(), "after Homebrew update")?;
+            self.changed_taps()?;
+        } else {
+            println!(
+                "Homebrew catalog refresh deferred to preserve local tap changes: {}",
+                dirty.join(", ")
+            );
+        }
         let pins = self.pins()?;
         let revision = self.target_revision()?;
         println!("\nTarget llama.cpp snapshot:\n  {revision}");
 
-        txn.prepare(&revision, |file| {
-            status(self.command("ruby").arg("-c").arg(file).stdout(Stdio::null()))
-        })?;
-        println!("HEAD-sync transaction prepared and applied");
-        println!("\n== Check upgrade requirements for both synchronized formulae ==");
-        status(self.brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"]).args(PAIR))
-            .wrap_err("Synchronized formula preflight failed before either keg was upgraded; inspect the requirements above and preserve the LLVM pin. The official stable LLVM revision may have advanced since the pinned keg was installed")?;
-        for formula in PAIR {
-            println!("\n== Upgrade {formula} at {revision} ==");
-            status(&mut self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula]))?;
-        }
-        println!("\n== Verify active pair before remaining formulae ==");
-        self.verify_pair(&revision)?;
+        let active = if let Ok(active) = self.verify_pair(&revision) {
+            println!("Synchronized ggml and llama.cpp are already installed at the full target revision");
+            active
+        } else {
+            txn.prepare(&revision, |file| {
+                status(self.command("ruby").arg("-c").arg(file).stdout(Stdio::null()))
+            })?;
+            println!("HEAD-sync transaction prepared and applied");
+            println!("\n== Check upgrade requirements for both synchronized formulae ==");
+            status(self.brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"]).args(PAIR))
+                .wrap_err("Synchronized formula preflight failed before either keg was upgraded; inspect the requirements above and preserve the LLVM pin. The official stable LLVM revision may have advanced since the pinned keg was installed")?;
+            for formula in PAIR {
+                println!("\n== Upgrade {formula} at {revision} ==");
+                status(&mut self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula]))?;
+            }
+            let active = self.verify_pair(&revision)?;
+            txn.recover()?;
+            active
+        };
+        self.verify_runtime(&active)?;
         self.remaining(&installed, &pins)?;
-        self.verify_runtime(&revision)
+        self.verify_runtime(&self.verify_pair(&revision)?)?;
+        let missing = command_text(self.brew(&["missing"]))?;
+        ensure!(missing.is_empty(), "Homebrew dependencies are missing:\n{missing}");
+        Ok(())
+    }
+
+    fn changed_taps(&self) -> Result<Vec<String>> {
+        let mut dirty = Vec::new();
+        for tap in names(&command_text(self.brew(&["tap"]))?)? {
+            ensure!(tap.split('/').count() == 2, "Unexpected Homebrew tap identifier");
+            if tap == "homebrew/core" {
+                continue;
+            }
+            let path = command_path(self.brew(&["--repo", &tap]))?;
+            let mut command = self.command("git");
+            command.env("GIT_OPTIONAL_LOCKS", "0").arg("-C").arg(path).args([
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+            ]);
+            let changes = command_text(command).wrap_err_with(|| format!("Cannot inspect Homebrew tap {tap}"))?;
+            ensure!(
+                !changes
+                    .lines()
+                    .any(|line| matches!(line.get(..2), Some("DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU"))),
+                "Homebrew tap {tap} has unresolved Git conflicts. Resolve them before HEAD-sync"
+            );
+            if !changes.is_empty() {
+                dirty.push(tap);
+            }
+        }
+        Ok(dirty)
     }
 
     fn core_clean(&self, core: &Path, phase: &str) -> Result<()> {
@@ -245,6 +292,8 @@ impl Headsync {
             .iter()
             .filter_map(|formula| {
                 if matches!(basename(formula), "llvm" | "llvm-head" | "topgrade")
+                    || basename(formula).starts_with("llvm@")
+                    || PAIR.contains(&basename(formula))
                     || pinned.iter().any(|pin| basename(pin) == basename(formula))
                 {
                     println!("Skipping protected formula: {formula}");
@@ -269,8 +318,17 @@ impl Headsync {
             })
             .wrap_err("unable to enumerate outdated formulae")?;
         io::stderr().write_all(&output.stderr)?;
+        ensure!(
+            !output.stdout.is_empty(),
+            "Homebrew returned no formula inventory (exit {:?}); inspect its diagnostic above",
+            output.status.code()
+        );
         let outdated = outdated_names(&output.stdout, output.status.code() == Some(1), &candidates)
             .wrap_err("invalid Homebrew outdated result")?;
+        if outdated.is_empty() {
+            println!("No remaining outdated formulae");
+            return Ok(());
+        }
         let dependents = names(
             &command_text(self.brew(&["uses", "--installed", "--include-build", "--formula", "rust"]))
                 .wrap_err("unable to identify installed Homebrew Rust dependents")?,
@@ -297,11 +355,7 @@ impl Headsync {
             )
             .wrap_err_with(|| format!("Homebrew Rust cannot run; required by {formula}"))?;
         }
-        if outdated.is_empty() {
-            println!("No remaining outdated formulae");
-        } else {
-            status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))?;
-        }
+        status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))?;
         Ok(())
     }
 
@@ -326,13 +380,13 @@ impl Headsync {
                 .file_name()
                 .and_then(OsStr::to_str)
                 .context("Invalid active keg name")?;
-            println!("{formula}: {name}");
             ensure!(
                 name.split('_').next() == Some(expected_keg.as_str()),
                 "{formula} did not land on target snapshot"
             );
             let receipt_path = keg.join("INSTALL_RECEIPT.json");
-            let receipt: Receipt = serde_json::from_slice(&fs::read(&receipt_path)?)
+            let mut file = super::open_file(&receipt_path, false, super::MAX_JSON)?;
+            let receipt: Receipt = serde_json::from_slice(&super::read_json_bytes(&mut file)?)
                 .wrap_err_with(|| format!("cannot read {formula} full revision from its receipt"))?;
             ensure!(
                 receipt.source.spec == "head" && receipt.source.scm_revision == revision,
@@ -344,9 +398,8 @@ impl Headsync {
         Ok(active)
     }
 
-    fn verify_runtime(&self, revision: &str) -> Result<()> {
+    fn verify_runtime(&self, active: &[PathBuf]) -> Result<()> {
         println!("\n== Verify matched runtime ==");
-        let active = self.verify_pair(revision)?;
         const SYMBOL: &str = "ggml_backend_sched_set_copy_callback";
         ensure!(
             fs::read_to_string(active[0].join("include/ggml-backend.h"))?.contains(SYMBOL),
@@ -362,8 +415,6 @@ impl Headsync {
             "Missing ggml backend symbol {SYMBOL}"
         );
         status(self.command(active[1].join("bin/llama-cli")).arg("--version"))?;
-        let missing = command_text(self.brew(&["missing"]))?;
-        ensure!(missing.is_empty(), "Homebrew dependencies are missing:\n{missing}");
         Ok(())
     }
 }

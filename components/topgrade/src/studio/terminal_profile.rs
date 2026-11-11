@@ -136,24 +136,55 @@ fn mas_ids(stdout: &str, allowed: Option<&BTreeSet<u64>>) -> Result<Vec<u64>> {
         .collect()
 }
 
-fn mas_query(mode: &str, ids: Option<&[u64]>) -> Result<Vec<u64>> {
-    let allowed = ids.map(|ids| ids.iter().copied().collect());
-    let output = RunType::Wet
-        .execute(Path::new(MAS))
-        .args(["outdated", mode, "--json"])
-        .args(ids.into_iter().flatten().map(u64::to_string))
-        .output_checked_utf8()?;
-    std::io::stderr().write_all(output.stderr.as_bytes())?;
-    mas_ids(&output.stdout, allowed.as_ref())
+fn mas_lookup_pending(status: Option<i32>, stdout: &str, stderr: &str, ids: &BTreeSet<u64>) -> bool {
+    status == Some(1)
+        && stdout.is_empty()
+        && stderr
+            .trim_end_matches(['\r', '\n'])
+            .strip_prefix("Error: No installed apps with ADAM ID ")
+            .and_then(|id| id.parse().ok())
+            .is_some_and(|id| ids.contains(&id))
+}
+
+fn mas_query(mode: &str, ids: Option<&[u64]>, after_upgrade: bool) -> Result<Vec<u64>> {
+    let allowed = ids.map(|ids| ids.iter().copied().collect::<BTreeSet<_>>());
+    let delays = if after_upgrade { &[1, 2, 4, 8][..] } else { &[] };
+    for attempt in 0..=delays.len() {
+        ensure!(!crate::ctrlc::interrupted(), "MAS verification interrupted");
+        let output = RunType::Wet
+            .execute(Path::new(MAS))
+            .args(["outdated", mode, "--json"])
+            .args(ids.into_iter().flatten().map(u64::to_string))
+            .output_checked_with_utf8(|output| {
+                if output.status.success()
+                    || (attempt < delays.len()
+                        && allowed.as_ref().is_some_and(|allowed| {
+                            mas_lookup_pending(output.status.code(), &output.stdout, &output.stderr, allowed)
+                        }))
+                {
+                    Ok(())
+                } else {
+                    Err(())
+                }
+            })?;
+        if output.status.success() {
+            std::io::stderr().write_all(output.stderr.as_bytes())?;
+            return mas_ids(&output.stdout, allowed.as_ref());
+        }
+        let delay = delays[attempt];
+        println!("MAS: App Store inventory has not caught up; checking again in {delay}s");
+        thread::sleep(Duration::from_secs(delay));
+    }
+    bail!("MAS verification did not complete")
 }
 
 fn mas() -> Result<()> {
-    let candidates = mas_query("--inaccurate", None)?;
+    let candidates = mas_query("--inaccurate", None, false)?;
     if candidates.is_empty() {
         println!("MAS: current (inaccurate catalog found no candidates)");
         return Ok(());
     }
-    let verified = mas_query("--accurate", Some(&candidates))?;
+    let verified = mas_query("--accurate", Some(&candidates), false)?;
     if verified.is_empty() {
         println!("MAS: current after accurate App Store verification");
         return Ok(());
@@ -165,7 +196,7 @@ fn mas() -> Result<()> {
         .args(["upgrade", "--accurate"])
         .args(verified.iter().map(u64::to_string))
         .status_checked()?;
-    let remaining = mas_query("--accurate", Some(&verified))?;
+    let remaining = mas_query("--accurate", Some(&verified), true)?;
     ensure!(
         remaining.is_empty(),
         "MAS exited successfully but these updates remain: {remaining:?}"
@@ -199,5 +230,21 @@ mod tests {
         assert!(mas_ids(&format!("{line}\n{line}"), None).is_err());
         assert!(mas_ids(&line.replace("\"2\"", "\"1\""), None).is_err());
         assert!(mas_ids(&line.replace("42", "true"), None).is_err());
+    }
+
+    #[test]
+    fn mas_lookup_retry_requires_the_exact_requested_id_and_error() {
+        let ids = BTreeSet::from([42, 43]);
+        let missing = "Error: No installed apps with ADAM ID 42\n";
+        assert!(mas_lookup_pending(Some(1), "", missing, &ids));
+        assert!(!mas_lookup_pending(Some(2), "", missing, &ids));
+        assert!(!mas_lookup_pending(Some(1), "{}", missing, &ids));
+        assert!(!mas_lookup_pending(Some(1), "", &missing.replace("42", "44"), &ids));
+        assert!(!mas_lookup_pending(
+            Some(1),
+            "",
+            &format!("{missing}Network error"),
+            &ids
+        ));
     }
 }

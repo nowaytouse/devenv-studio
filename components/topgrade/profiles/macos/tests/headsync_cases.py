@@ -38,6 +38,10 @@ root=pathlib.Path(os.environ["TEST_ROOT"])
 with (root/"events").open("a") as f: f.write("brew " + " ".join(args) + "\n")
 if args == ["--repo", "homebrew/core"]:
  print(root/"core")
+elif args == ["tap"]:
+ print("homebrew/core\nexample/tools")
+elif args == ["--repo", "example/tools"]:
+ print(root/"tap")
 elif args == ["--prefix"]:
  print(root)
 elif args == ["--cellar", "llvm"]:
@@ -60,8 +64,9 @@ elif args[:1] == ["upgrade"]:
  if os.environ.get("HOMEBREW_NO_AUTO_UPDATE") != "1": print("auto-update guard missing",file=sys.stderr); sys.exit(30)
  if "topgrade" in args: print("topgrade must not reach brew upgrade", file=sys.stderr); sys.exit(32)
  target = args[-1] if args[-1] in ("ggml", "llama.cpp") else "bulk"
- for f in (root/"core/Formula/g/ggml.rb",root/"core/Formula/l/llama.cpp.rb"):
-  if os.environ["TEST_SHA"] not in f.read_text(): print("formula revision mismatch",file=sys.stderr); sys.exit(33)
+ if target != "bulk" or "--dry-run" in args or not os.environ.get("TEST_HEADSYNC_NATIVE_CHILD"):
+  for f in (root/"core/Formula/g/ggml.rb",root/"core/Formula/l/llama.cpp.rb"):
+   if os.environ["TEST_SHA"] not in f.read_text(): print("formula revision mismatch",file=sys.stderr); sys.exit(33)
  if "--dry-run" in args:
   if os.environ.get("TEST_FAIL_PREFLIGHT") == "1":
    print("Pinned LLVM cannot satisfy llama.cpp",file=sys.stderr); sys.exit(44)
@@ -72,6 +77,7 @@ elif args[:1] == ["upgrade"]:
    if (root/"upgrade-release").exists(): break
    __import__("time").sleep(.02)
  if os.environ.get("TEST_FAIL") == target: print("injected upgrade failure",file=sys.stderr); sys.exit(34)
+ if target == "llama.cpp": (root/"pair-installed").touch()
 elif args[:1] == ["outdated"]:
  eligible={name.rsplit("/",1)[-1]:name for name in args[1:] if not name.startswith("--")}
  outdated=set(os.environ.get("TEST_OUTDATED", "topgrade").splitlines())
@@ -80,6 +86,7 @@ elif args[:1] == ["outdated"]:
  if mode == "malformed": print("{bad json"); sys.exit(1)
  if mode == "one-empty": print('{"formulae": [], "casks": []}'); sys.exit(1)
  if mode == "operational": print("simulated outdated transport failure",file=sys.stderr); sys.exit(2)
+ if mode == "no-json": print("Error: synthetic formula syntax error",file=sys.stderr); sys.exit(1)
  if "--json=v2" in args:
   entries=[{"name":name,"pinned":mode == "newly-pinned"} for name in found]
   if mode == "unselected": entries=[{"name":"not-a-candidate","pinned":False}]
@@ -100,7 +107,10 @@ elif args == ["list", "--versions", "ggml"]:
 elif args == ["list", "--versions", "llama.cpp"]:
  print("llama.cpp HEAD-"+os.environ["TEST_SHA"][:7]+(" HEAD-deadbee" if os.environ.get("TEST_EXTRA_HEAD") else ""))
 elif len(args) == 2 and args[0] == "--prefix" and args[1] in ("ggml", "llama.cpp"):
- print(root/"opt"/args[1])
+ if os.environ.get("TEST_HEADSYNC_NATIVE_CHILD") and not (root/"pair-installed").exists():
+  print(root/"previous-opt"/args[1])
+ else:
+  print(root/"opt"/args[1])
 elif len(args) == 2 and args[0] == "--cellar" and args[1] in ("ggml", "llama.cpp"):
  print(root/"Cellar"/args[1])
 elif args == ["missing"]:
@@ -114,6 +124,13 @@ args=sys.argv[1:]
 root=pathlib.Path(os.environ["TEST_ROOT"])
 with (root/"events").open("a") as f: f.write("git " + " ".join(args) + "\n")
 if len(args)>=4 and args[0] == "-C" and args[2] == "status":
+ if pathlib.Path(args[1]) == root/"tap":
+  state = os.environ.get("TEST_TAP_STATUS", "clean")
+  if "brew update" in (root/"events").read_text().splitlines():
+   state = os.environ.get("TEST_TAP_AFTER", state)
+  if state == "dirty": print(" M Formula/example.rb")
+  if state == "unmerged": print("UU Formula/example.rb")
+  sys.exit(0)
  state=os.environ.get("TEST_GIT_STATUS", "clean")
  if state == "fail": print("simulated git error",file=sys.stderr); sys.exit(41)
  if state == "dirty": print(" M Formula/g/ggml.rb")
@@ -269,7 +286,32 @@ def idempotent(f):
         assert "HEAD sync transaction: OK" in result.stdout
         f.assert_restored()
     upgrades = [line for line in f.events() if line.startswith("brew upgrade") and "--dry-run" not in line]
-    assert len(upgrades) == 6 and all("topgrade" not in line for line in upgrades), upgrades
+    assert len(upgrades) == (4 if native else 6) and all("topgrade" not in line for line in upgrades), upgrades
+
+
+def dirty_tap_preserves_checkout(f):
+    (f.root / "pair-installed").touch()
+    result = f.run(TEST_TAP_STATUS="dirty")
+    assert result.returncode == 0, result.stdout
+    assert "catalog refresh deferred" in result.stdout, result.stdout
+    assert "already installed at the full target revision" in result.stdout, result.stdout
+    assert not any(line == "brew update" or line.startswith("brew upgrade ") for line in f.events())
+    f.assert_restored()
+
+
+def tap_conflict_stops_before_pair(f, after_update):
+    result = f.run(**{"TEST_TAP_AFTER" if after_update else "TEST_TAP_STATUS": "unmerged"})
+    assert result.returncode != 0 and "example/tools has unresolved Git conflicts" in result.stdout, result.stdout
+    assert ("brew update" in f.events()) == after_update, f.events()
+    assert not any(line.startswith("brew upgrade ") for line in f.events()), f.events()
+    f.assert_restored()
+
+
+def outdated_exit_one_without_json_explains_error(f):
+    result = f.run(TEST_OUTDATED_MODE="no-json")
+    assert result.returncode != 0 and "no formula inventory" in result.stdout, result.stdout
+    assert "synthetic formula syntax error" in result.stdout, result.stdout
+    f.assert_restored()
 
 
 def rust_guard(f):
@@ -336,7 +378,8 @@ def blocked_pair_does_not_upgrade(f):
 
 
 def pin_scan_exclusions(f):
-    result = f.run(TEST_INSTALLED="llvm\nnyamiiko/tools/llvm-head\ntopgrade\nz3\natuin",
+    versioned = "\nllvm@22" if native else ""
+    result = f.run(TEST_INSTALLED=f"llvm\nnyamiiko/tools/llvm-head\ntopgrade\nz3\natuin{versioned}",
                    TEST_OUTDATED="topgrade\nz3")
     assert result.returncode == 0, result.stdout
     scan = next(line for line in f.events() if line.startswith("brew outdated "))
@@ -628,6 +671,10 @@ cases = [
 ]
 if native:
     cases += [
+        ("dirty tap defers refresh and reuses an already verified pair", dirty_tap_preserves_checkout),
+        ("existing tap conflict stops before either mutation", lambda f: tap_conflict_stops_before_pair(f, False)),
+        ("tap conflict after refresh stops before either keg upgrade", lambda f: tap_conflict_stops_before_pair(f, True)),
+        ("exit 1 without JSON retains the Homebrew diagnostic", outdated_exit_one_without_json_explains_error),
         ("LLVM mismatched pin stops before mutation", lambda f: llvm_link_rejected(f, "mismatch")),
         ("LLVM mismatch still recovers existing journal", llvm_mismatch_still_recovers_existing_journal),
         ("LLVM pin change during update stops before formula patch", llvm_pin_changed_during_update),
