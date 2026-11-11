@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 更新中心增加 LLVM 稳定版和 HEAD 的独立手动审核入口。
+- Topgrade 在构建前检查 Homebrew tap 冲突，并在 App Store 安装成功后的索引延迟期间仅复查结果。
+- 项目索引隔离无效记录并保留最近一份有效索引，增加 Serena 缓存盘点。Topgrade 引擎增加官方发布跟踪。
+
 - Windows Topgrade 新增可选的用户目录 FreshClam 配置，沿用原生病毒库更新步骤，失败时不尝试提权。
 
 - Krita Next 跟随 KDE 官方 macOS Universal 滚动渠道，可跨版本系列更新。安装前及同构建检查均验证 QtCore／QtGui 完整版本一致且不低于 6.11.3，保留应用与事务回退。
