@@ -1,7 +1,8 @@
+use std::io::IsTerminal;
 use std::path::Path;
 use std::{ffi::OsStr, process::Command};
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Context, Result, bail};
 use etcetera::base_strategy::BaseStrategy;
 use rust_i18n::t;
 use tracing::debug;
@@ -31,7 +32,7 @@ pub fn run_chocolatey(ctx: &ExecutionContext) -> Result<()> {
 pub fn run_winget(ctx: &ExecutionContext) -> Result<()> {
     let winget = require("winget")?;
 
-    print_separator("winget");
+    print_separator("WinGet");
 
     ctx.execute(&winget).args(["source", "update"]).status_checked()?;
 
@@ -91,22 +92,29 @@ pub fn update_wsl(ctx: &ExecutionContext) -> Result<()> {
 /// versions of Windows (since Windows 10 version 2004), this command is
 /// installed by default.
 ///
-/// If the command is installed and the user hasn't installed any Linux distros
-/// on it, command `wsl -l` would print a help message and exit with failure, we
-/// use this to check whether WSL is installed or not.
+/// Modern WSL reports its runtime version even without Linux distributions.
+/// Older inbox WSL versions lack `--version`, so fall back to their distro list.
 fn is_wsl_installed() -> Result<bool> {
     if let Some(wsl) = which("wsl")? {
         // Don't use `output_checked` as an execution failure log is not wanted
         #[expect(clippy::disallowed_methods)]
-        let output = Command::new(wsl).arg("-l").output()?;
-        let status = output.status;
-
-        if status.success() {
-            return Ok(true);
-        }
+        let installed = probe_wsl_runtime(|argument| {
+            Command::new(&wsl)
+                .arg(argument)
+                .output()
+                .map(|output| output.status.success())
+        })?;
+        return Ok(installed);
     }
 
     Ok(false)
+}
+
+fn probe_wsl_runtime(mut probe: impl FnMut(&str) -> std::io::Result<bool>) -> std::io::Result<bool> {
+    if probe("--version")? {
+        return Ok(true);
+    }
+    probe("-l")
 }
 
 fn get_wsl_distributions(ctx: &ExecutionContext, wsl: &Path) -> Result<Vec<String>> {
@@ -161,11 +169,14 @@ fn wsl_topgrade_script(dist: &str, topgrade: &str, verbose: bool, yes: bool) -> 
 }
 
 pub fn run_wsl_topgrade(ctx: &ExecutionContext) -> Result<()> {
-    if !is_wsl_installed()? {
-        return Err(SkipStep(t!("WSL not installed").to_string()).into());
-    }
-
     let wsl = require("wsl")?;
+    // A runtime can be installed without any distributions. Keep distribution
+    // updates separate from the runtime-only WslUpdate step.
+    #[expect(clippy::disallowed_methods)]
+    let can_list_distributions = Command::new(&wsl).arg("-l").output()?.status.success();
+    if !can_list_distributions {
+        return Err(SkipStep("Could not list installed WSL distributions".to_owned()).into());
+    }
     let wsl_distributions = get_wsl_distributions(ctx, &wsl)?;
     let mut ran = false;
     let mut first_error = None;
@@ -196,6 +207,16 @@ pub fn run_wsl_topgrade(ctx: &ExecutionContext) -> Result<()> {
 }
 
 pub fn windows_update(ctx: &ExecutionContext) -> Result<()> {
+    if windows_update_needs_interactive_selection(
+        ctx.config().accept_all_windows_updates(),
+        std::io::stdin().is_terminal(),
+    ) {
+        let reason = t!(
+            "Windows Update skipped: manual selection requires an interactive terminal (windows.accept_all_updates = false)"
+        );
+        print_warning(&reason);
+        return Err(SkipStep(reason.to_string()).into());
+    }
     let powershell = ctx.require_powershell()?;
 
     print_separator(t!("Windows Update"));
@@ -208,45 +229,75 @@ pub fn windows_update(ctx: &ExecutionContext) -> Result<()> {
         return Err(SkipStep(t!("PSWindowsUpdate is not installed").to_string()).into());
     }
 
-    let mut cmd = "Import-Module PSWindowsUpdate; Install-WindowsUpdate -Verbose".to_string();
+    let cmd = windows_update_command(
+        ctx.config().accept_all_windows_updates(),
+        ctx.config().windows_updates_auto_reboot(),
+        ctx.config().updates_exclude_drivers(),
+    );
+    powershell.build_command(ctx, &cmd, true)?.status_checked()
+}
 
-    if ctx.config().accept_all_windows_updates() {
+fn windows_update_needs_interactive_selection(accept_all: bool, interactive: bool) -> bool {
+    !accept_all && !interactive
+}
+
+fn windows_update_command(accept_all: bool, reboot: UpdatesAutoReboot, exclude_drivers: bool) -> String {
+    let mut cmd = "Import-Module PSWindowsUpdate; Install-WindowsUpdate -Verbose".to_owned();
+    if exclude_drivers {
+        cmd.push_str(" -UpdateType Software");
+    }
+    if accept_all {
         cmd.push_str(" -AcceptAll");
     }
-
-    match ctx.config().windows_updates_auto_reboot() {
+    match reboot {
         UpdatesAutoReboot::Yes => cmd.push_str(" -AutoReboot"),
         UpdatesAutoReboot::No => cmd.push_str(" -IgnoreReboot"),
         UpdatesAutoReboot::Ask => (), // Prompting is the default for Install-WindowsUpdate
     }
+    cmd
+}
 
-    powershell.build_command(ctx, &cmd, true)?.status_checked()
+const STORE_SCAN_COMMAND: &str = r#"$ErrorActionPreference = 'Stop'; (Get-CimInstance -Namespace "Root\cimv2\mdm\dmmap" -ClassName "MDM_EnterpriseModernAppManagement_AppManagement01" | Invoke-CimMethod -MethodName UpdateScanMethod).ReturnValue"#;
+
+fn validate_store_scan_result(output: &str) -> Result<()> {
+    let result = output
+        .trim()
+        .parse::<u32>()
+        .wrap_err("Microsoft Store update scan did not return one numeric CIM ReturnValue")?;
+    if result != 0 {
+        bail!("Microsoft Store update scan failed with CIM ReturnValue {result}");
+    }
+    Ok(())
 }
 
 pub fn microsoft_store(ctx: &ExecutionContext) -> Result<()> {
+    if let Some(store) = which("store")? {
+        print_separator("Microsoft Store (`store` CLI)");
+
+        return ctx
+            .execute(store)
+            .arg("updates")
+            .arg_if(ctx.config().yes(Step::MicrosoftStore), "--apply")
+            .status_checked();
+    }
+
+    debug!("`store` not available, falling back to powershell/UpdateScanMethod-based updates");
+
     let powershell = ctx.require_powershell()?;
 
-    print_separator(t!("Microsoft Store"));
+    print_separator("Microsoft Store (UpdateScanMethod)");
 
     println!("{}", t!("Scanning for updates..."));
 
     // Scan for updates using the MDM UpdateScanMethod
     // This method is also available for non-MDM devices
-    let cmd = r#"(Get-CimInstance -Namespace "Root\cimv2\mdm\dmmap" -ClassName "MDM_EnterpriseModernAppManagement_AppManagement01" | Invoke-CimMethod -MethodName UpdateScanMethod).ReturnValue"#;
-
-    powershell
-        .build_command(ctx, cmd, true)?
-        .output_checked_with_utf8(|output| {
-            if !output.status.success() {
-                return Err(());
-            }
-            let ret_val = output.stdout.trim();
-            debug!("Command return value: {}", ret_val);
-            if ret_val == "0" { Ok(()) } else { Err(()) }
-        })?;
+    let output = powershell
+        .build_command(ctx, STORE_SCAN_COMMAND, true)?
+        .output_checked_utf8()?;
+    validate_store_scan_result(&output.stdout)?;
     println!(
         "{}",
-        t!("Success, Microsoft Store apps are being updated in the background")
+        t!("Microsoft Store asynchronous update scan requested; app upgrades have not been verified")
     );
     Ok(())
 }
@@ -280,7 +331,11 @@ pub fn insert_startup_scripts(ctx: &ExecutionContext, git_repos: &mut RepoStep) 
 
 #[cfg(test)]
 mod tests {
-    use super::wsl_topgrade_script;
+    use super::{
+        probe_wsl_runtime, validate_store_scan_result, windows_update_command,
+        windows_update_needs_interactive_selection, wsl_topgrade_script,
+    };
+    use crate::config::UpdatesAutoReboot;
 
     #[test]
     fn wsl_topgrade_script_quotes_dynamic_values_and_forwards_flags() {
@@ -288,5 +343,74 @@ mod tests {
             wsl_topgrade_script("Distro's name", "/home/user/top grade", true, true),
             "TOPGRADE_PREFIX='Distro'\\''s name' exec '/home/user/top grade' -v -y"
         );
+    }
+
+    #[test]
+    fn modern_wsl_does_not_require_an_installed_distribution() {
+        let mut called = Vec::new();
+        assert!(
+            probe_wsl_runtime(|argument| {
+                called.push(argument.to_owned());
+                assert_eq!(argument, "--version", "modern WSL must not probe its empty distro list");
+                Ok(true)
+            })
+            .unwrap()
+        );
+        assert_eq!(called, ["--version"]);
+    }
+
+    #[test]
+    fn older_wsl_falls_back_to_its_distro_list() {
+        for expected in [false, true] {
+            let mut called = Vec::new();
+            let installed = probe_wsl_runtime(|argument| {
+                called.push(argument.to_owned());
+                Ok(argument == "-l" && expected)
+            })
+            .unwrap();
+            assert_eq!(installed, expected);
+            assert_eq!(called, ["--version", "-l"]);
+        }
+        assert!(probe_wsl_runtime(|_| Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))).is_err());
+    }
+
+    #[test]
+    fn windows_update_filters_preserve_acceptance_and_reboot_options() {
+        let original = "Import-Module PSWindowsUpdate; Install-WindowsUpdate -Verbose";
+        assert_eq!(
+            windows_update_command(true, UpdatesAutoReboot::No, false),
+            format!("{original} -AcceptAll -IgnoreReboot")
+        );
+        assert_eq!(
+            windows_update_command(true, UpdatesAutoReboot::No, true),
+            format!("{original} -UpdateType Software -AcceptAll -IgnoreReboot")
+        );
+        assert_eq!(
+            windows_update_command(false, UpdatesAutoReboot::Yes, true),
+            format!("{original} -UpdateType Software -AutoReboot")
+        );
+        assert_eq!(
+            windows_update_command(false, UpdatesAutoReboot::Ask, true),
+            format!("{original} -UpdateType Software")
+        );
+    }
+
+    #[test]
+    fn unattended_windows_update_does_not_wait_for_manual_selection() {
+        assert!(windows_update_needs_interactive_selection(false, false));
+        assert!(!windows_update_needs_interactive_selection(false, true));
+        assert!(!windows_update_needs_interactive_selection(true, false));
+        assert!(!windows_update_needs_interactive_selection(true, true));
+    }
+
+    #[test]
+    fn store_scan_requires_successful_cim_return_value() {
+        assert!(validate_store_scan_result("0\r\n").is_ok());
+        for output in ["1", "2147749891", "", "0\n0", "not a result"] {
+            assert!(
+                validate_store_scan_result(output).is_err(),
+                "accepted invalid CIM result: {output:?}"
+            );
+        }
     }
 }

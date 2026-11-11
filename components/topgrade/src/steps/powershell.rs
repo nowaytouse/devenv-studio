@@ -25,11 +25,7 @@ impl Powershell {
     /// surface it as its skip message instead of a generic "not installed". The `Err` can also
     /// contain an error when `which` fails.
     pub fn new(ctx: &ExecutionContext) -> Result<Self> {
-        if terminal::is_dumb() {
-            return Err(SkipStep(t!("Cannot detect PowerShell in a dumb terminal").to_string()).into());
-        }
-
-        let (path, is_pwsh) = Self::detect_path()?;
+        let (path, is_pwsh) = Self::detect_path_for_terminal(cfg!(windows), terminal::is_dumb(), Self::detect_path)?;
 
         let mut ret = Self {
             path,
@@ -38,6 +34,20 @@ impl Powershell {
         };
         ret.set_profile(ctx);
         Ok(ret)
+    }
+
+    fn detect_path_for_terminal(
+        is_windows: bool,
+        is_dumb: bool,
+        detect: impl FnOnce() -> Result<(PathBuf, bool)>,
+    ) -> Result<(PathBuf, bool)> {
+        // Windows automation often redirects its console; that does not prevent executable discovery.
+        // Preserve the existing terminal restriction on other platforms.
+        if !is_windows && is_dumb {
+            return Err(SkipStep(t!("Cannot detect PowerShell in a dumb terminal").to_string()).into());
+        }
+
+        detect()
     }
 
     fn detect_path() -> Result<(PathBuf, bool)> {
@@ -219,5 +229,50 @@ impl Powershell {
             .output_checked()
             .map(|output| !output.stdout.trim_ascii().is_empty())
             .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    #[test]
+    fn windows_dumb_terminal_still_runs_powershell_detection() {
+        for is_dumb in [true, false] {
+            let detected = Cell::new(false);
+            let expected = PathBuf::from("pwsh.exe");
+            let result = Powershell::detect_path_for_terminal(true, is_dumb, || {
+                detected.set(true);
+                Ok((expected.clone(), true))
+            })
+            .expect("Windows executable discovery must not depend on terminal capabilities");
+
+            assert!(detected.get());
+            assert_eq!(result, (expected, true));
+        }
+    }
+
+    #[test]
+    fn unix_dumb_terminal_keeps_skip_without_running_detector() {
+        let detected = Cell::new(false);
+        let error = Powershell::detect_path_for_terminal(false, true, || {
+            detected.set(true);
+            Ok((PathBuf::from("pwsh"), true))
+        })
+        .expect_err("Unix dumb terminals must retain their existing skip behavior");
+
+        assert!(error.downcast_ref::<SkipStep>().is_some());
+        assert!(!detected.get());
+    }
+
+    #[test]
+    fn unix_interactive_terminal_preserves_detector_result() {
+        let expected = PathBuf::from("powershell");
+        let result = Powershell::detect_path_for_terminal(false, false, || Ok((expected.clone(), false)))
+            .expect("Unix interactive terminals must still run executable discovery");
+
+        assert_eq!(result, (expected, false));
     }
 }

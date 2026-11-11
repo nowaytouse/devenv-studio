@@ -318,7 +318,12 @@
 
 [windows]
 # Manually select Windows updates
+# Requires an interactive terminal; unattended runs skip when this is false.
 # accept_all_updates = false
+
+# Exclude device drivers from Windows Update, leaving driver maintenance to the
+# device manufacturer or a separately reviewed driver update. (default: false)
+# updates_exclude_drivers = false
 
 # Controls whether to automatically reboot the computer when updates are
 # installed that request it. (default: "no", allowed values: "yes", "no", "ask")
@@ -339,11 +344,11 @@
 # manager such as Scoop or Cargo
 # self_rename = true
 
-# Use sudo to elevate privileges for the Windows Package Manager (winget)
-# Only use this option if you want to run the Winget step in sudo-mode.
-# Running winget in sudo-mode is generally not recommended, as not every
+# Use sudo to elevate privileges for the Windows Package Manager (WinGet)
+# Only use this option if you want to run the WinGet step in sudo-mode.
+# Running WinGet in sudo-mode is generally not recommended, as not every
 # package supports installing / upgrading in sudo-mode, and it may cause issues
-# with some packages or may even cause the Winget-step to fail.
+# with some packages or may even cause the WinGet step to fail.
 # If any problems occur, please try running Topgrade without this option first
 # before reporting an issue.
 # (default: false)

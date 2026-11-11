@@ -420,7 +420,7 @@ pub(super) fn backup(repo: &Path, before: &BTreeMap<PathBuf, Stamp>, run: &Path,
     Ok(backup)
 }
 
-pub(super) fn record_git_status(repo: &Path, log: &mut File, when: &str) -> Result<()> {
+pub(super) fn record_git_status(repo: &Path, log: &mut File, when: &str) -> Result<bool> {
     let Some(git) = process::find_tool("git")? else {
         bail!("Missing Git executable for dependency status verification");
     };
@@ -431,6 +431,7 @@ pub(super) fn record_git_status(repo: &Path, log: &mut File, when: &str) -> Resu
         "core.fsmonitor=false",
         "status",
         "--porcelain=v1",
+        "--untracked-files=all",
     ]);
     let output = process::capture(git, process::QUERY_TIMEOUT)?;
     ensure!(
@@ -438,8 +439,9 @@ pub(super) fn record_git_status(repo: &Path, log: &mut File, when: &str) -> Resu
         "Cannot record {when} Git status for {}",
         repo.display()
     );
-    writeln!(log, "# {when} status:\n{}", output.stdout.trim_end())?;
-    Ok(())
+    let clean = output.stdout.is_empty();
+    writeln!(log, "# {when} worktree clean: {clean}")?;
+    Ok(clean)
 }
 
 #[cfg(test)]

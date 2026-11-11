@@ -9,7 +9,9 @@ Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来�
 
 ## macOS Topgrade
 
-当前组件已同步上游 [v17.15.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.15.0)，上游提交为 `155a490a35261382def837b572c306dd55590d39`。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。
+当前组件已同步上游 [v17.16.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) 与随后提交 `77eef190429850607c41cedfec904f43d66c8394`。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。滚动依赖维护会跳过有未提交改动的工作区。
+
+`Project Source Indexes` 使用 Repomix 和 LeanCTX 为 `~/Downloads/GitHub` 下的 Git 项目更新私有索引。直接运行 `~/.local/bin/topgrade-project-indexes.py /path/to/checkout` 可单独刷新项目。索引只读取已提交的普通源码文件，先排除私有目录、再执行秘密扫描，最终仅保存相对路径和 token 计数。`${XDG_STATE_HOME:-$HOME/.local/state}/project-indexes/<checkout-name>/latest.json` 记录完整提交和 UTC 生成时间。同一提交与工具版本保持既有索引，扫描或生成失败保留上次结果。
 
 「更新中心」从已核验的 Topgrade 引擎读取步骤目录。「更新任务」区分工具与缓存和只读诊断，默认零选中。可审核计数来自本机工具可用性。重跑前需重新检查。「终端维护」置顶 BetterDisplay 与 Homebrew HEAD-sync，并提供其余引擎步骤搜索和本机 profile 预演。预演读取正常 Topgrade 配置，前后置命令及配置中的 `misc.only` 也会参与。以预演结果核对实际范围。配置迁移包仍是独立的备份和提取入口。
 

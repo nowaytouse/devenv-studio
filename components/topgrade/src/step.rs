@@ -669,7 +669,7 @@ impl Step {
             Snap =>
             {
                 #[cfg(target_os = "linux")]
-                runner.execute(*self, "snap", || linux::run_snap(ctx))?
+                runner.execute(*self, "Snap", || linux::run_snap(ctx))?
             }
             Soar =>
             {
@@ -682,7 +682,7 @@ impl Step {
                 runner.execute(*self, "Sparkle", || macos::run_sparkle(ctx))?
             }
             Spicetify => runner.execute(*self, "spicetify", || generic::spicetify_upgrade(ctx))?,
-            Stack => runner.execute(*self, "stack", || generic::run_stack_update(ctx))?,
+            Stack => runner.execute(*self, "Stack", || generic::run_stack_update(ctx))?,
             Stew => runner.execute(*self, "stew", || generic::run_stew(ctx))?,
             System => {
                 #[cfg(target_os = "linux")]
@@ -704,7 +704,11 @@ impl Step {
                 #[cfg(target_os = "openbsd")]
                 runner.execute(*self, "OpenBSD Upgrade", || openbsd::upgrade_openbsd(ctx))?
             }
-            Tailscale => runner.execute(*self, "Tailscale", || generic::run_tailscale(ctx))?,
+            Tailscale =>
+            {
+                #[cfg(any(target_os = "windows", target_os = "macos"))]
+                runner.execute(*self, "Tailscale", || generic::run_tailscale(ctx))?
+            }
             Tldr => runner.execute(*self, "tldr", || generic::run_tldr(ctx))?,
             Tlmgr => runner.execute(*self, "tlmgr", || generic::run_tlmgr_update(ctx))?,
             Tmux =>
@@ -768,7 +772,7 @@ impl Step {
             Winget =>
             {
                 #[cfg(windows)]
-                runner.execute(*self, "Winget", || windows::run_winget(ctx))?
+                runner.execute(*self, "WinGet", || windows::run_winget(ctx))?
             }
             Wsl =>
             {
@@ -813,7 +817,7 @@ impl Step {
 #[expect(clippy::too_many_lines)]
 pub(crate) fn default_steps() -> Vec<Step> {
     use Step::*;
-    // For now, SelfUpdate isn't included as it's run before the other non-steps (pre-commands, sudo, etc)
+    // For now, SelfUpdate isn't included as it's run before the other non-steps (pre-commands, etc)
     vec![
         // Steps that should run first
         // Steps that don't have to run in a particular order

@@ -2,6 +2,20 @@
   "version": 1,
   "files": [
     {
+      "source": "bin/topgrade-project-indexes.py",
+      "destination": ".local/bin/topgrade-project-indexes.py",
+      "sha256": "37828fd381e4630fd8b806d16158888defa1fccbb30ea183c382921fbec75845",
+      "mode": 448,
+      "adoptSha256": null
+    },
+    {
+      "source": "config/topgrade.d/96-project-indexes.toml",
+      "destination": ".config/topgrade.d/96-project-indexes.toml",
+      "sha256": "8c1b44180c72e81423dd6ab14ab69e8b4ebcb1adc7e0a025a74ac6324f471090",
+      "mode": 384,
+      "adoptSha256": null
+    },
+    {
       "source": "bin/brew-headsync-upgrade",
       "destination": ".local/bin/brew-headsync-upgrade",
       "sha256": "c5230c5189cf1ae7d07af78278491986223e0c8113f65b83711415bac9f02e75",

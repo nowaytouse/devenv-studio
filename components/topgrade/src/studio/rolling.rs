@@ -201,11 +201,14 @@ fn process_repo(repo: &Path, surfaces: &[Surface], run: &Path, run_id: &str, his
         return Ok(true);
     }
     let stem = files::repo_stem(repo)?;
+    let mut log = super::create_file(&run.join(format!("{stem}.log")))?;
+    if !files::record_git_status(repo, &mut log, "initial")? {
+        println!("{}: SKIPPED [uncommitted project changes]", repo.display());
+        return Ok(true);
+    }
     let before = files::snapshot(repo)?;
     let backup = files::backup(repo, &before, run, &stem)?;
-    let mut log = super::create_file(&run.join(format!("{stem}.log")))?;
     writeln!(log, "# repository: {}\n# backup: {}", repo.display(), backup.display())?;
-    files::record_git_status(repo, &mut log, "initial")?;
     let mut current = before;
     let mut verified = true;
     for surface in surfaces {
@@ -384,6 +387,28 @@ mod tests {
         );
         std::fs::write(repo.join("Cargo.lock"), b"initial")?;
         std::fs::write(repo.join("notes.txt"), b"unrelated local work")?;
+        for args in [
+            &["add", "--", "Cargo.lock", "notes.txt"][..],
+            &[
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.test",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "commit",
+                "--quiet",
+                "-m",
+                "fixture",
+            ][..],
+        ] {
+            let mut prepare = process::command(&git, &repo);
+            prepare.args(args);
+            ensure!(
+                process::capture(prepare, process::QUERY_TIMEOUT)?.status.success(),
+                "Could not prepare Git fixture"
+            );
+        }
         let history_path = root.join("history.jsonl");
         let history = Mutex::new(super::super::create_file(&history_path)?);
         let surface = |name, fixture| Surface {
@@ -401,6 +426,10 @@ mod tests {
         assert_eq!(std::fs::read(repo.join("notes.txt"))?, b"unrelated local work");
         let backup = run.join("before").join(files::repo_stem(&repo)?);
         assert_eq!(std::fs::read(backup.join("files/Cargo.lock"))?, b"initial");
+        let retry = root.join("retry");
+        files::create_private_dir(&retry)?;
+        assert!(process_repo(&repo, &surfaces[1..], &retry, "dirty-fixture", &history)?);
+        assert_eq!(std::fs::read(repo.join("notes.txt"))?, b"unrelated local work");
         let history = std::fs::read_to_string(history_path)?;
         assert_eq!(history.lines().count(), 1);
         let record: serde_json::Value = serde_json::from_str(&history)?;

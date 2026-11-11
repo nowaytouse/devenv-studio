@@ -111,6 +111,7 @@ pub enum UpdatesAutoReboot {
 #[serde(deny_unknown_fields)]
 pub struct Windows {
     accept_all_updates: Option<bool>,
+    updates_exclude_drivers: Option<bool>,
     updates_auto_reboot: Option<UpdatesAutoReboot>,
     self_rename: Option<bool>,
     open_remotes_in_new_terminal: Option<bool>,
@@ -1504,6 +1505,15 @@ impl Config {
             .unwrap_or(true)
     }
 
+    /// Whether Windows Update should install software updates without device drivers.
+    pub fn updates_exclude_drivers(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|windows| windows.updates_exclude_drivers)
+            .unwrap_or(false)
+    }
+
     /// Whether to auto reboot for Windows updates that require it
     pub fn windows_updates_auto_reboot(&self) -> UpdatesAutoReboot {
         self.config_file
@@ -1549,7 +1559,7 @@ impl Config {
             .unwrap_or(false)
     }
 
-    /// Should use sudo for Winget
+    /// Should use sudo for WinGet
     pub fn winget_use_sudo(&self) -> bool {
         self.config_file
             .windows
@@ -2490,6 +2500,35 @@ mod test {
         let str = include_str!("../config.example.toml");
 
         assert!(toml::from_str::<ConfigFile>(str).is_ok());
+    }
+
+    #[test]
+    fn windows_driver_exclusion_is_opt_in_and_does_not_change_update_choices() {
+        let default = config_from_toml("");
+        assert!(!default.updates_exclude_drivers());
+        assert!(default.accept_all_windows_updates());
+        assert!(matches!(default.windows_updates_auto_reboot(), UpdatesAutoReboot::No));
+
+        let selected = config_from_toml(
+            "[windows]\nupdates_exclude_drivers = true\naccept_all_updates = false\nupdates_auto_reboot = \"ask\"\n",
+        );
+        assert!(selected.updates_exclude_drivers());
+        assert!(!selected.accept_all_windows_updates());
+        assert!(matches!(selected.windows_updates_auto_reboot(), UpdatesAutoReboot::Ask));
+        assert!(!config_from_toml("[windows]\nupdates_exclude_drivers = false\n").updates_exclude_drivers());
+    }
+
+    #[test]
+    fn windows_driver_exclusion_preserves_config_precedence() {
+        let mut preferred: ConfigFile = toml::from_str("[windows]\nupdates_exclude_drivers = false\n").unwrap();
+        let mut fallback: ConfigFile = toml::from_str("[windows]\nupdates_exclude_drivers = true\n").unwrap();
+        preferred.merge(&mut fallback);
+        assert_eq!(preferred.windows.unwrap().updates_exclude_drivers, Some(false));
+
+        let mut missing: ConfigFile = toml::from_str("[windows]\n").unwrap();
+        let mut fallback: ConfigFile = toml::from_str("[windows]\nupdates_exclude_drivers = true\n").unwrap();
+        missing.merge(&mut fallback);
+        assert_eq!(missing.windows.unwrap().updates_exclude_drivers, Some(true));
     }
 
     /// Regression test for https://github.com/topgrade-rs/topgrade/issues/2283:

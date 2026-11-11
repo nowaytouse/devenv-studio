@@ -363,8 +363,10 @@ fn export(home: &Path, root: &Path, source: &Path, commit: &str, selected: &Hash
     }
     if !exists(&release)? {
         let stage = tempfile::tempdir_in(&releases)?;
+        // Archiving a commit adds a PAX global header. Export its verified tree instead.
+        let tree = format!("{commit}^{{tree}}");
         let payload = git_out(
-            git(home, source, route)?.args(["archive", "--format=tar", commit]),
+            git(home, source, route)?.args(["archive", "--format=tar", &tree]),
             ARCHIVE_LIMIT,
         )?;
         let tracked = extract(payload, stage.path())?;
@@ -530,21 +532,32 @@ fn current_installed_design_kit_verifies() {
 #[cfg(test)]
 #[test]
 fn design_archive_rejects_symlinks_and_retains_checked_file_mode() -> Result<()> {
-    let mut builder = tar::Builder::new(Vec::new());
-    let mut header = tar::Header::new_gnu();
+    let source = tempfile::tempdir()?;
+    let git = |args: &[&str]| -> Result<Vec<u8>> {
+        let output = Command::new("/usr/bin/git")
+            .current_dir(source.path())
+            .env_clear()
+            .env("HOME", source.path())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .args(args)
+            .output()?;
+        ensure!(output.status.success(), "Synthetic Git fixture failed: {args:?}");
+        Ok(output.stdout)
+    };
+    git(&["init", "--template=", "--quiet"])?;
     let payload = b"#!/bin/sh\n";
-    header.set_mode(0o755);
-    header.set_size(payload.len() as u64);
-    header.set_cksum();
-    builder.append_data(&mut header, "scripts/gate", &payload[..])?;
-    let safe = builder.into_inner()?;
+    fs::create_dir(source.path().join("scripts"))?;
+    fs::write(source.path().join("scripts/gate"), payload)?;
+    git(&["add", "--chmod=+x", "scripts/gate"])?;
+    let tree = String::from_utf8(git(&["write-tree"])?)?;
+    let safe = git(&["archive", "--format=tar", tree.trim()])?;
     let dir = tempfile::tempdir()?;
     let root = dir.path().canonicalize()?;
     let files = extract(safe, &root)?;
     assert_eq!(files["scripts/gate"], digest(payload));
     assert_eq!(
-        fs::metadata(root.join("scripts/gate"))?.permissions().mode() & 0o111,
-        0o111
+        fs::metadata(root.join("scripts/gate"))?.permissions().mode() & 0o100,
+        0o100
     );
 
     let mut builder = tar::Builder::new(Vec::new());

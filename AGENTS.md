@@ -7,6 +7,8 @@
 - Do not execute downloaded scripts, disable security/update components, embed credentials or include personal data.
 - Pin source revisions, keep provenance per action and preserve relevant third-party notices.
 - Keep existing user work, stage explicit paths, and report local tests, target compilation, CI and device acceptance separately.
+- Before relying on a local project index, compare its full commit with `git rev-parse HEAD` and check `generated_at` (UTC) in `${XDG_STATE_HOME:-$HOME/.local/state}/project-indexes/<checkout-name>/latest.json`. Refresh with `~/.local/bin/topgrade-project-indexes.py <checkout>` when stale. Index metadata stays local.
+- Use synthetic fixtures and an isolated temporary home for QA. Exclude real exports, credentials, personal paths and raw user logs from fixtures and debug artifacts.
 - Use cargo fmt --all -- --check, cargo test --workspace and cargo clippy --workspace --all-targets -- -D warnings for this workspace. Windows adapter changes also need a Windows target check when available.
 - Do not monitor CI unless the user requests it.
 - Keep changes under Unreleased and do not bump package versions, create tags or publish releases for each task or conversation turn. Choose a version only at an explicitly authorized release checkpoint; follow docs/RELEASING.md.

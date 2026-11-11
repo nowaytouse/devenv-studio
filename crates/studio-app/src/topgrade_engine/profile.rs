@@ -154,6 +154,7 @@ fn mapping(source: &str) -> Result<String> {
                     | "topgrade-skills-verified.py"
                     | "topgrade-skills-integrity.py"
                     | "normalize-gh-skill-lock.py"
+                    | "topgrade-project-indexes.py"
                     | "topgrade-select-xcode-beta"
                     | "proxy-auto-run"
                     | "update-gradle-nightly"
@@ -182,6 +183,7 @@ fn mapping(source: &str) -> Result<String> {
                     | "topgrade.d/90-skills-coverage.toml"
                     | "topgrade.d/90-xcode-beta-select.toml"
                     | "topgrade.d/95-skills-unattended.toml"
+                    | "topgrade.d/96-project-indexes.toml"
             ) =>
         {
             format!(".config/{name}")

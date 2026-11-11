@@ -20,12 +20,12 @@ update-preview-extras update-preview-apps update-project-deps cli-versions
 npm-bundled-security-guard.py topgrade-cursor-native-reconcile.py design-skill-kit-sync.py
 topgrade-skills-verified.py topgrade-skills-integrity.py normalize-gh-skill-lock.py
 topgrade-select-xcode-beta proxy-auto-run update-gradle-nightly update-xcode-beta
-topgrade-helm-verified topgrade-gh-skills-verified""".split())
+ topgrade-helm-verified topgrade-gh-skills-verified topgrade-project-indexes.py""".split())
 LIBEXEC = frozenset(("rolling-deps/edge-extras.py", "rolling-deps/update-gradle-nightly.real.py",
                      "preview-apps/update-preview-apps.py"))
 CONFIG = frozenset(("topgrade.toml", "topgrade.d/90-brew-headsync.toml",
                     "topgrade.d/90-skills-coverage.toml", "topgrade.d/90-xcode-beta-select.toml",
-                    "topgrade.d/95-skills-unattended.toml"))
+                     "topgrade.d/95-skills-unattended.toml", "topgrade.d/96-project-indexes.toml"))
 REFERENCE = frozenset(("before.json", "leaf-candidate-after.json", "validation-report.json",
                        "leaf-candidate-report.json"))
 
