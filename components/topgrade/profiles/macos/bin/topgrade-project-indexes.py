@@ -206,25 +206,30 @@ def dated_name(receipt):
     return f"{timestamp:%Y%m%dT%H%M%S%fZ}-{receipt['commit'][:12]}.json"
 
 
-def retain_receipt(path, valid):
+def retain_receipt(path, valid, *, copy_data=None):
     folder = path.parent / ("history" if valid else "quarantine")
     private_directory(folder)
     target = Path(tempfile.mkdtemp(prefix="receipt-", dir=folder)) / path.name
-    path.rename(target)
-    print(f"{path.parent.name}: moved {path.name} to {folder.name}/")
+    if copy_data is None:
+        path.rename(target)
+    else:
+        publish(target, copy_data)
+    print(f"{path.parent.name}: saved {path.name} in {folder.name}/")
 
 
 def tidy_receipts(destination, expected):
     latest = destination / "latest.json"
-    active_data = active_name = None
+    active_data = active_name = stale_data = None
     if os.path.lexists(latest):
         data, receipt = read_receipt(latest)
         if receipt and receipt.get("checkout_id", expected["checkout_id"]) != expected["checkout_id"]:
             raise RuntimeError("Index directory belongs to another checkout with the same name")
         if receipt and all(receipt.get(k) == v for k, v in expected.items()):
             active_data, active_name = data, dated_name(receipt)
+        elif receipt:
+            stale_data = data
         else:
-            retain_receipt(latest, valid=receipt is not None)
+            retain_receipt(latest, valid=False)
     for path in sorted(destination.iterdir()):
         if not DATED.fullmatch(path.name):
             continue
@@ -233,7 +238,7 @@ def tidy_receipts(destination, expected):
         if path.name == active_name and valid and data == active_data:
             continue
         retain_receipt(path, valid)
-    return active_data
+    return active_data, stale_data
 
 
 def serena_inventory(repo, destination, env, quarantine_empty=False):
@@ -347,7 +352,7 @@ def refresh(repo, destination, *, quarantine_empty_serena=False):
         }
         expected = {"schema": SCHEMA, "commit": revision, "tools": versions,
                     "checkout_id": sha256(os.fsencode(repo.resolve(strict=True))).hexdigest()}
-        active = tidy_receipts(destination, expected)
+        active, stale = tidy_receipts(destination, expected)
         serena_inventory(repo, destination, env, quarantine_empty_serena)
         latest = destination / "latest.json"
         if active:
@@ -380,6 +385,10 @@ def refresh(repo, destination, *, quarantine_empty_serena=False):
         if len(data) > MAX_RECEIPT_BYTES or not decode_receipt(data):
             raise RuntimeError("Generated source index failed receipt verification")
         publish(destination / f"{now:%Y%m%dT%H%M%S%fZ}-{revision[:12]}.json", data)
+        if stale is not None:
+            if read_receipt(latest)[0] != stale:
+                raise RuntimeError("Previous source index changed during rebuild")
+            retain_receipt(latest, valid=True, copy_data=stale)
         publish(latest, data)
         print(f"{repo.name}: indexed {revision[:12]} ({len(files)} files, {excluded} excluded by security scan)")
 

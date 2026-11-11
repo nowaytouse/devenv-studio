@@ -6,6 +6,7 @@ import runpy
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/topgrade-project-indexes.py"
@@ -35,9 +36,9 @@ class ProjectIndexTests(unittest.TestCase):
                 (unrelated.name, b"untouched"),
             ):
                 api["publish"](root / name, content)
-            self.assertIsNone(api["tidy_receipts"](root, current))
-            self.assertFalse((root / "latest.json").exists())
-            self.assertEqual([item.read_bytes() for item in (root / "history").glob("*/*.json")], [data, data])
+            self.assertEqual(api["tidy_receipts"](root, current), (None, data))
+            self.assertEqual((root / "latest.json").read_bytes(), data)
+            self.assertEqual([item.read_bytes() for item in (root / "history").glob("*/*.json")], [data])
             self.assertEqual([item.read_bytes() for item in (root / "quarantine").glob("*/*.json")], [invalid])
             self.assertEqual(unrelated.read_bytes(), b"untouched")
             self.assertIsNone(api["decode_receipt"](json.dumps({
@@ -116,6 +117,18 @@ class ProjectIndexTests(unittest.TestCase):
                 self.assertNotIn(fragment, data)
             refresh(repo, destination)
             self.assertEqual(latest.read_bytes(), data)
+            (repo / "public.rs").write_text("pub fn synthetic_v2() -> u8 { 43 }\n")
+            git("add", "--", "public.rs")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
+                "commit", "--quiet", "-m", "second synthetic fixture")
+            failure = Mock(side_effect=RuntimeError("fixture failure"))
+            with patch.dict(refresh.__globals__, {"snapshot": failure}):
+                with self.assertRaisesRegex(RuntimeError, "fixture failure"):
+                    refresh(repo, destination)
+            self.assertEqual(latest.read_bytes(), data)
+            refresh(repo, destination)
+            self.assertEqual(json.loads(latest.read_bytes())["commit"], git("rev-parse", "HEAD"))
+            self.assertIn(data, [item.read_bytes() for item in (destination / "history").glob("*/*.json")])
 
 
 if __name__ == "__main__":

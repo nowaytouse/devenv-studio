@@ -4,7 +4,7 @@
     {
       "source": "bin/topgrade-project-indexes.py",
       "destination": ".local/bin/topgrade-project-indexes.py",
-      "sha256": "99b08e89339fc45dcf483a3981035b410912d30435637325265cbe31f4890dbb",
+      "sha256": "943b2373c8633fad41cb491006c320d7bce082daa190cf8a344a797696ed1184",
       "mode": 448,
       "adoptSha256": null
     },
