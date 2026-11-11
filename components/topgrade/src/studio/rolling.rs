@@ -201,12 +201,12 @@ fn process_repo(repo: &Path, surfaces: &[Surface], run: &Path, run_id: &str, his
         return Ok(true);
     }
     let stem = files::repo_stem(repo)?;
+    let before = files::snapshot(repo)?;
     let mut log = super::create_file(&run.join(format!("{stem}.log")))?;
     if !files::record_git_status(repo, &mut log, "initial")? {
         println!("{}: SKIPPED [uncommitted project changes]", repo.display());
         return Ok(true);
     }
-    let before = files::snapshot(repo)?;
     let backup = files::backup(repo, &before, run, &stem)?;
     writeln!(log, "# repository: {}\n# backup: {}", repo.display(), backup.display())?;
     let mut current = before;
