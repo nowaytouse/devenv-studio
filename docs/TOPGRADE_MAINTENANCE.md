@@ -29,6 +29,8 @@ Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来�
 
 在 Apple Silicon 的「更新任务」中，打开「LLVM 手动更新」并一次审核一个渠道。稳定版使用 Homebrew 官方 LLVM 23.1 瓶装，成功回读 LLVM 版本和 Homebrew Rust 后才切换 pin。HEAD 从官方 LLVM main 核对完整提交，构建 `nyamiiko/tools/llvm-head` 并只切换该渠道的 `opt`。审核后的公式、版本或链接发生变化会停止。构建可能耗时数小时，两个入口都保留原 keg；缺少依赖时停止并列出受影响的公式。
 
+首次构建 LLVM HEAD 时，Studio 使用私有 Git 缓存。首次下载只获取官方 main 的提交历史和当前提交的文件，完整提交匹配后才写入缓存。后续构建会复用缓存，Homebrew 仍会在安装前核验实际取到的完整提交。
+
 普通 `topgrade -y` 和 Homebrew HEAD-sync 的范围不含这两个手动入口。LLVM 更新中断时，可从对应 Studio 运行目录的 `llvm-before.json` 核对原 `opt` 和 pin。确认本机状态后，再按下方的中断流程恢复维护。
 
 检查后，「当前更新引擎」显示实际运行版本、组件树短标识及 profile 清单版本和摘要。展开来源可查看二进制路径、Studio 构建提交、完整组件树和两份 SHA-256。组件树区分同一个 Topgrade 版本下的不同源码，二进制摘要进一步区分产物。执行记录保留当时的引擎身份及可用回退候选。旧记录保留已写入的组件树，缺失字段保持未知。

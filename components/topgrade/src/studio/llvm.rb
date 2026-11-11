@@ -12,6 +12,9 @@ LLVM_REF = "refs/heads/main".freeze
 LLVM_HEAD_FORMULA = "nyamiiko/tools/llvm-head".freeze
 LLVM_STABLE_VERSION = /\A23\.1\.\d+(?:_\d+)?\z/
 LLVM_SHA = /\A[0-9a-f]{40}\z/
+LLVM_GIT_ENV = {
+  "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_TERMINAL_PROMPT" => "0",
+}.freeze
 
 class StudioLlvmInstaller < FormulaInstaller
   def hold_locks
@@ -98,12 +101,33 @@ end
 def llvm_upstream
   value = llvm_capture(
     "/usr/bin/git", "ls-remote", "--exit-code", "--refs", LLVM_REMOTE, LLVM_REF,
-    env: {"GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_TERMINAL_PROMPT" => "0"}
+    env: LLVM_GIT_ENV
   )
   sha, ref = value.split("\t", -1)
   raise "Invalid LLVM GitHub revision" unless ref == LLVM_REF && LLVM_SHA.match?(sha)
 
   sha
+end
+
+def llvm_prepare_head_cache(cache, revision)
+  return if File.exist?(cache) || File.symlink?(cache)
+
+  puts "Preparing the LLVM HEAD cache from official main."
+  Dir.mktmpdir("llvm-head-", llvm_path(cache.dirname, :directory?)) do |directory|
+    checkout = File.join(directory, "source")
+    git = "/usr/bin/git"
+    # Keep the main history without fetching blobs that the build never reads.
+    llvm_capture(git, "clone", "--quiet", "--no-checkout", "--filter=blob:none",
+                 "--single-branch", "--no-tags", "--no-recurse-submodules", "--branch", "main",
+                 "--config", "http.version=HTTP/1.1", "--", LLVM_REMOTE, checkout, env: LLVM_GIT_ENV)
+    fetched = llvm_capture(git, "-C", checkout, "rev-parse", "--verify", "HEAD", env: LLVM_GIT_ENV)
+    raise "LLVM main changed during fetch. Review the new revision first." unless fetched == revision
+
+    llvm_capture(git, "-C", checkout, "checkout", "--quiet", "--no-recurse-submodules", "main", env: LLVM_GIT_ENV)
+    raise "LLVM HEAD cache appeared during fetch" if File.exist?(cache) || File.symlink?(cache)
+
+    File.rename(checkout, cache)
+  end
 end
 
 def llvm_snapshot(step)
@@ -247,9 +271,10 @@ def llvm_run(formula, snapshot, journal)
     if stable && File.exist?(formula.prefix)
       raise "Candidate LLVM keg already exists at #{formula.prefix}; retaining it"
     end
+    cache = formula.head.downloader.cached_location unless stable
+    llvm_prepare_head_cache(cache, version) unless stable
     installer.fetch
     unless stable
-      cache = formula.head.downloader.cached_location
       fetched = llvm_capture("/usr/bin/git", "-C", cache.to_s, "rev-parse", "--verify", "HEAD")
       raise "LLVM main changed during fetch. Review the new revision first." unless fetched == version
 
