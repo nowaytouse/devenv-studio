@@ -64,6 +64,19 @@ Dir.mktmpdir do |temporary|
     raise unless error.message.start_with?("git failed:")
   end
   raise "Failed download left staging files" unless Dir.children(directory).sort == ["llvm-head--git", "offline"]
+
+  keg = Class.new do
+    def to_s = "/synthetic/keg"
+
+    protected
+
+    def path = Pathname(to_s)
+  end.new
+  opt = directory/"opt"
+  installer = StudioLlvmInstaller.allocate
+  installer.define_singleton_method(:formula) { Struct.new(:opt_prefix).new(opt) }
+  installer.link(keg)
+  raise "Unexpected opt link" unless File.readlink(opt) == keg.to_s
 end
 """
         subprocess.run(

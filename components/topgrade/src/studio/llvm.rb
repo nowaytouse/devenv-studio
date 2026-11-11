@@ -43,7 +43,7 @@ class StudioLlvmInstaller < FormulaInstaller
   # The default optlink also rewrites aliases and former names. This operation
   # owns only the explicit channel path reviewed in Studio.
   def link(keg)
-    llvm_replace_link(formula.opt_prefix.to_s, keg.path.to_s)
+    llvm_replace_link(formula.opt_prefix.to_s, keg.to_s)
   end
 end
 
@@ -288,7 +288,7 @@ def llvm_run(formula, snapshot, journal)
     installer.install
     installer.finish
     candidate = llvm_link(formula.opt_prefix, formula.rack)
-    unless candidate[:target] == formula.prefix.to_s && candidate[:target] != active[:target]
+    unless candidate[:target] == candidate_path && candidate[:target] != active[:target]
       raise "Homebrew did not activate the expected LLVM keg"
     end
     if stable
