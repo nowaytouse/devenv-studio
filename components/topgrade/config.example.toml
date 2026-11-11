@@ -325,6 +325,10 @@
 # device manufacturer or a separately reviewed driver update. (default: false)
 # updates_exclude_drivers = false
 
+# Use %LOCALAPPDATA%\ClamAV\freshclam.conf for the clam_av_db step without an elevation retry.
+# This requires an existing working FreshClam configuration. (default: false)
+# clamav_user_config = false
+
 # Controls whether to automatically reboot the computer when updates are
 # installed that request it. (default: "no", allowed values: "yes", "no", "ask")
 # updates_auto_reboot = "yes"

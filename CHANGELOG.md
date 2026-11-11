@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Windows Topgrade 新增可选的用户目录 FreshClam 配置，沿用原生病毒库更新步骤，失败时不尝试提权。
+
 - Krita Next 跟随 KDE 官方 macOS Universal 滚动渠道，可跨版本系列更新。安装前及同构建检查均验证 QtCore／QtGui 完整版本一致且不低于 6.11.3，保留应用与事务回退。
 
 - 修复 Windows 恢复持久化日志尾部时的文件句柄权限，验证独占锁、截尾和继续写入。CI 汇总完整工作区测试结果。

@@ -2279,6 +2279,12 @@ pub fn run_freshclam(ctx: &ExecutionContext) -> Result<()> {
 
     print_separator(t!("Update ClamAV Database (FreshClam)"));
 
+    #[cfg(windows)]
+    if ctx.config().clamav_user_config() {
+        let config = freshclam_user_config_arg(env::var_os("LOCALAPPDATA").map(PathBuf::from))?;
+        return ctx.execute(&freshclam).arg(config).status_checked();
+    }
+
     let output = ctx.execute(&freshclam).output()?;
     let output = match output {
         ExecutorOutput::Wet(output) => output,
@@ -2306,6 +2312,77 @@ pub fn run_freshclam(ctx: &ExecutionContext) -> Result<()> {
             )))
         }
     }
+}
+
+#[cfg(any(windows, test))]
+fn freshclam_user_config_arg(local_app_data: Option<PathBuf>) -> Result<OsString> {
+    let local_app_data = local_app_data
+        .filter(|path| path.is_absolute())
+        .ok_or_eyre("ClamAV user configuration requires an absolute LOCALAPPDATA")?;
+    let directory = local_app_data.join("ClamAV");
+    let config = directory.join("freshclam.conf");
+    for (path, is_directory) in [(&directory, true), (&config, false)] {
+        let metadata = fs::symlink_metadata(path).wrap_err("Could not inspect the per-user FreshClam configuration")?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt as _;
+            const REPARSE_POINT: u32 = 0x400;
+            if metadata.file_attributes() & REPARSE_POINT != 0 {
+                bail!("The ClamAV directory and FreshClam configuration must not be reparse points");
+            }
+        }
+        let regular = if is_directory {
+            metadata.is_dir()
+        } else {
+            metadata.is_file()
+        };
+        if !regular {
+            bail!("Expected a regular ClamAV directory and FreshClam configuration file");
+        }
+    }
+    let mut arg = OsString::from("--config-file=");
+    arg.push(config);
+    Ok(arg)
+}
+
+#[test]
+fn freshclam_user_config_validates_the_file_and_keeps_spaces_in_one_arg() -> Result<()> {
+    let local_app_data = tempfile::Builder::new().prefix("synthetic local data ").tempdir()?;
+    let path = local_app_data.path().to_path_buf();
+    let directory = path.join("ClamAV");
+    let config = directory.join("freshclam.conf");
+    assert!(freshclam_user_config_arg(None).is_err());
+    assert!(freshclam_user_config_arg(Some(PathBuf::from("relative"))).is_err());
+    assert!(freshclam_user_config_arg(Some(path.clone())).is_err());
+    fs::create_dir_all(&config)?;
+    assert!(freshclam_user_config_arg(Some(path.clone())).is_err());
+    fs::remove_dir(&config)?;
+    fs::write(&config, "# Synthetic test configuration\n")?;
+    let mut expected = OsString::from("--config-file=");
+    expected.push(config);
+    assert_eq!(freshclam_user_config_arg(Some(path))?, expected);
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn freshclam_user_config_rejects_linked_directory_and_file() -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let home = tempdir()?;
+    let path = home.path();
+    let directory = path.join("ClamAV");
+    let target = path.join("fixture");
+    fs::create_dir(&target)?;
+    fs::write(target.join("freshclam.conf"), "# Synthetic test configuration\n")?;
+    symlink(&target, &directory)?;
+    assert!(freshclam_user_config_arg(Some(path.to_path_buf())).is_err());
+
+    fs::remove_file(&directory)?;
+    fs::create_dir(&directory)?;
+    symlink(target.join("freshclam.conf"), directory.join("freshclam.conf"))?;
+    assert!(freshclam_user_config_arg(Some(path.to_path_buf())).is_err());
+    Ok(())
 }
 
 /// Involve `pio upgrade` to update PlatformIO core.

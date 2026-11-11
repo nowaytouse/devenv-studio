@@ -7,6 +7,12 @@
 
 Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来匹配软件。清单显示导出范围和可获得的版本，升级可用性由终端的核对命令确定。只有官方社区源且 ID 唯一的行提供可复制命令。升级在终端处理，Studio 的部署记录涵盖由 Studio 执行的任务。Windows LTSC 2021 和 2024 仍按各自的目标和主机检查控制配置写入。 [WinGet 导出](https://learn.microsoft.com/en-us/windows/package-manager/winget/export) · [WinGet 核对与升级](https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade)
 
+## Windows ClamAV 病毒库更新
+
+如果已经在 `%LOCALAPPDATA%\ClamAV\freshclam.conf` 配置了可用的 FreshClam，可以在现有的 `[windows]` 段加入 `clamav_user_config = true`。确保 `freshclam.exe` 在 PATH 中，并启用原生 `clam_av_db` 步骤。迁移时可移除同一病毒库的自定义更新入口，以免重复运行。先用 `topgrade --only clam_av_db --dry-run` 核对配置及调度范围，预演不会更新病毒库。
+
+配置缺失、类型不符，或 ClamAV 子目录和配置文件使用 Windows 重解析点时会报告失败。原生步骤直接调用 FreshClam 更新病毒库，失败时不会尝试提权。病毒库和日志位置由本机 FreshClam 配置决定。 [ClamAV 更新文档](https://docs.clamav.net/manual/Usage/SignatureManagement.html#freshclam)
+
 ## macOS Topgrade
 
 当前组件已同步上游 [v17.16.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) 与随后提交 `77eef190429850607c41cedfec904f43d66c8394`。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。滚动依赖维护会跳过有未提交改动的工作区。

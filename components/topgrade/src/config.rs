@@ -112,6 +112,7 @@ pub enum UpdatesAutoReboot {
 pub struct Windows {
     accept_all_updates: Option<bool>,
     updates_exclude_drivers: Option<bool>,
+    clamav_user_config: Option<bool>,
     updates_auto_reboot: Option<UpdatesAutoReboot>,
     self_rename: Option<bool>,
     open_remotes_in_new_terminal: Option<bool>,
@@ -1514,6 +1515,16 @@ impl Config {
             .unwrap_or(false)
     }
 
+    /// Whether FreshClam should use the Windows per-user configuration.
+    #[cfg(any(windows, test))]
+    pub fn clamav_user_config(&self) -> bool {
+        self.config_file
+            .windows
+            .as_ref()
+            .and_then(|windows| windows.clamav_user_config)
+            .unwrap_or(false)
+    }
+
     /// Whether to auto reboot for Windows updates that require it
     pub fn windows_updates_auto_reboot(&self) -> UpdatesAutoReboot {
         self.config_file
@@ -2529,6 +2540,13 @@ mod test {
         let mut fallback: ConfigFile = toml::from_str("[windows]\nupdates_exclude_drivers = true\n").unwrap();
         missing.merge(&mut fallback);
         assert_eq!(missing.windows.unwrap().updates_exclude_drivers, Some(true));
+    }
+
+    #[test]
+    fn windows_freshclam_user_config_is_opt_in() {
+        assert!(!config_from_toml("").clamav_user_config());
+        assert!(!config_from_toml("[windows]\nclamav_user_config = false\n").clamav_user_config());
+        assert!(config_from_toml("[windows]\nclamav_user_config = true\n").clamav_user_config());
     }
 
     /// Regression test for https://github.com/topgrade-rs/topgrade/issues/2283:
