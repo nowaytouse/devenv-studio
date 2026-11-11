@@ -257,6 +257,17 @@ pub(in crate::studio) fn lean_ctx_mirror(canonical: &Path, mirror: &Path) -> Res
 pub(super) struct Delegated {
     pub npx: usize,
     pub cursor: usize,
+    pub local: usize,
+}
+
+fn reviewed_local_rex(home: &Path, path: &Path, sha: &str) -> Result<bool> {
+    let canonical = home.join(".agents/skills/rex");
+    let mirror = home.join(".claude/skills/rex");
+    if path != canonical && path != mirror {
+        return Ok(false);
+    }
+    let reviewed = BTreeMap::from([(PathBuf::from("SKILL.md"), sha.to_owned())]);
+    Ok(tree(&canonical)? == reviewed && tree(&mirror)? == reviewed)
 }
 
 pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec<Item>, Delegated)> {
@@ -324,6 +335,15 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
                 row.path.display()
             );
             delegated.cursor += 1;
+        } else if row.scope == "user"
+            && name == "rex"
+            && reviewed_local_rex(
+                home,
+                &row.path,
+                "8ceee7ec6e022deec6080f1dc03729e320eba969db28476c5922b2fbfae5cde4",
+            )?
+        {
+            delegated.local += 1;
         } else {
             color_eyre::eyre::bail!(
                 "No verified updater owns this metadata-less skill: {}",
@@ -332,4 +352,29 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
         }
     }
     Ok((selected, delegated))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_rex_requires_reviewed_bytes_at_both_user_paths() -> Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let home = temporary.path().canonicalize()?;
+        let canonical = home.join(".agents/skills/rex");
+        let mirror = home.join(".claude/skills/rex");
+        let content = b"---\nname: rex\n---\nSynthetic local skill\n";
+        for path in [&canonical, &mirror] {
+            fs::create_dir_all(path)?;
+            fs::write(path.join("SKILL.md"), content)?;
+        }
+        let sha = super::super::super::sha256(fs::File::open(canonical.join("SKILL.md"))?)?;
+        assert!(reviewed_local_rex(&home, &canonical, &sha)?);
+        assert!(reviewed_local_rex(&home, &mirror, &sha)?);
+        assert!(!reviewed_local_rex(&home, &home.join("rex"), &sha)?);
+        fs::write(mirror.join("SKILL.md"), b"changed")?;
+        assert!(!reviewed_local_rex(&home, &canonical, &sha)?);
+        Ok(())
+    }
 }

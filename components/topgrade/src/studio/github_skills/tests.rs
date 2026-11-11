@@ -181,6 +181,7 @@ fn verifies_native_change_and_delegates_known_owners() {
             github: 1,
             npx: 2,
             cursor: 1,
+            local: 0,
             updated: 1
         }
     );

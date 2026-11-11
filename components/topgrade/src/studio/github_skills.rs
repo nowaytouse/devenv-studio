@@ -244,6 +244,7 @@ struct Summary {
     github: usize,
     npx: usize,
     cursor: usize,
+    local: usize,
     updated: usize,
 }
 
@@ -278,6 +279,7 @@ fn update(home: &Path, run: &mut impl FnMut(&[&str]) -> Result<Output>) -> Resul
         github: selected.len(),
         npx: delegated.npx,
         cursor: delegated.cursor,
+        local: delegated.local,
         updated: planned,
     })
 }
@@ -305,5 +307,11 @@ pub(super) fn run() -> Result<()> {
         "Verified {} GitHub skills ({} updated); delegated {} to NPX and {} to Cursor.",
         summary.github, summary.updated, summary.npx, summary.cursor,
     );
+    if summary.local > 0 {
+        println!(
+            "Retained {} reviewed local Rex copies without updating them.",
+            summary.local
+        );
+    }
     Ok(())
 }
