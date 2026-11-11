@@ -1,10 +1,12 @@
 //! Local, revision-pinned maintenance of the independent Topgrade engine.
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod profile;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod upstream;
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod mac {
-    use super::profile;
+    use super::{profile, upstream};
     use anyhow::{Context, Result, bail, ensure};
     use serde::{Deserialize, Serialize};
     use std::{
@@ -99,10 +101,11 @@ mod mac {
         Ok(())
     }
 
-    fn git(checkout: &Path, args: &[&str]) -> Result<String> {
+    pub(super) fn git(checkout: &Path, args: &[&str]) -> Result<String> {
         let result = output(
             Command::new("/usr/bin/git")
                 .current_dir(checkout)
+                .arg("--no-replace-objects")
                 .args(args),
             "Inspect reviewed Studio revision",
         )?;
@@ -485,21 +488,28 @@ mod mac {
     }
 
     pub(super) fn execute(args: &[String]) -> Result<()> {
-        if let [mode, tree] = args
-            && mode == "verify-current"
-        {
-            return verify_current(tree);
+        if let [mode, value] = args {
+            match mode.as_str() {
+                "verify-current" => return verify_current(value),
+                "check-upstream" | "record-upstream" | "export-upstream-agent" => {
+                    return upstream::execute(mode, Path::new(value));
+                }
+                _ => {}
+            }
         }
         let [mode, checkout_arg, revision] = args else {
             bail!(
-                "Usage: devenv-studio topgrade-engine <plan|prepare|install|rollback> <absolute checkout> <full commit>\n       devenv-studio topgrade-engine rollback-current <active component tree> <previous component tree>\n       devenv-studio topgrade-engine verify-current <active component tree>"
+                "Usage: devenv-studio topgrade-engine <plan|prepare|prepare-upstream|install|rollback> <absolute checkout> <full commit>\n       devenv-studio topgrade-engine <check-upstream|record-upstream|export-upstream-agent> <absolute checkout>\n       devenv-studio topgrade-engine rollback-current <active component tree> <previous component tree>\n       devenv-studio topgrade-engine verify-current <active component tree>"
             );
         };
         if mode == "rollback-current" {
             return rollback_current(checkout_arg, revision);
         }
         ensure!(
-            matches!(mode.as_str(), "plan" | "prepare" | "install" | "rollback"),
+            matches!(
+                mode.as_str(),
+                "plan" | "prepare" | "prepare-upstream" | "install" | "rollback"
+            ),
             "Unknown engine maintenance action"
         );
         ensure!(
@@ -526,6 +536,9 @@ mod mac {
             &["rev-parse", &format!("{revision}:components/topgrade")],
         )?;
         ensure!(hexadecimal(&tree, 40), "Invalid Topgrade component tree");
+        if mode == "prepare-upstream" {
+            upstream::verify_current(checkout, revision)?;
+        }
         let home = account_home()?;
         let base = home.join(".local/share/topgrade-rustup-head");
         let releases = base.join("releases");
@@ -575,7 +588,7 @@ mod mac {
             return restore_activation(&home, &tree, None);
         }
         prepare(checkout, revision, &tree, &release, &home)?;
-        if mode == "prepare" {
+        if matches!(mode.as_str(), "prepare" | "prepare-upstream") {
             println!("Prepared verified engine at {}", target.display());
             return Ok(());
         }

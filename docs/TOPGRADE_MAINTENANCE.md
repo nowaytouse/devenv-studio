@@ -67,6 +67,24 @@ devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 
 `prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 使用 Studio 的 Rust 安装器验证资产、应用并回读 profile，然后原子切换到准备好的二进制。安装器兼容原有 v1 收据和事务日志。相同组件树复用引擎。软件更新使用已部署的引擎，引擎维护由上述命令显式启动。
 
+### 跟进 Topgrade 官方版本
+
+`topgrade-engine check-upstream /absolute/studio-checkout` 从该 checkout 当前提交读取 `topgrade-upstream.json`，通过 HTTPS 查询 Topgrade 官方 Git 标签，按版本号比较稳定版。输出记录 Studio 提交、已审核的标签对象和提交、当前最高稳定标签及检查时间。新版本显示 `new_release`。已审核标签被移动或消失时显示 `pin_changed` 或 `pin_missing`。普通版本检查只读 Git 引用，无需 GitHub 凭据。
+
+发现新版本后，在隔离工作树导入并审核组件源码、Cargo 锁文件及本机 profile，然后在同一 Studio 提交更新上游 pin。运行 `devenv-studio topgrade-engine prepare-upstream /absolute/studio-checkout FULL_STUDIO_SHA` 重新核对官方标签，再从该干净提交构建候选。标签对象、完整提交和组件版本均须一致。候选构建成功后仍须显式执行上面的 `install`，原有回退流程可继续使用。
+
+需要每日自动检查时，可自行启用只读 LaunchAgent。请从你信任且长期保留的 Studio 二进制生成文件，将示例中的两条绝对路径换成本机实际位置：
+
+```sh
+agent="$HOME/Library/LaunchAgents/org.devenv-studio.topgrade-upstream.plist"
+mkdir -p "$HOME/Library/LaunchAgents"
+(umask 077; set -C; /absolute/bin/devenv-studio topgrade-engine export-upstream-agent /absolute/studio-checkout > "$agent")
+/usr/bin/plutil -lint "$agent"
+/bin/launchctl bootstrap "gui/$(id -u)" "$agent"
+```
+
+生成的配置只安排 `record-upstream`。首次加载和此后每日查询时，它将最新成功检查原子写入 `~/Library/Application Support/DevEnv Studio Topgrade Upstream/status-v1.json`。用 `launchctl print "gui/$(id -u)/org.devenv-studio.topgrade-upstream"` 查看任务状态和最近退出码，并核对 JSON 检查时间。断网或检查失败会保留上次记录。通过 `launchctl bootout "gui/$(id -u)/org.devenv-studio.topgrade-upstream"` 卸载；如需跨登录停用，将对应 plist 移出 `~/Library/LaunchAgents`。
+
 原有 Homebrew HEAD-sync 日志仍可由 Rust 入口恢复。组件在执行两项成对升级后先验证两份活动 keg 的完整 SHA，再枚举其余公式。收到 TERM 或 HUP 时，更新器持锁等待正在运行的子进程，随后恢复两份公式并以相应的退出状态结束。若第一项 keg 升级成功而第二项失败，请保留新旧 keg 和日志，核对两个 `opt` 指向与完整收据后再审阅配对恢复。若只有父进程被强制杀死，请先确认原来的 Homebrew 和构建子进程均已退出，再运行恢复。
 
 HEAD-sync 在刷新目录前检查所有 tap。未解决的 Git 冲突会在构建前停止。有本地改动且无冲突时，暂缓 `brew update`，使用现有目录和配方继续核验。干净的 tap 完成刷新后会再次检查。两份活动 keg 已匹配目标完整 SHA 时，直接核验现有运行时，避免因后续公式失败而重建同一配对。普通批量升级保留 LLVM、LLVM HEAD 和版本化 LLVM 配方。

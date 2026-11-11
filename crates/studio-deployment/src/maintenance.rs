@@ -14,6 +14,8 @@ pub mod brew_inventory;
 mod native;
 #[cfg(any(target_os = "macos", test))]
 mod protocol;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+pub mod topgrade_upstream;
 pub mod windows_inventory;
 pub mod windows_updates;
 
