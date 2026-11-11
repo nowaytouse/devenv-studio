@@ -1,6 +1,6 @@
 use super::{
     Check, EngineIdentity, Review, Step,
-    protocol::{IDS, valid_hex},
+    protocol::{IDS, manual_llvm, valid_hex},
 };
 use crate::process::{Invocation, run_configured};
 use anyhow::{Context, Result, ensure};
@@ -366,6 +366,14 @@ pub(in super::super) struct Proof {
     engine: EngineIdentity,
     digest: String,
     tools: BTreeMap<&'static str, Tool>,
+    llvm: Option<LlvmPlan>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct LlvmPlan {
+    digest: String,
+    detail: String,
 }
 
 fn require_running(cancel: &AtomicBool) -> Result<()> {
@@ -593,6 +601,7 @@ fn profile_proof(home: PathBuf, release: &Release, cancel: &AtomicBool) -> Resul
         engine: release.identity.clone(),
         digest: release.digest.clone(),
         tools: BTreeMap::new(),
+        llvm: None,
     })
 }
 
@@ -647,7 +656,7 @@ fn required_tools(id: &str) -> &'static [&'static str] {
     match id {
         "github_cli_skills" | "github_cli_extensions" => &["gh"],
         "helm" => &["helm", "curl"],
-        "brew_linkage_audit" => &["brew"],
+        "brew_linkage_audit" | "llvm_head" | "llvm_stable" => &["brew"],
         "tldr" => &["tldr"],
         _ => &[],
     }
@@ -717,7 +726,9 @@ fn parse_inventory(bytes: &[u8]) -> Result<Vec<Step>> {
         });
     }
     ensure!(
-        IDS.iter().all(|id| seen.contains(*id)),
+        IDS.iter()
+            .filter(|id| !manual_llvm(id))
+            .all(|id| seen.contains(*id)),
         "Topgrade engine lacks expected native steps"
     );
     Ok(steps)
@@ -799,6 +810,47 @@ fn review_proof(selected: &[String], cancel: &AtomicBool) -> Result<Proof> {
             }
         }
     }
+    if let Some(id) = selected.iter().find(|id| manual_llvm(id)) {
+        ensure!(selected.len() == 1, "Review each LLVM channel on its own");
+        let output = run_configured(
+            &Invocation {
+                program: proof.engine.binary.clone(),
+                args: vec!["--studio-llvm-plan".into(), id.into()],
+                vscode_node: false,
+                npm_node: false,
+            },
+            cancel,
+            Duration::from_secs(45),
+            |command| {
+                command
+                    .env_clear()
+                    .env("HOME", &proof.home)
+                    .env("PATH", PATH)
+                    .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+                    .current_dir(&proof.home);
+            },
+        )
+        .context("Inspect the exact LLVM candidate")?;
+        require_running(cancel)?;
+        ensure!(
+            !output.timed_out && !output.cancelled,
+            "LLVM candidate check timed out or was cancelled"
+        );
+        ensure!(
+            output.code == 0,
+            "LLVM candidate unavailable: {}",
+            output.stderr.trim()
+        );
+        let plan: LlvmPlan =
+            serde_json::from_str(&output.stdout).context("Invalid LLVM review output")?;
+        ensure!(
+            valid_hex(&plan.digest, 64)
+                && (1..=600).contains(&plan.detail.len())
+                && !plan.detail.chars().any(char::is_control),
+            "Invalid LLVM review"
+        );
+        proof.llvm = Some(plan);
+    }
     Ok(proof)
 }
 
@@ -809,10 +861,17 @@ pub(super) fn review(selected: &BTreeSet<String>, cancel: &AtomicBool) -> Result
     );
     let selected = selected.iter().cloned().collect::<Vec<_>>();
     let proof = review_proof(&selected, cancel)?;
-    let steps = inventory(&proof)?
+    let mut steps: Vec<_> = inventory(&proof)?
         .into_iter()
         .filter(|step| !step.terminal && selected.contains(&step.id))
         .collect();
+    ensure!(
+        steps.len() == selected.len(),
+        "The active engine does not support every selected step"
+    );
+    if let Some(plan) = &proof.llvm {
+        steps[0].detail.clone_from(&plan.detail);
+    }
     Ok(Review {
         steps,
         engine: proof.engine.clone(),

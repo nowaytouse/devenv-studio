@@ -64,13 +64,15 @@ fn studio_request_requires_private_directory_and_distinct_known_steps() {
     private_file(&path, &serde_json::to_vec(&data).unwrap());
     assert_eq!(request(&dir).unwrap().steps, [Step::GithubCliSkills, Step::Helm]);
 
-    data["steps"] = serde_json::json!(Step::ALL);
+    let routine: Vec<_> = Step::ALL.into_iter().filter(|step| !step.manual_llvm()).collect();
+    data["steps"] = serde_json::json!(routine);
     fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
-    assert_eq!(request(&dir).unwrap().steps, Step::ALL);
+    assert_eq!(request(&dir).unwrap().steps, routine);
     for steps in [
         serde_json::json!(["helm", "helm"]),
         serde_json::json!(["helm", "github_cli_skills"]),
         serde_json::json!(["brew_formula"]),
+        serde_json::json!(["llvm_head"]),
         serde_json::json!(["unknown"]),
     ] {
         data["steps"] = steps;
@@ -81,6 +83,34 @@ fn studio_request_requires_private_directory_and_distinct_known_steps() {
     fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
     assert!(request(&dir).is_err());
+}
+
+#[test]
+fn studio_llvm_requires_an_exclusive_candidate_and_manual_entry() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = temp.path().canonicalize().unwrap();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
+    let path = dir.join("request.json");
+    let mut data = serde_json::json!({
+        "schema_version": 1,
+        "run_id": "reviewed-llvm",
+        "steps": ["llvm_stable"],
+        "review_digest": "f".repeat(64),
+        "llvm_plan_digest": "a".repeat(64),
+    });
+    private_file(&path, &serde_json::to_vec(&data).unwrap());
+    assert_eq!(request(&dir).unwrap().steps, [Step::LlvmStable]);
+    for ids in [
+        &["llvm_head", "llvm_stable"][..],
+        &["helm", "llvm_stable"][..],
+        &["helm"][..],
+    ] {
+        data["steps"] = serde_json::json!(ids);
+        fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+        assert!(request(&dir).is_err());
+    }
+    assert!(run_native_profile("llvm_stable", RunType::Dry).is_err());
+    assert!(run_native_profile("llvm_head", RunType::Dry).is_err());
 }
 
 #[test]
@@ -158,7 +188,7 @@ fn studio_clean_child_exit_clears_marker_but_signal_retains_it() {
 fn studio_inventory_uses_topgrade_step_ids_and_only_controls_reviewed_operations() {
     use clap::ValueEnum;
     let rows = inventory::entries();
-    assert_eq!(rows.len(), crate::step::Step::value_variants().len() + 2);
+    assert_eq!(rows.len(), crate::step::Step::value_variants().len() + 4);
     assert!(rows.windows(2).all(|pair| pair[0].id < pair[1].id));
     let ids: Vec<_> = rows
         .iter()

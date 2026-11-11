@@ -287,8 +287,20 @@ impl Supervisor<'_> {
                 sender,
             );
             let start = Instant::now();
-            // The engine owns the 15-minute watchdog for each step.
-            let step_budget = Duration::from_secs(15 * 60 * self.request.steps.len() as u64);
+            // Match the engine watchdog for each reviewed operation.
+            let step_budget = Duration::from_secs(
+                self.request
+                    .steps
+                    .iter()
+                    .map(|step| {
+                        if step == "llvm_head" {
+                            4 * 60 * 60
+                        } else {
+                            15 * 60
+                        }
+                    })
+                    .sum(),
+            );
             let soft_deadline = step_budget + Duration::from_secs(60);
             let hard_deadline = step_budget + Duration::from_secs(3 * 60);
             let mut previous = Vec::new();
@@ -429,7 +441,7 @@ pub(in crate::maintenance) fn run(
     let proof = review_proof(&review.selected, cancel)?;
     ensure!(
         proof == review.proof,
-        "Topgrade engine, profile or tools changed after review; review again"
+        "Topgrade engine, profile, tools or LLVM candidate changed after review; review again"
     );
     // A prior release is optional; a damaged rollback candidate cannot change this run's scope.
     let rollback = rollback_candidate(&proof.home, &proof.engine, cancel)
@@ -442,6 +454,7 @@ pub(in crate::maintenance) fn run(
         run_id: run_id.clone(),
         steps: review.selected,
         review_digest: proof.digest,
+        llvm_plan_digest: proof.llvm.map(|plan| plan.digest),
     };
     validate_request(&request, &run_id)?;
     persist(&path.join("request.json"), &serde_json::to_vec(&request)?)
@@ -687,6 +700,7 @@ mod tests {
             run_id: "fixture".into(),
             steps: vec!["helm".into()],
             review_digest: "a".repeat(64),
+            llvm_plan_digest: None,
         }
     }
 

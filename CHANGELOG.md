@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- 更新中心增加 LLVM 稳定版和 HEAD 的独立手动审核入口。
+- macOS 更新中心可分别审核 LLVM 稳定版瓶装更新和 LLVM HEAD 构建。稳定版沿用 LLVM 23.1 的兼容范围，HEAD 使用独立 keg，两项均保留旧版本。
 - Topgrade 在构建前检查 Homebrew tap 冲突，并在 App Store 安装成功后的索引延迟期间仅复查结果。
 - 项目索引隔离无效记录并保留最近一份有效索引，增加 Serena 缓存盘点。Topgrade 引擎增加官方发布跟踪。
 

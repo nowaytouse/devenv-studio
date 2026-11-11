@@ -2,13 +2,15 @@ use super::{RunStatus, StepReport, StepStatus};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
-pub(super) const IDS: [&str; 6] = [
+pub(super) const IDS: [&str; 8] = [
     "brew_linkage_audit",
     "cli_versions",
     "github_cli_extensions",
     "github_cli_skills",
     "helm",
     "tldr",
+    "llvm_head",
+    "llvm_stable",
 ];
 pub(super) const EVENT_LIMIT: u64 = 16 * 1024;
 
@@ -19,6 +21,12 @@ pub(super) struct Request {
     pub run_id: String,
     pub steps: Vec<String>,
     pub review_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub llvm_plan_digest: Option<String>,
+}
+
+pub(super) fn manual_llvm(id: &str) -> bool {
+    matches!(id, "llvm_head" | "llvm_stable")
 }
 
 pub(super) fn valid_hex(value: &str, length: usize) -> bool {
@@ -47,6 +55,14 @@ pub(super) fn validate_request(request: &Request, run_id: &str) -> Result<()> {
             && request.steps.iter().all(|id| IDS.contains(&id.as_str()))
             && request.steps.windows(2).all(|pair| pair[0] < pair[1]),
         "Invalid Topgrade maintenance request"
+    );
+    let llvm = request.steps.iter().any(|id| manual_llvm(id));
+    ensure!(
+        match &request.llvm_plan_digest {
+            Some(digest) => llvm && request.steps.len() == 1 && valid_hex(digest, 64),
+            None => !llvm,
+        },
+        "LLVM changes require a single reviewed candidate"
     );
     Ok(())
 }
@@ -170,8 +186,22 @@ mod tests {
             schema_version: 1,
             run_id: "test-123".into(),
             steps: IDS[..2].iter().map(|s| (*s).into()).collect(),
+            llvm_plan_digest: None,
             review_digest: "a".repeat(64),
         }
+    }
+
+    #[test]
+    fn llvm_approval_binds_exactly_one_manual_channel() {
+        let mut request = request();
+        request.steps = vec!["llvm_head".into()];
+        assert!(validate_request(&request, "test-123").is_err());
+        request.llvm_plan_digest = Some("b".repeat(64));
+        assert!(validate_request(&request, "test-123").is_ok());
+        request.steps.push("llvm_stable".into());
+        assert!(validate_request(&request, "test-123").is_err());
+        request.steps = vec!["helm".into()];
+        assert!(validate_request(&request, "test-123").is_err());
     }
 
     fn event(seq: usize, kind: &str, step: Option<&str>, status: Option<&str>) -> String {

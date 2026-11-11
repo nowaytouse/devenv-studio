@@ -29,6 +29,7 @@ mod gradle;
 mod headsync;
 mod helm;
 mod inventory;
+mod llvm;
 mod npm_guard;
 mod preview;
 mod proxy;
@@ -69,16 +70,20 @@ enum Step {
     GithubCliExtensions,
     GithubCliSkills,
     Helm,
+    LlvmHead,
+    LlvmStable,
     Tldr,
 }
 
 impl Step {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 8] = [
         Self::BrewLinkageAudit,
         Self::CliVersions,
         Self::GithubCliExtensions,
         Self::GithubCliSkills,
         Self::Helm,
+        Self::LlvmHead,
+        Self::LlvmStable,
         Self::Tldr,
     ];
 
@@ -89,12 +94,18 @@ impl Step {
             Self::GithubCliExtensions => "github_cli_extensions",
             Self::GithubCliSkills => "github_cli_skills",
             Self::Helm => "helm",
+            Self::LlvmHead => "llvm_head",
+            Self::LlvmStable => "llvm_stable",
             Self::Tldr => "tldr",
         }
     }
 
     fn find(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|step| step.id() == id)
+    }
+
+    fn manual_llvm(self) -> bool {
+        matches!(self, Self::LlvmHead | Self::LlvmStable)
     }
 
     fn label(self) -> &'static str {
@@ -104,13 +115,15 @@ impl Step {
             Self::GithubCliExtensions => "GitHub CLI Extensions",
             Self::GithubCliSkills => "GitHub CLI Skills",
             Self::Helm => "Helm Repositories",
+            Self::LlvmHead => "LLVM HEAD",
+            Self::LlvmStable => "LLVM Stable",
             Self::Tldr => "tldr Cache",
         }
     }
 
     fn tools(self) -> &'static [&'static str] {
         match self {
-            Self::BrewLinkageAudit => &["brew"],
+            Self::BrewLinkageAudit | Self::LlvmHead | Self::LlvmStable => &["brew"],
             Self::CliVersions => &[],
             Self::GithubCliExtensions | Self::GithubCliSkills => &["gh"],
             Self::Helm => &["helm", "curl"],
@@ -127,6 +140,7 @@ impl Step {
                 .status_checked(),
             Self::GithubCliSkills => github_skills::run(),
             Self::Helm => helm::run(),
+            Self::LlvmHead | Self::LlvmStable => bail!("LLVM changes require a dedicated Studio review"),
             Self::Tldr => tool_command(&resolve_tool("tldr")?)?.arg("--update").status_checked(),
         }
     }
@@ -135,6 +149,9 @@ impl Step {
 pub(crate) fn run_native_profile(id: &str, run_type: RunType) -> Result<()> {
     let result = match (Step::find(id), run_type) {
         (None, _) => terminal_profile::run(id, run_type),
+        (Some(step), _) if step.manual_llvm() => {
+            bail!("LLVM changes require a dedicated Studio review")
+        }
         (Some(step), RunType::Dry) => {
             println!("Dry running: {}", step.label());
             Ok(())
@@ -160,6 +177,7 @@ struct Request {
     run_id: String,
     steps: Vec<Step>,
     review_digest: String,
+    llvm_plan_digest: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -229,6 +247,14 @@ pub fn dispatch() -> Option<Result<bool>> {
             (Some(dir), None) => run(Path::new(&dir)),
             _ => Err(color_eyre::eyre::eyre!(
                 "Usage: topgrade --studio-run <absolute run directory>"
+            )),
+        });
+    }
+    if first == "--studio-llvm-plan" {
+        return Some(match (args.next(), args.next()) {
+            (Some(id), None) => llvm::plan(&id).map(|()| true),
+            _ => Err(color_eyre::eyre::eyre!(
+                "Usage: topgrade --studio-llvm-plan <llvm_head|llvm_stable>"
             )),
         });
     }
@@ -407,6 +433,14 @@ fn request(dir: &Path) -> Result<Request> {
         (1..=Step::ALL.len()).contains(&request.steps.len())
             && request.steps.windows(2).all(|pair| pair[0].id() < pair[1].id()),
         "Select distinct supported Studio steps"
+    );
+    let manual = request.steps.iter().any(|step| step.manual_llvm());
+    ensure!(
+        match &request.llvm_plan_digest {
+            Some(digest) => manual && request.steps.len() == 1 && is_hex(digest, 64),
+            None => !manual,
+        },
+        "LLVM changes require a single reviewed candidate"
     );
     Ok(request)
 }
@@ -687,10 +721,14 @@ fn worker(dir: &Path, id: &std::ffi::OsStr, raw: &std::ffi::OsStr) -> Result<()>
             && request.steps.contains(&step),
         "Studio worker did not match the authorized run and process group"
     );
-    step.run()
+    match request.llvm_plan_digest {
+        Some(digest) => llvm::run(step, &digest, dir),
+        None => step.run(),
+    }
 }
 
 fn run_step(state: &Path, run_id: &str, step: Step, mut command: Command) -> Result<Outcome> {
+    let dir = command.get_current_dir().map(Path::to_owned);
     let mut marker = Interruption {
         schema_version: SCHEMA,
         run_id: run_id.to_owned(),
@@ -728,7 +766,12 @@ fn run_step(state: &Path, run_id: &str, step: Step, mut command: Command) -> Res
         }
         return Err(error);
     }
-    let Some(status) = wait_until(&mut child, Instant::now() + STEP_TIMEOUT)? else {
+    let timeout = if step == Step::LlvmHead {
+        Duration::from_secs(4 * 60 * 60)
+    } else {
+        STEP_TIMEOUT
+    };
+    let Some(status) = wait_until(&mut child, Instant::now() + timeout)? else {
         if let Err(error) = terminate_group(&mut child, pgid) {
             eprintln!("Studio helper cleanup: {error:#}");
         }
@@ -739,6 +782,9 @@ fn run_step(state: &Path, run_id: &str, step: Step, mut command: Command) -> Res
         status.signal().is_none() && !signal_group(pgid, None)?,
         "Studio step {step:?} did not finish cleanly ({status}); review the retained interruption marker"
     );
+    if step.manual_llvm() {
+        llvm::check_restoration(&dir.ok_or_else(|| color_eyre::eyre::eyre!("Missing LLVM run directory"))?)?;
+    }
     clear_marker(state)?;
     if status.success() {
         Ok(Outcome::Success)

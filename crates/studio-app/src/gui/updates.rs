@@ -64,6 +64,9 @@ impl UiState {
             return;
         }
         let changed = if selected {
+            if !self.can_add_step(id) {
+                return;
+            }
             self.selected.insert(id.into())
         } else {
             self.selected.remove(id)
@@ -71,6 +74,12 @@ impl UiState {
         if changed {
             self.clear_review();
         }
+    }
+
+    fn can_add_step(&self, id: &str) -> bool {
+        self.selected.contains(id)
+            || self.selected.is_empty()
+            || (!manual_llvm(id) && !self.selected.iter().any(|id| manual_llvm(id)))
     }
 
     fn can_review(&self, busy: bool) -> bool {
@@ -480,20 +489,27 @@ impl Studio {
                     "选择后审核。任务可用性检查不查询上游更新。",
                     "Select tasks for review. The availability check does not query upstream updates.",
                 ));
-                for (group, diagnostics) in [
-                    (tx("工具与缓存", "Tools and caches"), false),
-                    (tx("只读诊断", "Read-only diagnostics"), true),
+                for group in [
+                    tx("工具与缓存", "Tools and caches"),
+                    tx("只读诊断", "Read-only diagnostics"),
+                    tx("LLVM 手动更新", "Manual LLVM updates"),
                 ] {
                     let steps = check
                         .steps
                         .iter()
-                        .filter(|step| !step.terminal && diagnostic_step(&step.id) == diagnostics);
+                        .filter(|step| !step.terminal && task_group(&step.id) == group);
                     if steps.clone().next().is_none() {
                         continue;
                     }
                     surface_frame().inner_margin(12.0).show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         ui.strong(group);
+                        if group == task_group("llvm_stable") {
+                            ui.label(tx(
+                                "每次选择一个 LLVM 渠道并单独审核。",
+                                "Select and review one LLVM channel at a time.",
+                            ));
+                        }
                         for (index, step) in steps.enumerate() {
                             if index > 0 {
                                 ui.separator();
@@ -506,7 +522,10 @@ impl Studio {
                                         ui.horizontal_wrapped(|ui| {
                                             if ui
                                                 .add_enabled(
-                                                    !busy && check.available && step.available,
+                                                    !busy
+                                                        && check.available
+                                                        && step.available
+                                                        && self.updates.can_add_step(&step.id),
                                                     egui::Checkbox::new(
                                                         &mut selected,
                                                         step_label(&step.id, &step.label),
@@ -958,6 +977,20 @@ fn run_status_label(status: &maintenance::RunStatus) -> &'static str {
     }
 }
 
+fn manual_llvm(id: &str) -> bool {
+    matches!(id, "llvm_head" | "llvm_stable")
+}
+
+fn task_group(id: &str) -> &'static str {
+    if manual_llvm(id) {
+        tx("LLVM 手动更新", "Manual LLVM updates")
+    } else if diagnostic_step(id) {
+        tx("只读诊断", "Read-only diagnostics")
+    } else {
+        tx("工具与缓存", "Tools and caches")
+    }
+}
+
 fn step_label<'a>(id: &str, fallback: &'a str) -> &'a str {
     match id {
         "brew_linkage_audit" => tx("Homebrew 链接审计", "Homebrew linkage audit"),
@@ -965,6 +998,8 @@ fn step_label<'a>(id: &str, fallback: &'a str) -> &'a str {
         "github_cli_extensions" => tx("GitHub CLI 扩展", "GitHub CLI extensions"),
         "github_cli_skills" => tx("GitHub CLI 技能", "GitHub CLI skills"),
         "helm" => tx("Helm 仓库", "Helm repositories"),
+        "llvm_head" => "LLVM HEAD",
+        "llvm_stable" => tx("LLVM 稳定版", "LLVM stable"),
         "tldr" => tx("TLDR 命令手册", "TLDR command pages"),
         _ => fallback,
     }
@@ -995,6 +1030,14 @@ fn step_detail(step: &maintenance::Step) -> &str {
             "核验或刷新现有 Helm 仓库索引。",
             "Verify or refresh existing Helm repository indexes.",
         ),
+        "llvm_head" => tx(
+            "单独构建已审核的 LLVM main 提交。编译可能耗时数小时。",
+            "Build the reviewed LLVM main commit in its separate keg. This may take several hours.",
+        ),
+        "llvm_stable" => tx(
+            "只接受官方 LLVM 23.1 瓶装。核验 Homebrew Rust 后更新稳定版 pin，保留旧 keg。",
+            "Use an official LLVM 23.1 bottle. Verify Homebrew Rust before updating the pin and retain the previous keg.",
+        ),
         "tldr" => tx(
             "刷新 TLDR 手册缓存。使用多语言缓存时，请先在 tealdeer 中明确配置下载语言。",
             "Refresh the TLDR cache. If you keep multiple languages, configure tealdeer's download languages first.",
@@ -1018,6 +1061,14 @@ fn operation_detail(id: &str) -> &'static str {
         "helm" => tx(
             "helm repo list · 校验缓存 · 必要时运行 helm repo update",
             "helm repo list · verify cache · helm repo update when needed",
+        ),
+        "llvm_head" => tx(
+            "Homebrew · nyamiiko/tools/llvm-head · 核验已安装提交",
+            "Homebrew · nyamiiko/tools/llvm-head · verify installed commit",
+        ),
+        "llvm_stable" => tx(
+            "Homebrew · homebrew/core/llvm · 仅瓶装 · 核验 Rust 和 pin",
+            "Homebrew · homebrew/core/llvm · bottle only · verify Rust and pin",
         ),
         "tldr" => "tldr --update",
         _ => "",
