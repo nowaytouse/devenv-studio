@@ -534,14 +534,12 @@ fn current_installed_design_kit_verifies() {
 fn design_archive_rejects_symlinks_and_retains_checked_file_mode() -> Result<()> {
     let source = tempfile::tempdir()?;
     let git = |args: &[&str]| -> Result<Vec<u8>> {
-        let output = Command::new("/usr/bin/git")
+        let output = crate::studio::command(Path::new("/usr/bin/git"))
             .current_dir(source.path())
-            .env_clear()
             .env("HOME", source.path())
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .args(args)
-            .output()?;
-        ensure!(output.status.success(), "Synthetic Git fixture failed: {args:?}");
+            .output_checked()?;
         Ok(output.stdout)
     };
     git(&["init", "--template=", "--quiet"])?;
