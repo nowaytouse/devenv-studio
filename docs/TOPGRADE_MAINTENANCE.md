@@ -17,7 +17,9 @@ Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来�
 
 当前组件已同步上游 [v17.16.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) 与随后提交 `77eef190429850607c41cedfec904f43d66c8394`。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。滚动依赖维护会跳过有未提交改动的工作区。
 
-`Project Source Indexes` 使用 Repomix 和 LeanCTX 为 `~/Downloads/GitHub` 下的 Git 项目更新私有索引。直接运行 `~/.local/bin/topgrade-project-indexes.py /path/to/checkout` 可单独刷新项目。索引只读取已提交的普通源码文件，先排除私有目录、再执行秘密扫描，最终仅保存相对路径和 token 计数。`${XDG_STATE_HOME:-$HOME/.local/state}/project-indexes/<checkout-name>/latest.json` 记录完整提交和 UTC 生成时间。同一提交与工具版本保持既有索引，扫描或生成失败保留上次结果。
+`Project Source Indexes` 使用 Repomix 和 LeanCTX 为 `~/Downloads/GitHub` 下的 Git 项目更新私有索引。直接运行 `~/.local/bin/topgrade-project-indexes.py /path/to/checkout` 可单独刷新项目。索引只读取已提交的普通源码文件，先排除私有目录、再执行秘密扫描，最终仅保存相对路径和 token 计数。`${XDG_STATE_HOME:-$HOME/.local/state}/project-indexes/<checkout-name>/latest.json` 记录完整提交、工具版本、UTC 生成时间及检出目录的摘要。刷新时会将过时的已知索引移入 `history/`，将格式、路径或内容边界校验失败的普通私有索引移入 `quarantine/`。原文件保留以备核对。生成失败会报告错误，此时没有已核验的新索引，历史文件仍可查阅。
+
+同目录的 `serena.json` 记录本地 Serena 版本及标准 `.serena/cache` 符号文件的大小、时间和状态。Serena 的符号缓存对应实时检出内容，由 Serena 按文件内容和语言服务器配置判断有效性。索引维护不会反序列化这些缓存，也不会启动语言服务器。结束对应项目的 Serena 会话后，可对明确指定的检出目录运行 `topgrade-project-indexes.py --quarantine-empty-serena-cache /path/to/checkout`，将空的符号缓存移入 `serena-quarantine/`。正常缓存、项目设置和记忆保留。已配置的项目可用 Serena 官方 `serena project index /path/to/checkout` 重建符号缓存，重建时还应核对工具是否报告部分文件失败。 [Serena 项目工作流](https://oraios.github.io/serena/02-usage/040_workflow.html)
 
 「更新中心」从已核验的 Topgrade 引擎读取步骤目录。「更新任务」区分工具与缓存和只读诊断，默认零选中。可审核计数来自本机工具可用性。重跑前需重新检查。「终端维护」置顶 BetterDisplay 与 Homebrew HEAD-sync，并提供其余引擎步骤搜索和本机 profile 预演。预演读取正常 Topgrade 配置，前后置命令及配置中的 `misc.only` 也会参与。以预演结果核对实际范围。配置迁移包仍是独立的备份和提取入口。
 

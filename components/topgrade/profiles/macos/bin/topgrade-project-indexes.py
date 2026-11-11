@@ -4,6 +4,7 @@
 import argparse
 from datetime import UTC, datetime
 import fcntl
+from hashlib import sha256
 import io
 import json
 import os
@@ -29,7 +30,11 @@ PRIVATE_PARTS = {
 }
 SAFE_PATH = re.compile(r"[A-Za-z0-9_./+-]+")
 SHA = re.compile(r"[0-9a-f]{40}")
-SCHEMA = 2
+DATED = re.compile(r"[0-9]{8}T[0-9]{12}Z-[0-9a-f]{12}\.json")
+TREE_ROW = re.compile(r"((?:│   |    )*)[├└]── ([A-Za-z0-9_.+-]+)(/?) \(([0-9,]+) tokens?\)")
+SERENA_FILES = ("document_symbols.pkl", "raw_document_symbols.pkl")
+SCHEMA = 3
+MAX_RECEIPT_BYTES = 2 * 1024 * 1024
 
 
 def run(args, cwd, env, *, input_bytes=None):
@@ -119,6 +124,170 @@ def publish(path, data):
             temporary.unlink(missing_ok=True)
 
 
+def read_receipt(path):
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as handle:
+        info = os.fstat(handle.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_nlink != 1 or info.st_mode & 0o077):
+            raise RuntimeError("Index receipt must be a private, owned regular file")
+        if info.st_size > MAX_RECEIPT_BYTES:
+            return None, None
+        data = handle.read(MAX_RECEIPT_BYTES + 1)
+    if len(data) > MAX_RECEIPT_BYTES:
+        return None, None
+    return data, decode_receipt(data)
+
+
+def decode_receipt(data):
+    def unique_fields(pairs):
+        result = dict(pairs)
+        if len(pairs) != len(result):
+            raise ValueError("Duplicate receipt fields")
+        return result
+
+    try:
+        receipt = json.loads(data, object_pairs_hook=unique_fields)
+        if (not isinstance(receipt, dict) or type(receipt.get("schema")) is not int
+                or receipt["schema"] not in (2, SCHEMA)):
+            return None
+        fields = {"schema", "commit", "generated_at", "tools", "source_files", "excluded_by_security",
+                  "token_tree", "token_heatmap"}
+        if receipt["schema"] == SCHEMA:
+            fields.add("checkout_id")
+            if not re.fullmatch(r"[0-9a-f]{64}", receipt.get("checkout_id", "")):
+                return None
+        if set(receipt) != fields or not SHA.fullmatch(receipt["commit"]):
+            return None
+        timestamp = datetime.fromisoformat(receipt["generated_at"])
+        if timestamp.tzinfo is None or timestamp > datetime.now(UTC):
+            return None
+        tools = receipt["tools"]
+        if (not isinstance(tools, dict) or set(tools) != {"repomix", "lean_ctx"}
+                or any(not isinstance(v, str) or not 0 < len(v) <= 256 or not v.isprintable()
+                       for v in tools.values())):
+            return None
+        count, excluded = receipt["source_files"], receipt["excluded_by_security"]
+        if type(count) is not int or type(excluded) is not int or count <= 0 or excluded < 0 or count + excluded > 6000:
+            return None
+        lines = receipt["token_tree"].splitlines()
+        if not lines or not re.fullmatch(r"─+", lines[0]):
+            return None
+        files, parents = set(), []
+        for line in lines[1:]:
+            match = TREE_ROW.fullmatch(line)
+            if not match:
+                return None
+            indent, name, directory, _ = match.groups()
+            depth = len(indent) // 4
+            del parents[depth:]
+            if depth != len(parents) or name.startswith(".") or name.casefold() in PRIVATE_PARTS:
+                return None
+            if directory:
+                parents.append(name)
+            else:
+                relative = "/".join([*parents, name])
+                if relative in files or not source_path(relative):
+                    return None
+                files.add(relative)
+        heatmap = receipt["token_heatmap"]
+        if (len(files) != count or not isinstance(heatmap, list) or len(heatmap) > min(count, 100)
+                or any(not isinstance(row, dict) or set(row) != {"path", "token_count"}
+                       or row["path"] not in files or type(row["token_count"]) is not int
+                       or row["token_count"] < 0 for row in heatmap)
+                or len({row["path"] for row in heatmap}) != len(heatmap)):
+            return None
+    except (AttributeError, OverflowError, RecursionError, TypeError, ValueError):
+        return None
+    return receipt
+
+
+def dated_name(receipt):
+    timestamp = datetime.fromisoformat(receipt["generated_at"]).astimezone(UTC)
+    return f"{timestamp:%Y%m%dT%H%M%S%fZ}-{receipt['commit'][:12]}.json"
+
+
+def retain_receipt(path, valid):
+    folder = path.parent / ("history" if valid else "quarantine")
+    private_directory(folder)
+    target = Path(tempfile.mkdtemp(prefix="receipt-", dir=folder)) / path.name
+    path.rename(target)
+    print(f"{path.parent.name}: moved {path.name} to {folder.name}/")
+
+
+def tidy_receipts(destination, expected):
+    latest = destination / "latest.json"
+    active_data = active_name = None
+    if os.path.lexists(latest):
+        data, receipt = read_receipt(latest)
+        if receipt and receipt.get("checkout_id", expected["checkout_id"]) != expected["checkout_id"]:
+            raise RuntimeError("Index directory belongs to another checkout with the same name")
+        if receipt and all(receipt.get(k) == v for k, v in expected.items()):
+            active_data, active_name = data, dated_name(receipt)
+        else:
+            retain_receipt(latest, valid=receipt is not None)
+    for path in sorted(destination.iterdir()):
+        if not DATED.fullmatch(path.name):
+            continue
+        data, receipt = read_receipt(path)
+        valid = bool(receipt and dated_name(receipt) == path.name)
+        if path.name == active_name and valid and data == active_data:
+            continue
+        retain_receipt(path, valid)
+    return active_data
+
+
+def serena_inventory(repo, destination, env, quarantine_empty=False):
+    paths = (Path.home() / ".local/bin/serena", Path("/opt/homebrew/bin/serena"))
+    executable = next((path for path in paths if path.is_file() and os.access(path, os.X_OK)), None)
+    version = None
+    if executable:
+        try:
+            reported = run([str(executable), "--version"], destination, env).decode().strip()
+            if re.fullmatch(r"Serena [0-9][A-Za-z0-9.+_-]{0,63}", reported):
+                version = reported
+        except (OSError, RuntimeError, UnicodeError, subprocess.SubprocessError):
+            pass
+
+    cache = repo / ".serena/cache"
+    entries = []
+    status = "absent"
+    for directory in (cache.parent, cache):
+        try:
+            if not stat.S_ISDIR(directory.lstat().st_mode):
+                status = "unsafe"
+                break
+        except FileNotFoundError:
+            break
+    else:
+        status = "present-unverified"
+        for server in sorted(cache.iterdir()):
+            if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", server.name):
+                continue
+            if not stat.S_ISDIR(server.lstat().st_mode):
+                status = "unsafe"
+                continue
+            for name in SERENA_FILES:
+                file = server / name
+                try:
+                    info = file.lstat()
+                except FileNotFoundError:
+                    continue
+                regular = stat.S_ISREG(info.st_mode)
+                state = "unverified" if regular and info.st_size else "invalid"
+                if (quarantine_empty and regular and info.st_size == 0 and info.st_uid == os.getuid()
+                        and info.st_nlink == 1 and file.lstat() == info):
+                    folder = destination / "serena-quarantine"
+                    private_directory(folder)
+                    saved = Path(tempfile.mkdtemp(prefix=f"{server.name}-", dir=folder)) / name
+                    file.rename(saved)
+                    state = "quarantined-empty"
+                entries.append({"path": f"{server.name}/{name}", "bytes": info.st_size if regular else None,
+                                "modified_at": datetime.fromtimestamp(info.st_mtime, UTC).isoformat(),
+                                "status": state})
+    data = {"version": version, "cache_status": status, "files": entries}
+    publish(destination / "serena.json", (json.dumps(data, indent=2) + "\n").encode())
+
+
 def token_tree(stage, work, files, env):
     config = work / "repomix.json"
     config.write_text(json.dumps({"security": {"enableSecurityCheck": True}}))
@@ -152,7 +321,7 @@ def token_tree(stage, work, files, env):
     return tree, excluded
 
 
-def refresh(repo, destination):
+def refresh(repo, destination, *, quarantine_empty_serena=False):
     private_directory(destination)
     lock = os.open(destination / ".lock", os.O_CREAT | os.O_NOFOLLOW | os.O_RDWR, 0o600)
     with os.fdopen(lock, "rb") as guard, tempfile.TemporaryDirectory(dir=destination) as work:
@@ -176,19 +345,17 @@ def refresh(repo, destination):
             "repomix": run([REPOMIX, "--version"], stage, env).decode().strip(),
             "lean_ctx": run([LEAN_CTX, "--version"], stage, env).decode().strip(),
         }
+        expected = {"schema": SCHEMA, "commit": revision, "tools": versions,
+                    "checkout_id": sha256(os.fsencode(repo.resolve(strict=True))).hexdigest()}
+        active = tidy_receipts(destination, expected)
+        serena_inventory(repo, destination, env, quarantine_empty_serena)
         latest = destination / "latest.json"
-        if latest.is_symlink():
-            raise RuntimeError("Unexpected symlink at latest.json")
-        if latest.exists():
-            try:
-                prior = json.loads(latest.read_text())
-            except (UnicodeError, ValueError):
-                prior = {}
-            if isinstance(prior, dict) and all(prior.get(k) == v for k, v in {
-                "schema": SCHEMA, "commit": revision, "tools": versions,
-            }.items()) and isinstance(prior.get("token_heatmap"), list) and prior.get("token_tree"):
-                print(f"{repo.name}: current {revision[:12]}")
-                return
+        if active:
+            dated = destination / dated_name(json.loads(active))
+            if not dated.exists():
+                publish(dated, active)
+            print(f"{repo.name}: current {revision[:12]}")
+            return
 
         files = snapshot(repo, revision, stage, env)
         tree, excluded = token_tree(stage, work, files, env)
@@ -205,11 +372,13 @@ def refresh(repo, destination):
             raise RuntimeError("Project HEAD changed during indexing")
         now = datetime.now(UTC)
         data = (json.dumps({
-            "schema": SCHEMA, "commit": revision, "generated_at": now.isoformat(),
-            "tools": versions, "source_files": len(files), "token_tree": tree,
+            **expected, "generated_at": now.isoformat(),
+            "source_files": len(files), "token_tree": tree,
             "excluded_by_security": excluded,
             "token_heatmap": [{"path": row["path"], "token_count": row["token_count"]} for row in heatmap],
         }, ensure_ascii=False, indent=2) + "\n").encode()
+        if len(data) > MAX_RECEIPT_BYTES or not decode_receipt(data):
+            raise RuntimeError("Generated source index failed receipt verification")
         publish(destination / f"{now:%Y%m%dT%H%M%S%fZ}-{revision[:12]}.json", data)
         publish(latest, data)
         print(f"{repo.name}: indexed {revision[:12]} ({len(files)} files, {excluded} excluded by security scan)")
@@ -218,7 +387,11 @@ def refresh(repo, destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repositories", type=Path, nargs="*")
+    parser.add_argument("--quarantine-empty-serena-cache", action="store_true",
+                        help="Move empty Serena symbol caches for explicit checkouts after closing their Serena sessions")
     args = parser.parse_args()
+    if args.quarantine_empty_serena_cache and not args.repositories:
+        parser.error("--quarantine-empty-serena-cache requires explicit checkouts")
     os.umask(0o077)
     state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "project-indexes"
     private_directory(state)
@@ -229,7 +402,8 @@ def main():
         try:
             if repo.is_symlink() or not re.fullmatch(r"[A-Za-z0-9_.-]+", repo.name) or repo.name.startswith("."):
                 raise RuntimeError("Invalid checkout name")
-            refresh(repo.resolve(strict=True), state / repo.name)
+            refresh(repo.resolve(strict=True), state / repo.name,
+                    quarantine_empty_serena=args.quarantine_empty_serena_cache)
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             print(f"{repo.name}: index failed ({type(exc).__name__})" +
                   (f": {exc}" if isinstance(exc, RuntimeError) else ""), flush=True)
