@@ -71,4 +71,10 @@ TLDR 刷新会按 tealdeer 选择的下载语言替换缓存。多语言用户�
 
 Windows 在 LTSC 2021 和 LTSC 2024 分开记录系统版本、预览产物摘要、Studio 启动、WinGet 清单和实际权限提示。对同一来源中有唯一 ID 的非关键包，先记录已安装版本和明确目标版本，再执行 Studio 显示的单包终端命令，核对退出码和升级后的版本。两代设备各自通过后再开放 GUI 单包写入。
 
+### Windows DNS 隔离验收
+
+在 FlClash 的本地文件中保留 `dns.nameserver-policy`，导入后从生效配置核对该策略、HTTPS 上游、TUN 严格路由及 UDP／TCP 端口 53 接管。普通文件配置只接受部分全局覆盖字段，因此必须核对生效配置。记录 IPv6 与 LLMNR 的独立状态。维护记录中通过的组合使用原有的核心 IPv6 设置，LLMNR 已关闭，智能多宿主名称解析策略未配置。 [FlClash 配置合成源码](https://github.com/chen08209/FlClash/blob/v0.9.3/lib/providers/state/profile.dart) · [Mihomo TUN 配置](https://wiki.metacubex.one/en/config/inbound/tun/)
+
+使用合成域名分别发出 UDP／TCP DNS 查询，再用 HTTPS 请求作正对照。只在短暂测试窗口对物理网卡统计端口 53 和 443 的出站事件及捕获丢失量。报告仅保存计数和测试范围，抓包内容留在本机并在测试结束后清理。分别记录 TUN 运行中、退出后和重启后的结果。发现连通性回退时恢复上一份已验收的客户端配置。
+
 Studio 预览包包含 Studio 自己的可执行文件。引擎由本机单独构建。仓库内保留 Topgrade 源代码、第三方声明及 GPL 许可；分发引擎时须一并处理对应源码与构建材料。
