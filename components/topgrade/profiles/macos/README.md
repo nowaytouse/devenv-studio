@@ -4,6 +4,8 @@ This Apple Silicon macOS profile configures the managed Rust Topgrade tasks. The
 
 DevEnv Studio builds a reviewed component tree, installs the matching profile with its Rust installer, and activates the engine separately. The built-in Helm and GitHub Skills steps use their native validators. The older standalone helpers remain available for legacy entry points and recovery.
 
+The Homebrew formula step refreshes catalogs before checking for upgrades. When a tap has local changes, the step preserves that checkout and fast-forwards clean tracked tap checkouts, including `homebrew/core`. The log names deferred taps and reports refresh failures. A failed core refresh stops formula upgrades.
+
 ## Review and install
 
 Use the Studio maintenance CLI against a clean reviewed checkout:

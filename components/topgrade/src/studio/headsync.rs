@@ -49,6 +49,12 @@ struct Headsync {
     git_config_index: Option<usize>,
 }
 
+struct TapCheckout {
+    name: String,
+    path: PathBuf,
+    dirty: bool,
+}
+
 impl Headsync {
     #[expect(
         clippy::disallowed_methods,
@@ -182,18 +188,7 @@ impl Headsync {
             &command_text(self.brew(&["list", "--formula", "--full-name"]))
                 .wrap_err("unable to enumerate installed Homebrew formulae")?,
         )?;
-        let dirty = self.changed_taps()?;
-        if dirty.is_empty() {
-            println!("\n== Homebrew update ==");
-            status(&mut self.brew(&["update"]))?;
-            self.core_clean(txn.core(), "after Homebrew update")?;
-            self.changed_taps()?;
-        } else {
-            println!(
-                "Homebrew catalog refresh deferred to preserve local tap changes: {}",
-                dirty.join(", ")
-            );
-        }
+        let catalog_errors = self.refresh_catalogs(txn.core())?;
         let pins = self.pins()?;
         let revision = self.target_revision()?;
         println!("\nTarget llama.cpp snapshot:\n  {revision}");
@@ -222,46 +217,152 @@ impl Headsync {
         self.verify_runtime(&self.verify_pair(&revision)?)?;
         let missing = command_text(self.brew(&["missing"]))?;
         ensure!(missing.is_empty(), "Homebrew dependencies are missing:\n{missing}");
+        ensure!(
+            catalog_errors.is_empty(),
+            "Homebrew formula upgrades completed, but some tap catalogs could not be refreshed:\n{}",
+            catalog_errors.join("\n")
+        );
         Ok(())
     }
 
-    fn changed_taps(&self) -> Result<Vec<String>> {
-        let mut dirty = Vec::new();
+    fn refresh_catalogs(&self, core: &Path) -> Result<Vec<String>> {
+        let taps = self.tap_checkouts()?;
+        let dirty: Vec<&str> = taps
+            .iter()
+            .filter(|tap| tap.dirty)
+            .map(|tap| tap.name.as_str())
+            .collect();
+        if dirty.is_empty() {
+            println!("\n== Homebrew update ==");
+            status(&mut self.brew(&["update"]))?;
+            self.core_clean(core, "after Homebrew update")?;
+            self.tap_checkouts()?;
+            return Ok(Vec::new());
+        }
+
+        // A regular brew update may reset and stash the index of every tap.
+        println!("\n== Refresh clean Homebrew catalogs (Git fast-forward only) ==");
+        println!("Preserving taps with local changes: {}", dirty.join(", "));
+        self.refresh_checkout("homebrew/core", core)?;
+        self.core_clean(core, "after Homebrew catalog refresh")?;
+        let mut errors = Vec::new();
+        for tap in taps.iter().filter(|tap| !tap.dirty) {
+            if let Err(error) = self.refresh_checkout(&tap.name, &tap.path) {
+                interrupted()?;
+                errors.push(format!("{error:#}"));
+            }
+        }
+        Ok(errors)
+    }
+
+    fn refresh_checkout(&self, tap: &str, path: &Path) -> Result<()> {
+        let refresh = || -> Result<()> {
+            let branch = command_text(self.git(path, &["branch", "--show-current"]))?;
+            let upstream = if branch.is_empty() {
+                String::new()
+            } else {
+                command_text(self.git(
+                    path,
+                    &[
+                        "for-each-ref",
+                        "--format=%(upstream)%09%(upstream:remotename)%09%(upstream:remoteref)",
+                        &format!("refs/heads/{branch}"),
+                    ],
+                ))?
+            };
+            if upstream.is_empty() || upstream == "\t\t" {
+                ensure!(tap != "homebrew/core", "homebrew/core has no tracked upstream branch");
+                println!("Preserving {tap}: no tracked upstream branch");
+                return Ok(());
+            }
+            let fields: Vec<_> = upstream.split('\t').collect();
+            let [tracking, remote, source] = fields.as_slice() else {
+                bail!("Invalid tracked upstream for {tap}");
+            };
+            ensure!(
+                tracking.starts_with("refs/remotes/") && !remote.is_empty() && source.starts_with("refs/heads/"),
+                "Invalid remote branch for {tap}"
+            );
+            ensure!(
+                self.worktree_changes(path)?.is_empty(),
+                "{tap} changed during catalog refresh"
+            );
+            println!("Refreshing {tap}");
+            status(&mut self.git(
+                path,
+                &[
+                    "fetch",
+                    "--no-tags",
+                    "--no-recurse-submodules",
+                    "--no-write-fetch-head",
+                    "--",
+                    remote,
+                    &format!("{source}:{tracking}"),
+                ],
+            ))?;
+            ensure!(
+                command_text(self.git(path, &["branch", "--show-current"]))? == branch
+                    && self.worktree_changes(path)?.is_empty(),
+                "{tap} changed during catalog refresh"
+            );
+            status(&mut self.git(
+                path,
+                &[
+                    "merge",
+                    "--ff-only",
+                    "--no-autostash",
+                    "--no-squash",
+                    "--no-overwrite-ignore",
+                    "--",
+                    tracking,
+                ],
+            ))
+        };
+        refresh().wrap_err_with(|| format!("Cannot refresh Homebrew tap {tap}"))
+    }
+
+    fn git(&self, path: &Path, args: &[&str]) -> Command {
+        let mut command = self.command("git");
+        command.arg("-C").arg(path).args(args);
+        command
+    }
+
+    fn worktree_changes(&self, path: &Path) -> Result<String> {
+        let mut command = self.git(path, &["status", "--porcelain=v1", "--untracked-files=all"]);
+        command.env("GIT_OPTIONAL_LOCKS", "0");
+        command_text(command)
+    }
+
+    fn tap_checkouts(&self) -> Result<Vec<TapCheckout>> {
+        let mut taps = Vec::new();
         for tap in names(&command_text(self.brew(&["tap"]))?)? {
             ensure!(tap.split('/').count() == 2, "Unexpected Homebrew tap identifier");
             if tap == "homebrew/core" {
                 continue;
             }
             let path = command_path(self.brew(&["--repo", &tap]))?;
-            let mut command = self.command("git");
-            command.env("GIT_OPTIONAL_LOCKS", "0").arg("-C").arg(path).args([
-                "status",
-                "--porcelain=v1",
-                "--untracked-files=all",
-            ]);
-            let changes = command_text(command).wrap_err_with(|| format!("Cannot inspect Homebrew tap {tap}"))?;
+            let changes = self
+                .worktree_changes(&path)
+                .wrap_err_with(|| format!("Cannot inspect Homebrew tap {tap}"))?;
             ensure!(
                 !changes
                     .lines()
                     .any(|line| matches!(line.get(..2), Some("DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU"))),
                 "Homebrew tap {tap} has unresolved Git conflicts. Resolve them before HEAD-sync"
             );
-            if !changes.is_empty() {
-                dirty.push(tap);
-            }
+            taps.push(TapCheckout {
+                name: tap,
+                path,
+                dirty: !changes.is_empty(),
+            });
         }
-        Ok(dirty)
+        Ok(taps)
     }
 
     fn core_clean(&self, core: &Path, phase: &str) -> Result<()> {
-        let mut command = self.command("git");
-        command.env("GIT_OPTIONAL_LOCKS", "0").arg("-C").arg(core).args([
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-        ]);
-        let changes =
-            command_text(command).wrap_err_with(|| format!("cannot inspect homebrew/core status ({phase})"))?;
+        let changes = self
+            .worktree_changes(core)
+            .wrap_err_with(|| format!("cannot inspect homebrew/core status ({phase})"))?;
         ensure!(changes.is_empty(), "homebrew/core is dirty ({phase}):\n{changes}");
         Ok(())
     }

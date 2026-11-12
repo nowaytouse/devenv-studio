@@ -63,6 +63,8 @@ Krita Next 跟随 KDE 官方 `master/macos-universal` 滚动渠道。目录中�
 
 取消在当前步骤结束后生效。超时或无法证明子进程结束时，保留中断记录，暂停新的维护操作。先检查任务和现存变更，再在终端运行已安装 Topgrade 的 `--studio-acknowledge-interruption`。如果中断记录缺少可核验的进程组信息，先人工确认没有残余进程并核验更新器状态，再保留该记录作恢复依据。
 
+Homebrew 公式步骤先刷新目录，再扫描并升级过期公式。有本地改动的 tap 会保留原样，`homebrew/core` 与其余有上游跟踪分支的干净 tap 仅快进。日志列出保留的 tap 和刷新失败。官方 core 刷新失败时，公式升级停止。
+
 ## 本机构建与切换
 
 源代码来自保留完整历史的 Topgrade 组件，使用独立 Cargo 配置及原许可证。维护者从干净、审核过的 Studio checkout 操作：

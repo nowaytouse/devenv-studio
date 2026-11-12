@@ -40,8 +40,10 @@ if args == ["--repo", "homebrew/core"]:
  print(root/"core")
 elif args == ["tap"]:
  print("homebrew/core\nexample/tools")
-elif args == ["--repo", "example/tools"]:
- print(root/"tap")
+ if os.environ.get("TEST_CATALOG_REFRESH") == "1":
+  print("example/clean\nexample/local")
+elif args[:1] == ["--repo"] and args[1] in ("example/tools", "example/clean", "example/local"):
+ print(root/{"example/tools":"tap", "example/clean":"clean-tap", "example/local":"local-tap"}[args[1]])
 elif args == ["--prefix"]:
  print(root)
 elif args == ["--cellar", "llvm"]:
@@ -81,6 +83,7 @@ elif args[:1] == ["upgrade"]:
 elif args[:1] == ["outdated"]:
  eligible={name.rsplit("/",1)[-1]:name for name in args[1:] if not name.startswith("--")}
  outdated=set(os.environ.get("TEST_OUTDATED", "topgrade").splitlines())
+ if (root/"core-catalog-refreshed").exists(): outdated.add("postgresql@17")
  if (root/"jpeg-xl-committed").exists(): outdated.difference_update(os.environ.get("TEST_JXL_REBUILDS", "").splitlines())
  found=[name for short,name in eligible.items() if short in outdated]
  mode=os.environ.get("TEST_OUTDATED_MODE", "normal")
@@ -144,7 +147,7 @@ args=sys.argv[1:]
 root=pathlib.Path(os.environ["TEST_ROOT"])
 with (root/"events").open("a") as f: f.write("git " + " ".join(args) + "\n")
 if len(args)>=4 and args[0] == "-C" and args[2] == "status":
- if pathlib.Path(args[1]) == root/"tap":
+ if pathlib.Path(args[1]).resolve() == (root/"tap").resolve():
   state = os.environ.get("TEST_TAP_STATUS", "clean")
   if "brew update" in (root/"events").read_text().splitlines():
    state = os.environ.get("TEST_TAP_AFTER", state)
@@ -154,6 +157,26 @@ if len(args)>=4 and args[0] == "-C" and args[2] == "status":
  state=os.environ.get("TEST_GIT_STATUS", "clean")
  if state == "fail": print("simulated git error",file=sys.stderr); sys.exit(41)
  if state == "dirty": print(" M Formula/g/ggml.rb")
+elif len(args)>=3 and args[0] == "-C" and os.environ.get("TEST_CATALOG_REFRESH") == "1":
+ repo = pathlib.Path(args[1]).name
+ assert repo in ("core", "clean-tap", "local-tap"), args
+ if args[2:] == ["branch", "--show-current"]:
+  print("main")
+ elif args[2:] == ["for-each-ref", "--format=%(upstream)%09%(upstream:remotename)%09%(upstream:remoteref)", "refs/heads/main"]:
+  print("refs/remotes/origin/main\torigin\trefs/heads/main" if repo != "local-tap" else "\t\t")
+ elif args[2:] == ["fetch", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--", "origin", "refs/heads/main:refs/remotes/origin/main"]:
+  assert repo in ("core", "clean-tap"), args
+  assert not (root/"state/brew-headsync/active").exists(), "catalog refresh before journal recovery"
+  if os.environ.get("TEST_FAIL") == "fetch-" + repo:
+   print("injected catalog fetch failure", file=sys.stderr); sys.exit(46)
+  (root/f"{repo}-catalog-fetched").touch()
+ elif args[2:] == ["merge", "--ff-only", "--no-autostash", "--no-squash", "--no-overwrite-ignore", "--", "refs/remotes/origin/main"]:
+  assert repo in ("core", "clean-tap") and (root/f"{repo}-catalog-fetched").exists(), args
+  if os.environ.get("TEST_FAIL") == "merge-" + repo:
+   print("injected catalog merge failure", file=sys.stderr); sys.exit(46)
+  (root/f"{repo}-catalog-refreshed").touch()
+ else:
+  print("unexpected catalog Git call: " + repr(args), file=sys.stderr); sys.exit(42)
 elif args[:1] == ["ls-remote"]:
  with (root/"events").open("a") as f:
   f.write("gitconfig count=" + os.environ.get("GIT_CONFIG_COUNT", "") + " key0=" + os.environ.get("GIT_CONFIG_KEY_0", "") + " value0=" + os.environ.get("GIT_CONFIG_VALUE_0", "") + " key1=" + os.environ.get("GIT_CONFIG_KEY_1", "") + " value1=" + os.environ.get("GIT_CONFIG_VALUE_1", "") + "\n")
@@ -250,7 +273,7 @@ class Fixture:
 
 def case(name, callback):
     with tempfile.TemporaryDirectory(prefix="headsync-regression-") as directory:
-        fixture = Fixture(Path(directory))
+        fixture = Fixture(Path(directory).resolve())
         try:
             callback(fixture)
         except Exception as error:
@@ -309,13 +332,48 @@ def idempotent(f):
     assert len(upgrades) == (4 if native else 6) and all("topgrade" not in line for line in upgrades), upgrades
 
 
-def dirty_tap_preserves_checkout(f):
+def dirty_tap_preserves_checkout(f, failed_refresh=""):
     (f.root / "pair-installed").touch()
-    result = f.run(TEST_TAP_STATUS="dirty")
-    assert result.returncode == 0, result.stdout
-    assert "catalog refresh deferred" in result.stdout, result.stdout
-    assert "already installed at the full target revision" in result.stdout, result.stdout
-    assert not any(line == "brew update" or line.startswith("brew upgrade ") for line in f.events())
+    dirty_tap = f.root / "tap"
+    dirty_tap.mkdir()
+    draft = dirty_tap / "local-formula.rb"
+    draft.write_text("# local draft\n")
+    for name in ("clean-tap", "local-tap"):
+        (f.root / name).mkdir()
+    result = f.run(TEST_TAP_STATUS="dirty", TEST_CATALOG_REFRESH="1",
+                   TEST_INSTALLED="llvm\npostgresql@17", TEST_FAIL=failed_refresh)
+    events = f.events()
+    refreshes = [line for line in events if line.startswith("git -C ") and
+                 (" fetch " in line or " merge " in line)]
+    expected = [("core", "fetch")]
+    if failed_refresh != "fetch-core":
+        expected.extend([("core", "merge"), ("clean-tap", "fetch"), ("clean-tap", "merge")])
+    assert len(refreshes) == len(expected) and all(
+        event.startswith(f"git -C {f.root / repo} {operation} ")
+        for event, (repo, operation) in zip(refreshes, expected, strict=True)
+    ), events
+    assert "brew update" not in events, events
+    dirty_events = [line for line in events if line.startswith(f"git -C {dirty_tap} ")]
+    assert dirty_events and all(line.startswith(f"git -C {dirty_tap} status ") for line in dirty_events), events
+    assert draft.read_text() == "# local draft\n"
+    if failed_refresh:
+        diagnostic = f"injected catalog {failed_refresh.split('-', 1)[0]} failure"
+        assert result.returncode != 0 and diagnostic in result.stdout, result.stdout
+    else:
+        assert result.returncode == 0, result.stdout
+    upgrades = [line for line in events if line.startswith("brew upgrade ")]
+    if failed_refresh == "fetch-core":
+        assert not upgrades and not (f.root / "core-catalog-refreshed").exists(), events
+    else:
+        assert "already installed at the full target revision" in result.stdout, result.stdout
+        assert upgrades == ["brew upgrade --formula --fetch-HEAD postgresql@17"], events
+        assert (f.root / "core-catalog-refreshed").exists()
+        assert (f.root / "clean-tap-catalog-refreshed").exists() == (not failed_refresh)
+        assert events.index(refreshes[-1]) < events.index(upgrades[0]), events
+        for repo, start, end in (("core", 0, 1), ("clean-tap", 2, 3)):
+            rechecks = events[events.index(refreshes[start]) + 1:events.index(refreshes[end])]
+            assert f"git -C {f.root / repo} branch --show-current" in rechecks, rechecks
+            assert f"git -C {f.root / repo} status --porcelain=v1 --untracked-files=all" in rechecks, rechecks
     f.assert_restored()
 
 
@@ -743,7 +801,9 @@ if native:
         ("Interrupted JPEG XL recovery runs before Homebrew refresh", jpeg_xl_recovers_before_brew_refresh),
         ("Pending JPEG XL recovery prevents Homebrew refresh", lambda f: jpeg_xl_recovers_before_brew_refresh(f, True)),
         ("broken linkage after a successful Homebrew command is a failure", broken_post_upgrade_linkage_fails),
-        ("dirty tap defers refresh and reuses an already verified pair", dirty_tap_preserves_checkout),
+        ("dirty tap is preserved while clean catalogs reveal a stable upgrade", dirty_tap_preserves_checkout),
+        ("core catalog fetch failure prevents formula upgrades", lambda f: dirty_tap_preserves_checkout(f, "fetch-core")),
+        ("clean tap merge failure still upgrades from the refreshed core catalog", lambda f: dirty_tap_preserves_checkout(f, "merge-clean-tap")),
         ("existing tap conflict stops before either mutation", lambda f: tap_conflict_stops_before_pair(f, False)),
         ("tap conflict after refresh stops before either keg upgrade", lambda f: tap_conflict_stops_before_pair(f, True)),
         ("exit 1 without JSON retains the Homebrew diagnostic", outdated_exit_one_without_json_explains_error),
