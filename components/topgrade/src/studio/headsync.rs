@@ -329,6 +329,25 @@ impl Headsync {
             println!("No remaining outdated formulae");
             return Ok(());
         }
+        if let Some(jxl) = outdated.iter().find(|formula| basename(formula) == "jpeg-xl") {
+            let users = names(
+                &command_text(self.brew(&[
+                    "uses",
+                    "--installed",
+                    "--recursive",
+                    "--include-implicit",
+                    "--include-optional",
+                    "--formula",
+                    jxl,
+                ]))
+                .wrap_err("Unable to verify the installed JPEG XL dependency group")?,
+            )?;
+            ensure!(
+                users.is_empty(),
+                "JPEG XL upgrade needs a coordinated ABI check for installed dependents: {}. No remaining formulae were upgraded",
+                users.join(", ")
+            );
+        }
         let dependents = names(
             &command_text(self.brew(&["uses", "--installed", "--include-build", "--formula", "rust"]))
                 .wrap_err("unable to identify installed Homebrew Rust dependents")?,
@@ -356,7 +375,11 @@ impl Headsync {
             .wrap_err_with(|| format!("Homebrew Rust cannot run; required by {formula}"))?;
         }
         status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))?;
-        Ok(())
+        let linkage = self
+            .brew(&["linkage", "--test"])
+            .envs([("LANG", "C"), ("LC_ALL", "C")])
+            .output_checked_with(|_| Ok(()))?;
+        super::diagnostics::verify_linkage(linkage).wrap_err("Linkage check after Homebrew formula upgrade")
     }
 
     fn verify_pair(&self, revision: &str) -> Result<Vec<PathBuf>> {

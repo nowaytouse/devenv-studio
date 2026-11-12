@@ -31,7 +31,10 @@ pub(super) fn linkage_failed(output: &Output) -> bool {
 }
 
 pub(super) fn run_linkage() -> Result<()> {
-    let output = probe(Path::new(BREW), &["linkage"])?;
+    verify_linkage(probe(Path::new(BREW), &["linkage", "--test"])?)
+}
+
+pub(super) fn verify_linkage(output: Output) -> Result<()> {
     if linkage_failed(&output) {
         print!("{}", String::from_utf8_lossy(&output.stdout));
         eprint!("{}", String::from_utf8_lossy(&output.stderr));

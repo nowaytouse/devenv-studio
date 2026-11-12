@@ -55,7 +55,7 @@ fn legacy_fixture_parity() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(
         stdout.lines().filter(|line| line.starts_with("PASS ")).count(),
-        55,
+        58,
         "{stdout}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );

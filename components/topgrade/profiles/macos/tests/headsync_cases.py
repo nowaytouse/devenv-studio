@@ -96,7 +96,11 @@ elif args[:1] == ["outdated"]:
   print("\n".join(found))
  if found: sys.exit(1)
 elif args[:1] == ["uses"]:
- print("topgrade\natuin")
+ if args[-1].endswith("/jpeg-xl"): print(os.environ.get("TEST_JXL_USERS", ""))
+ else: print("topgrade\natuin")
+elif args == ["linkage", "--test"]:
+ if os.environ.get("TEST_BATCH_BROKEN") == "1":
+  print("Broken dependencies:\n  synthetic-jxl-library", file=sys.stderr)
 elif args == ["linkage", "--test", "rust"]:
  if os.environ.get("TEST_RUST_HEALTH", "broken") == "broken":
   print("Broken dependencies: synthetic LLVM"); sys.exit(1)
@@ -311,6 +315,26 @@ def outdated_exit_one_without_json_explains_error(f):
     result = f.run(TEST_OUTDATED_MODE="no-json")
     assert result.returncode != 0 and "no formula inventory" in result.stdout, result.stdout
     assert "synthetic formula syntax error" in result.stdout, result.stdout
+    f.assert_restored()
+
+
+def jpeg_xl_abi_gate(f, users):
+    target = "nyamiiko/headfixes/jpeg-xl"
+    result = f.run(TEST_INSTALLED=f"llvm\n{target}\nz3", TEST_OUTDATED="jpeg-xl\nz3",
+                   TEST_JXL_USERS=users)
+    upgrades = [line for line in f.events() if line.startswith("brew upgrade ") and target in line]
+    if users:
+        assert result.returncode != 0 and "coordinated ABI check" in result.stdout, result.stdout
+        assert not upgrades and not any(line.startswith("brew upgrade ") and " z3" in line for line in f.events())
+    else:
+        assert result.returncode == 0 and upgrades, (result.stdout, f.events())
+    f.assert_restored()
+
+
+def broken_post_upgrade_linkage_fails(f):
+    result = f.run(TEST_OUTDATED="z3", TEST_BATCH_BROKEN="1")
+    assert result.returncode != 0 and "Linkage check after Homebrew formula upgrade" in result.stdout, result.stdout
+    assert "synthetic-jxl-library" in result.stdout, result.stdout
     f.assert_restored()
 
 
@@ -671,6 +695,9 @@ cases = [
 ]
 if native:
     cases += [
+        ("JPEG XL and installed dependents require a coordinated upgrade", lambda f: jpeg_xl_abi_gate(f, "vips\nhomebrew-ffmpeg/ffmpeg/ffmpeg")),
+        ("JPEG XL without installed dependents stays eligible", lambda f: jpeg_xl_abi_gate(f, "")),
+        ("broken linkage after a successful Homebrew command is a failure", broken_post_upgrade_linkage_fails),
         ("dirty tap defers refresh and reuses an already verified pair", dirty_tap_preserves_checkout),
         ("existing tap conflict stops before either mutation", lambda f: tap_conflict_stops_before_pair(f, False)),
         ("tap conflict after refresh stops before either keg upgrade", lambda f: tap_conflict_stops_before_pair(f, True)),
