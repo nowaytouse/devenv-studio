@@ -908,6 +908,14 @@ mod tests {
             rollback_candidate(&fixture.root, &current, &cancel).unwrap(),
             Some(previous.clone())
         );
+        let previous_release = previous.binary.parent().unwrap().parent().unwrap();
+        let archive = fixture.root.join("archived-release");
+        fs::rename(previous_release, &archive).unwrap();
+        assert_eq!(
+            rollback_candidate(&fixture.root, &current, &cancel).unwrap(),
+            None
+        );
+        fs::rename(archive, previous_release).unwrap();
         fs::write(&previous.binary, "changed").unwrap();
         assert!(rollback_candidate(&fixture.root, &current, &cancel).is_err());
     }

@@ -566,6 +566,11 @@ fn rollback_candidate(
             && activation.previous != current.binary,
         "Topgrade activation record does not match the active release"
     );
+    let tree = release_tree(home, &activation.previous)?;
+    let releases = home.join(".local/share/topgrade-rustup-head/releases");
+    if !present(&releases.join(tree))? {
+        return Ok(None);
+    }
     let previous = inspect_release(home, &activation.previous, cancel)?.identity;
     ensure!(
         match activation.profile_transaction.as_deref() {
@@ -763,7 +768,7 @@ pub(super) fn check(cancel: &AtomicBool) -> Result<Check> {
         let proof = profile_proof(home, &release, cancel)?;
         match rollback_candidate(&proof.home, &proof.engine, cancel) {
             Ok(Some(previous)) => rollback = Some(previous),
-            Ok(None) => rollback_detail = Some("No retained activation is recorded.".into()),
+            Ok(None) => rollback_detail = Some("No installed rollback engine is available.".into()),
             Err(error) => rollback_detail = Some(format!("{error:#}")),
         }
         inventory(&proof)
