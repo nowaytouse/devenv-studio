@@ -131,10 +131,25 @@ source = replaceOnce(source,
   "(await listInstalledSkills({ global })).map((skill) => skill.name)",
   "(await listInstalledSkills({ global, namesOnly: global })).map((skill) => skill.name)");
 
+const wellKnownStart = source.indexOf("async function processWellKnownUpdates(");
+const wellKnownEnd = source.indexOf("async function fetchGlobalSource(", wellKnownStart);
+if (wellKnownStart < 0 || wellKnownEnd < 0) throw new Error("Missing pinned well-known updater");
+let wellKnown = source.slice(wellKnownStart, wellKnownEnd);
+wellKnown = replaceOnce(wellKnown, "\tlet changed = false;", "\tlet changed = false;\n\tlet warningCount = 0;");
+wellKnown = replaceOnce(wellKnown,
+  "\t\tif (result.status === \"error\") {",
+  "\t\tif (isGlobal && (result.status === 'error' || result.removedSkills?.length)) {\n" +
+  "\t\t\twarningCount++;\n" +
+  "\t\t\tconsole.warn('Warning: ' + sanitizeMetadata(baseUrl) + ' — index unavailable or paths missing; local skills kept');\n" +
+  "\t\t\tcontinue;\n\t\t}\n\t\tif (result.status === \"error\") {");
+wellKnown = replaceOnce(wellKnown, "\t\tchanged\n", "\t\tchanged,\n\t\twarningCount\n");
+source = source.slice(0, wellKnownStart) + wellKnown + source.slice(wellKnownEnd);
+
 const globalStart = source.indexOf("async function updateGlobalSkills(");
 const globalEnd = source.indexOf("async function updateProjectSkills(", globalStart);
 if (globalStart < 0 || globalEnd < 0) throw new Error("Missing pinned global updater");
 let global = source.slice(globalStart, globalEnd);
+global = replaceOnce(global, "changed: wkChanged }", "changed: wkChanged, warningCount: wkWarnings }");
 global = replaceOnce(global, "\tconst onDisk = await installedSkillNames(true);", [
   "\tconsole.log('Reading installed global skills…');",
   "\tconst inventoryStart = Date.now();",
@@ -149,14 +164,16 @@ const cloneStart = global.indexOf("\t\tconst { tempDir, note } = checkout;", loo
 if (fetchStart < 0 || loopStart < 0 || cloneStart < 0) throw new Error("Missing pinned source checks");
 global = global.slice(0, fetchStart) + [
   "\tlet completed = 0;",
+  "\tlet warningCount = wkWarnings;",
   "\tconst checkouts = await mapConcurrent(groups, async (itemsForSource) => {",
   "\t\tconst first = itemsForSource[0].entry;",
   "\t\tconst source = sanitizeMetadata(first.source);",
   "\t\tconst checkout = await fetchGlobalSource(first, lockedNamesFor(first).map((name) => lock.skills[name]?.skillPath));",
   "\t\tconst progress = '[' + (++completed) + '/' + groups.length + '] ';",
   "\t\tif ('error' in checkout) {",
-  "\t\t\tconsole.log(progress + '✗ Failed to check skills from ' + source);",
-  "\t\t\treturn { error: true };",
+  "\t\t\twarningCount++;",
+  "\t\t\tconsole.warn(progress + 'Warning: ' + source + ' — source unavailable; local skills kept');",
+  "\t\t\treturn { error: true, deferred: true };",
   "\t\t}",
   "\t\tif ('tree' in checkout) {",
   "\t\t\tconst pending = [];",
@@ -179,7 +196,7 @@ global = global.slice(0, fetchStart) + [
   "\t\tconst source = firstEntry.source;",
   "\t\tconst isGitHubSource = firstEntry.sourceType === 'github';",
   "\t\tconst checkout = checkouts[index];",
-  "\t\tif ('error' in checkout) { failCount++; continue; }",
+  "\t\tif ('error' in checkout) { if (!checkout.deferred) failCount++; continue; }",
   "\t\tif ('pending' in checkout) { updates.push(...checkout.pending); continue; }",
   "",
 ].join("\n") + global.slice(cloneStart);
@@ -187,31 +204,40 @@ global = replaceOnce(global, "\t\t} catch (error) {\n\t\t\tconsole.log(", "\t\t}
 global = replaceOnce(global, "\t\tconst { tempDir, note } = checkout;",
   "\t\tconst { tempDir, note } = checkout;\n\t\tconst beforeSource = updates.length;");
 global = replaceOnce(global,
-  "const resolution = await checkAndPromptForDeletions(source, lockedNamesFor(firstEntry),",
+  "const resolution = await checkAndPromptForDeletions(source, lockedNamesFor(firstEntry), lock.skills, true, options, discoveredLocations,",
   [
     "const locked = lockedNamesFor(firstEntry);",
     "\t\t\tconst retired = 'discovering-gcp-data-assets';",
     "\t\t\tconst replacements = discoveredLocations.filter((skill) => skill.name === 'discover-assets');",
-    "\t\t\tconst keepRetired = locked.includes(retired) &&",
+    "\t\t\tconst retire = locked.includes(retired) &&",
     "\t\t\t\tresolveSkillLocations([retired], lock.skills, discoveredLocations).deletedSkills.includes(retired) &&",
     "\t\t\t\treplacements.length === 1 && replacements[0].skillPath === 'skills/discover-assets/SKILL.md' &&",
-    "\t\t\t\tawait verifiedDiscoveryCheckout(tempDir, firstEntry, process.env.DEVENV_STUDIO_RETAIN_DISCOVERY === '1', getGitHubHost(), execFileAsync);",
-    "\t\t\tif (keepRetired) console.log('Retained upstream-retired discovering-gcp-data-assets; replacement: discover-assets (not installed)');",
-    "\t\t\tconst resolution = await checkAndPromptForDeletions(source, keepRetired ? locked.filter((name) => name !== retired) : locked,",
+    "\t\t\t\tawait verifiedDiscoveryCheckout(tempDir, firstEntry, process.env.DEVENV_STUDIO_RETIRE_DISCOVERY === '1', getGitHubHost(), execFileAsync).catch(() => false);",
+    "\t\t\tif (retire) console.log('Verified upstream retirement of discovering-gcp-data-assets');",
+    "\t\t\tconst resolution = resolveSkillLocations(retire ? locked.filter((name) => name !== retired) : locked, lock.skills, discoveredLocations,",
   ].join("\n"));
 global = replaceOnce(global,
   "\t\t\tconst deletedSkillSet = new Set(resolution.deletedSkills);\n" +
   "\t\t\tfor (const { name: skillName, entry } of itemsForSource) {\n" +
   "\t\t\t\tif (deletedSkillSet.has(skillName)) continue;",
-  "\t\t\tif (resolution.deletedSkills.length || resolution.ambiguousSkills.length) { failCount++; continue; }\n" +
-  "\t\t\tfor (const { name: skillName, entry } of itemsForSource) {");
+  [
+    "\t\t\tconst unresolved = [...resolution.deletedSkills, ...resolution.ambiguousSkills];",
+    "\t\t\tif (unresolved.length) {",
+    "\t\t\t\twarningCount++;",
+    "\t\t\t\tconsole.warn('Warning: ' + sanitizeMetadata(source) + ' — missing or ambiguous paths for ' + unresolved.map(sanitizeMetadata).join(', ') + '; local skills kept');",
+    "\t\t\t\tcontinue;",
+    "\t\t\t}",
+    "\t\t\tfor (const { name: skillName, entry } of itemsForSource) {",
+  ].join("\n"));
 global = replaceOnce(global, "\t\t} catch (error) {\n\t\t\tfailCount++;",
   "\t\t\tconsole.log('✓ ' + sanitizeMetadata(source) + ' — Git paths verified; ' + " +
   "(updates.length - beforeSource) + ' pending');\n\t\t} catch (error) {\n\t\t\tfailCount++;");
 global = replaceOnce(global,
   "\tif (checkable.length === 0 && skipped.length === 0 && wellKnownCount === 0) {",
   "\tif (failCount > 0) {\n\t\tprocess.exitCode = 1;\n\t\treturn { successCount, failCount, checkedCount };\n\t}\n" +
+  "\tif (warningCount > 0) console.log('Skill source checks finished with warnings: ' + warningCount + ' source(s) skipped');\n" +
   "\tif (checkable.length === 0 && skipped.length === 0 && wellKnownCount === 0) {");
+global = global.replaceAll("if (!wkChanged) console.log", "if (!wkChanged && warningCount === 0) console.log");
 source = source.slice(0, globalStart) + global + source.slice(globalEnd);
 
 // Keep original module URLs for dependency resolution and leave the NPX cache untouched.

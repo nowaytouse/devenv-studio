@@ -16,13 +16,12 @@ const SOURCE_URL: &str = "https://github.com/mattpocock/skills";
 const FIELDS: [&str; 4] = ["source", "sourceType", "sourceUrl", "skillPath"];
 const ROOTS: [&str; 4] = [".agents/skills", ".codex/skills", ".claude/skills", ".cursor/skills"];
 const SKILLS_PACKAGE: &str = "skills@1.7.6";
-pub(super) const RETIRED_DISCOVERY: &str = "discovering-gcp-data-assets";
+const RETIRED_DISCOVERY: &str = "discovering-gcp-data-assets";
 const DISCOVERY_SOURCE: &str = "GoogleCloudPlatform/data-agent-kit-plugin";
 const DISCOVERY_URL: &str = "https://github.com/GoogleCloudPlatform/data-agent-kit-plugin.git";
 const DISCOVERY_TREE: &str = "db4886d8941a99c86ac44b2fe1ad427763c6c7f5";
 const DISCOVERY_SHA256: &str = "558a0e0738a9d9448463193371400a3a82c6e17d24b6915cd35477f5329d3bd4";
-const DISCOVERY_MARKER: &str =
-    "Retained upstream-retired discovering-gcp-data-assets; replacement: discover-assets (not installed)";
+const DISCOVERY_MARKER: &str = "Verified upstream retirement of discovering-gcp-data-assets";
 
 static ANSI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[[0-?]*[ -/]*[@-~]").expect("static ANSI pattern"));
 static FAILURE: LazyLock<Regex> = LazyLock::new(|| {
@@ -30,7 +29,7 @@ static FAILURE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("static failure pattern")
 });
 static SUCCESS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"All global skills are up to date|Updated [0-9]+ skill\(s\)|No global skills to check")
+    Regex::new(r"(?m)All global skills are up to date|Updated [0-9]+ skill\(s\)|No global skills (?:to check|tracked in lock file)|^Skill source checks finished with warnings: [1-9][0-9]* source\(s\) skipped$")
         .expect("static success pattern")
 });
 
@@ -63,25 +62,82 @@ fn reviewed_discovery_lock(record: &Value) -> bool {
         && !present_ref(record)
 }
 
-pub(super) fn retained_discovery(home: &Path, record: &Value) -> Result<bool> {
+fn discovery_paths(home: &Path, record: &Value, reviewed_digest: &str) -> Result<Option<Vec<(PathBuf, bool)>>> {
     if !reviewed_discovery_lock(record) {
-        return Ok(false);
+        return Ok(None);
     }
     let relative = Path::new(ROOTS[0]).join(RETIRED_DISCOVERY);
-    if !exists(&home.join(&relative))? {
-        return Ok(false);
+    let canonical = home.join(&relative);
+    let mut paths = Vec::new();
+    for root in &ROOTS[1..] {
+        let path = home.join(root).join(RETIRED_DISCOVERY);
+        if exists(&path)? && fs::symlink_metadata(&path)?.is_symlink() {
+            let target = fs::read_link(&path)?;
+            if target == canonical || target == Path::new("../..").join(&relative) {
+                directory(home, Path::new(root), false)?;
+                paths.push((path, false));
+            }
+        }
     }
-    let local = directory(home, &relative, false)?;
-    let mut files = fs::read_dir(&local)?;
-    if !files
-        .next()
-        .transpose()?
-        .is_some_and(|file| file.file_name() == "SKILL.md")
-        || files.next().transpose()?.is_some()
-    {
-        return Ok(false);
+    if exists(&canonical)? {
+        let local = directory(home, &relative, false)?;
+        let mut files = fs::read_dir(&local)?;
+        // An empty or absent canonical directory can be left by an interrupted retirement.
+        if let Some(file) = files.next().transpose()? {
+            let skill = file.path();
+            if file.file_name() != "SKILL.md"
+                || files.next().transpose()?.is_some()
+                || digest(&bytes(&skill, DATA_LIMIT)?) != reviewed_digest
+            {
+                return Ok(None);
+            }
+            paths.push((skill, false));
+        }
+        paths.push((local, true));
     }
-    Ok(digest(&bytes(&local.join("SKILL.md"), DATA_LIMIT)?) == DISCOVERY_SHA256)
+    Ok(Some(paths))
+}
+
+fn remove_discovery(lock_path: &Path, snapshot: &[u8], lock: &mut Value, paths: &[(PathBuf, bool)]) -> Result<()> {
+    let file = open_file(lock_path, false, DATA_LIMIT)?;
+    file.try_lock()
+        .wrap_err("Another process is maintaining the shared skill lock")?;
+    let identity = file.metadata()?;
+    let current = fs::symlink_metadata(lock_path)?;
+    ensure!(
+        current.is_file()
+            && (current.dev(), current.ino()) == (identity.dev(), identity.ino())
+            && bounded(&file, DATA_LIMIT)? == snapshot,
+        "Shared skill lock changed before retiring {RETIRED_DISCOVERY}"
+    );
+    for (path, is_directory) in paths {
+        if *is_directory {
+            fs::remove_dir(path)?;
+        } else {
+            fs::remove_file(path)?;
+        }
+        sync_directory(path.parent().context("Missing retired skill parent")?)?;
+        ensure!(!exists(path)?, "Retired skill path was recreated: {}", path.display());
+    }
+    lock["skills"]
+        .as_object_mut()
+        .context("Invalid shared lock entries")?
+        .remove(RETIRED_DISCOVERY)
+        .context("Missing verified retired skill lock entry")?;
+    let mut data = serde_json::to_vec_pretty(lock)?;
+    data.push(b'\n');
+    ensure!(data.len() as u64 <= DATA_LIMIT, "Retired skill lock is too large");
+    ensure!(
+        bytes(lock_path, DATA_LIMIT)? == snapshot,
+        "Shared skill lock changed during retirement"
+    );
+    atomic_write(lock_path, &data, identity.mode() & 0o777)?;
+    ensure!(
+        bytes(lock_path, DATA_LIMIT)? == data,
+        "Retired skill lock failed verification"
+    );
+    println!("Removed upstream-retired {RETIRED_DISCOVERY} and its lock entry. Successor: discover-assets.");
+    Ok(())
 }
 
 fn plan(mut lock: Value, rows: &[Row], home: &Path) -> Result<(Value, Vec<Value>)> {
@@ -324,11 +380,11 @@ pub(super) fn run(home: &Path) -> Result<()> {
     let original = bytes(&lock_path, DATA_LIMIT)?;
     let before = super::json(&original)?;
     let old = lock_entries(&before)?.get(RETIRED_DISCOVERY).unwrap_or(&Value::Null);
-    let retain_discovery = retained_discovery(home, old)?;
+    let retired_paths = discovery_paths(home, old, DISCOVERY_SHA256)?;
     let mut command = command(home, "npx", Some(&route))?;
     command.env(
-        "DEVENV_STUDIO_RETAIN_DISCOVERY",
-        if retain_discovery { "1" } else { "0" },
+        "DEVENV_STUDIO_RETIRE_DISCOVERY",
+        if retired_paths.is_some() { "1" } else { "0" },
     );
     let mut secrets = Vec::new();
     for name in ["GITHUB_TOKEN", "GH_TOKEN"] {
@@ -403,11 +459,12 @@ pub(super) fn run(home: &Path) -> Result<()> {
     );
     ensure!(
         accepted(&output, out.status.success()),
-        "Skills update did not verify every source ({}). Pre-update lock saved at {}",
+        "Skills update or integrity verification failed ({}). Pre-update lock saved at {}",
         out.status,
         archive.display()
     );
-    let after = super::json(&bytes(&lock_path, DATA_LIMIT)?)?;
+    let after_bytes = bytes(&lock_path, DATA_LIMIT)?;
+    let mut after = super::json(&after_bytes)?;
     verify_lock(&before, &after).wrap_err_with(|| {
         format!(
             "NPX lock verification failed; pre-update lock saved at {}",
@@ -415,12 +472,19 @@ pub(super) fn run(home: &Path) -> Result<()> {
         )
     })?;
     if output.lines().any(|line| line == DISCOVERY_MARKER) {
-        let retained = &after["skills"][RETIRED_DISCOVERY];
+        let paths = retired_paths.context("Unexpected proof for an unverified retired skill")?;
+        let record = &after["skills"][RETIRED_DISCOVERY];
         ensure!(
-            retain_discovery && retained == old && retained_discovery(home, retained)?,
+            record == old && discovery_paths(home, record, DISCOVERY_SHA256)?.as_ref() == Some(&paths),
             "Retired discovery skill changed during the update; pre-update lock saved at {}",
             archive.display()
         );
+        remove_discovery(&lock_path, &after_bytes, &mut after, &paths).wrap_err_with(|| {
+            format!(
+                "Retired skill cleanup interrupted; pre-update lock saved at {}",
+                archive.display()
+            )
+        })?;
     }
     Ok(())
 }
@@ -488,7 +552,14 @@ mod tests {
     #[test]
     fn output_requires_success_evidence_and_rejects_hidden_failure() {
         assert!(accepted("All global skills are up to date", true));
+        assert!(accepted("No global skills tracked in lock file.", true));
         assert!(accepted("Updated 12 skill(s)", true));
+        let warning = "Warning: example/unavailable — source unavailable; local skills kept";
+        let summary = format!("{warning}\nSkill source checks finished with warnings: 1 source(s) skipped");
+        assert!(!accepted(warning, true));
+        assert!(accepted(&summary, true));
+        assert!(!accepted(&summary, false));
+        assert!(!accepted(&format!("{summary}\nError: lock write failed"), true));
         assert!(!accepted(
             "All global skills are up to date\r\u{1b}[32m✗ source check\u{1b}[0m",
             true
@@ -520,16 +591,41 @@ mod tests {
             changed[key] = replacement.into();
             assert!(!reviewed_discovery_lock(&changed), "{key}");
         }
-        let home = tempfile::tempdir()?;
-        assert!(!retained_discovery(&home.path().canonicalize()?, &known)?);
-        let output = format!("Updated 1 skill(s)\n{DISCOVERY_MARKER}");
-        assert!(accepted(&output, true));
-        assert!(!accepted(
-            &format!(
-                "{output}\nWarning: The following skills from example/other appear to have been deleted upstream:"
-            ),
-            true
-        ));
+        let work = tempfile::tempdir()?;
+        let home = work.path().canonicalize()?;
+        let path = Path::new(ROOTS[0]).join(RETIRED_DISCOVERY);
+        let canonical = directory(&home, &path, true)?;
+        let skill = canonical.join("SKILL.md");
+        fs::write(&skill, b"synthetic reviewed content")?;
+        let hash = digest(b"synthetic reviewed content");
+        let owned = directory(&home, Path::new(".claude/skills"), true)?.join(RETIRED_DISCOVERY);
+        let independent = directory(&home, Path::new(".codex/skills"), true)?.join(RETIRED_DISCOVERY);
+        std::os::unix::fs::symlink(Path::new("../..").join(&path), &owned)?;
+        fs::create_dir(&independent)?;
+        let unknown = canonical.join("personal.txt");
+        fs::write(&unknown, b"synthetic unexpected file")?;
+        assert!(discovery_paths(&home, &known, &hash)?.is_none());
+        fs::remove_file(&unknown)?;
+        assert!(discovery_paths(&home, &known, &digest(b"different"))?.is_none());
+        let lock_path = home.join(LOCK_PATH);
+        let mut lock = json!({"version": 3, "skills": {
+            (RETIRED_DISCOVERY): known,
+            "unrelated": {"source": "example/other"}
+        }});
+        let snapshot = serde_json::to_vec(&lock)?;
+        atomic_write(&lock_path, &snapshot, 0o600)?;
+        let paths = discovery_paths(&home, &lock["skills"][RETIRED_DISCOVERY], &hash)?.unwrap();
+        assert!(remove_discovery(&lock_path, b"changed", &mut lock, &paths).is_err());
+        assert!(exists(&owned)? && exists(&skill)?);
+
+        fs::remove_file(&skill)?;
+        let interrupted = discovery_paths(&home, &lock["skills"][RETIRED_DISCOVERY], &hash)?.unwrap();
+        remove_discovery(&lock_path, &snapshot, &mut lock, &interrupted)?;
+        assert!(!exists(&owned)? && !exists(&canonical)?);
+        assert!(independent.is_dir());
+        let installed = super::super::json(&bytes(&lock_path, DATA_LIMIT)?)?;
+        assert_eq!(installed["skills"], json!({"unrelated": {"source": "example/other"}}));
+        assert!(discovery_paths(&home, &installed["skills"][RETIRED_DISCOVERY], &hash)?.is_none());
         Ok(())
     }
 

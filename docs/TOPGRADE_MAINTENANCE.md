@@ -55,7 +55,7 @@ Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受�
 
 旧的 Shell 和 Python 文件随 profile 保留，供兼容入口和回退使用。受管 Topgrade 流程使用 Rust 任务，按需调用 Homebrew、GitHub CLI、npm、Gradle 和厂商安装工具。Python 3.15 SQLite 的 ABI 验证继续通过目标解释器执行。
 
-NPX 识别经审核退役的 `discovering-gcp-data-assets`。只有旧锁记录与本地内容都匹配，并从官方仓库的当前 `main` 提交确认原目录已移除且后继 `discover-assets` 存在时，才保留原技能并继续。未知删除、歧义或核验失败仍会报错。 [官方添加记录](https://github.com/GoogleCloudPlatform/data-agent-kit-plugin/commit/5422f53e4333fe7f6f382be9689a1369dd8198fe) · [官方退役记录](https://github.com/GoogleCloudPlatform/data-agent-kit-plugin/commit/68924f89e78bc79c04c730eaba1dc8539529865f)
+NPX 清理已确认退役的 `discovering-gcp-data-assets`。核对旧锁记录、本地内容、官方 `main` 中原目录已移除及后继 `discover-assets` 存在后，删除原技能、受管链接及对应锁条目。清理中断后可重试，其他来源与手动副本保留。来源暂时不可用、路径缺失或歧义时，跳过该来源并报告警告，继续检查其他来源。锁完整性、安装和写入失败仍会报错。 [官方添加记录](https://github.com/GoogleCloudPlatform/data-agent-kit-plugin/commit/5422f53e4333fe7f6f382be9689a1369dd8198fe) · [官方退役记录](https://github.com/GoogleCloudPlatform/data-agent-kit-plugin/commit/68924f89e78bc79c04c730eaba1dc8539529865f)
 
 Krita Next 跟随 KDE 官方 `master/macos-universal` 滚动渠道。目录中最新发布的合格构建可以跨版本系列更新，Qt 5、Krita Plus 和稳定版使用独立渠道。同一应用版本的新 Git 提交仍会更新；同 Git SHA 的包若官方发布时间严格晚于收据中的安装时间，也作为重新打包候选核验，缺少或无效时间不推断为更新。候选与复制后的应用必须同时具有一致的 QtCore、QtGui 完整 `CFBundleVersion`，最低为 6.11.3。只有主、次版本号的元数据不能用于准入。没有较新构建证据且已装 Qt 不符合下限时，报告 `BLOCKED_INCOMPATIBLE_QT` 并返回失败；未来的新兼容候选仍可替换旧 Qt 构建。现有发布者、Git 祖先关系、禁止降级、锁、安装收据与交换恢复校验继续生效；成功安装的收据记录 `channel` 和 `qt_version`。兼容 Python 入口使用同一渠道与 Qt 准入规则。
 
