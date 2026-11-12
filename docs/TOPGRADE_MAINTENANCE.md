@@ -73,7 +73,7 @@ devenv-studio topgrade-engine prepare /absolute/studio-checkout FULL_STUDIO_SHA
 devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
 ```
 
-`prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 使用 Studio 的 Rust 安装器验证资产、应用并回读 profile，然后原子切换到准备好的二进制。安装器兼容原有 v1 收据和事务日志。相同组件树复用引擎。软件更新使用已部署的引擎，引擎维护由上述命令显式启动。
+`prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 使用 Studio 的 Rust 安装器验证资产、应用并回读 profile，然后原子更新 `~/.local/bin/topgrade` 指向的项目引擎。安装器兼容原有 v1 收据和事务日志。相同组件树复用引擎。软件更新使用已部署的项目 fork。旧的 `topgrade-rustup-headsync` 仅提示 Studio 的维护入口，所有模式都停止执行。
 
 ### 跟进 Topgrade 官方版本
 
