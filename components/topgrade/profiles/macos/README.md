@@ -8,6 +8,8 @@ The Homebrew formula step refreshes catalogs before checking for upgrades. When 
 
 Topgrade reports incomplete checks separately from completed steps. Dry runs and post-commands appear in the summary. If a selected configuration or its includes cannot be loaded, the CLI stops before executing updates.
 
+HEAD-sync also checks for consumers still linked to an old JPEG XL ABI after a bottle upgrade, even when JPEG XL itself is current. It rebuilds only the affected consumers from source, verifies the active links and sample codec operations, and uses the same journal to recover a failed repair. BetterDisplay's verified check uses the official Sparkle feed with the three configured channels. The app manages its own update preference.
+
 ## Review and install
 
 Use the Studio maintenance CLI against a clean reviewed checkout:
@@ -68,7 +70,7 @@ The LeanCTX host and canonical trees may each have a local `SKILL.md.bak` and an
 
 The fork opts into its existing compatible dependency-update path with the root file `.topgrade-dependencies.json` containing exactly `{"allow_incompatible": false}`. The repository still participates in Rolling updates; Cargo uses `cargo update` within its declared requirements instead of `cargo upgrade --incompatible allow --pinned allow`. Other surfaces retain their existing compatible behavior, including action updates.
 
-The Rust rolling task also applies compatible mode to Zig HEAD, Docker tags and Gradle. A malformed, duplicate-key, oversized, symlinked or nonregular policy file fails before that repository's update commands execute. The policy is included in dependency backups. The task uses installed ncu, disables JavaScript installation hooks, and pins the Gradle report plugin. Gradle wrapper updates require a verified distribution checksum and keep the existing scripts and JAR. Shared version references with unverified impact are reported as discovered candidates.
+The Rust rolling task respects exact Cargo requirements. Dirty checkouts are deferred before dependency snapshots and listed by repository in the summary. The task also applies compatible mode to Zig HEAD, Docker tags and Gradle. A malformed, duplicate-key, oversized, symlinked or nonregular policy file fails before that repository's update commands execute. The policy is included in dependency backups. The task uses installed ncu, disables JavaScript installation hooks, and pins the Gradle report plugin. Gradle wrapper updates require a verified distribution checksum and keep the existing scripts and JAR. Shared version references with unverified impact are reported as discovered candidates.
 
 ## npm reference data
 

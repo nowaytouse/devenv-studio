@@ -1,12 +1,12 @@
 use color_eyre::eyre::{Result, bail, ensure};
-use serde_json::Value;
-use std::{path::Path, process::Stdio, time::Duration};
+use std::{path::Path, process::Stdio};
 
-use super::{APPLICATIONS, bounded_output, bundle, field, signature, team, tool_command};
-use crate::{command::CommandExt as _, error::PartialStep};
+use super::{APPLICATIONS, bundle, field, signature, team, tool_command};
+use crate::command::CommandExt as _;
 
 const ID: &str = "pro.betterdisplay.BetterDisplay";
 const FEED: &str = "https://betterdisplay.pro/betterdisplay/sparkle/appcast.xml";
+const CHANNELS: &str = "arm64_internal,arm64_pre,arm64";
 
 pub(in crate::studio) fn betterdisplay() -> Result<()> {
     super::super::user_only()?;
@@ -24,7 +24,7 @@ pub(in crate::studio) fn betterdisplay() -> Result<()> {
             .arg(&app)
             .args([
                 "--channels",
-                "arm64_internal,arm64_pre,arm64",
+                CHANNELS,
                 "--feed-url",
                 FEED,
                 "--user-agent-name",
@@ -38,37 +38,50 @@ pub(in crate::studio) fn betterdisplay() -> Result<()> {
             .code()
             .ok_or_else(|| color_eyre::eyre::eyre!("Sparkle terminated by signal"))
     };
-    let probe = invoke("--probe")?;
-    match probe {
-        4 => println!("BetterDisplay: CURRENT — native probe found no update for requested channels"),
-        0 => {
+
+    println!("BetterDisplay: Checking Sparkle channels {CHANNELS} using the official feed");
+    check_with_sparkle(
+        invoke,
+        || {
             let live = field(&bundle(&app, ID)?, "CFBundleVersion")?;
             ensure!(
                 live == before && team(&app)? == expected_team,
                 "BetterDisplay changed during its probe"
             );
+            Ok(())
+        },
+        || {
+            let after = field(&bundle(&app, ID)?, "CFBundleVersion")?;
+            signature(&app, None)?;
+            ensure!(
+                team(&app)? == expected_team,
+                "BetterDisplay signing team changed after update"
+            );
+            updated(&before, &after)?;
+            println!("BetterDisplay: UPDATED — build {before} -> {after}");
+            Ok(())
+        },
+    )
+}
+
+fn check_with_sparkle(
+    mut invoke: impl FnMut(&str) -> Result<i32>,
+    verify_before_update: impl FnOnce() -> Result<()>,
+    verify_after_update: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    match invoke("--probe")? {
+        4 => println!("BetterDisplay: CURRENT — no update available from Sparkle for the requested channels"),
+        0 => {
+            verify_before_update()?;
             match invoke("--check-immediately")? {
-                4 => println!("BetterDisplay: SPARKLE_NO_UPDATE (arm64_internal,arm64_pre,arm64 requested)"),
-                0 => {
-                    let after = field(&bundle(&app, ID)?, "CFBundleVersion")?;
-                    signature(&app, None)?;
-                    ensure!(
-                        team(&app)? == expected_team,
-                        "BetterDisplay signing team changed after update"
-                    );
-                    updated(&before, &after)?;
-                    println!("BetterDisplay: UPDATED — build {before} -> {after}");
-                }
+                4 => println!("BetterDisplay: CURRENT — Sparkle found no update on recheck"),
+                0 => verify_after_update()?,
                 status => bail!("BetterDisplay: Sparkle CLI exit {status}"),
             }
         }
         status => bail!("BetterDisplay: Sparkle probe exit {status}"),
     }
-    preference_hint();
-    Err(PartialStep(
-        "Sparkle verified the requested BetterDisplay channels. Check the unverified in-app preference in Settings > Application > Updates.".into(),
-    )
-    .into())
+    Ok(())
 }
 
 fn updated(before: &str, after: &str) -> Result<()> {
@@ -79,48 +92,37 @@ fn updated(before: &str, after: &str) -> Result<()> {
     Ok(())
 }
 
-fn preference_hint() {
-    let read = || -> Result<Value> {
-        let (status, plist, _) = bounded_output(
-            tool_command(Path::new("/usr/bin/defaults"))?.args(["export", ID, "-"]),
-            Duration::from_secs(8),
-            super::PLIST_LIMIT,
-        )?;
-        ensure!(status.success(), "No externally readable BetterDisplay defaults");
-        let mut temp = tempfile::NamedTempFile::new()?;
-        std::io::Write::write_all(&mut temp, plist.as_bytes())?;
-        super::plist(&temp.path().canonicalize()?)
-    };
-    let Some(values) = read().ok().and_then(|value| value.as_object().cloned()) else {
-        println!("BetterDisplay: native update-channel preference is not externally readable");
-        return;
-    };
-    let mut count = 0;
-    for (key, value) in values {
-        let normalized = key.to_ascii_lowercase().replace(['-', '_', ' '], "");
-        if !["internal", "prerelease", "updatechannel"]
-            .iter()
-            .any(|term| normalized.contains(term))
-            || key.len() > 100
-            || key.chars().any(char::is_control)
-        {
-            continue;
-        }
-        if count < 6 {
-            let description = match value.as_bool() {
-                Some(true) => "ON",
-                Some(false) => "OFF",
-                None => "present (meaning unverified)",
-            };
-            println!("BetterDisplay: possible native setting {key} = {description} (key mapping UNVERIFIED)");
-        }
-        count += 1;
+#[cfg(test)]
+#[test]
+fn probe_no_update_completes_without_installation() {
+    for status in [4, 1, 6] {
+        let result = check_with_sparkle(
+            |mode| {
+                assert_eq!(mode, "--probe");
+                Ok(status)
+            },
+            || panic!("unexpected update"),
+            || panic!("unexpected installation"),
+        );
+        assert_eq!(result.is_ok(), status == 4);
     }
-    if count == 0 {
-        println!("BetterDisplay: no identifiable internal-channel preference key");
-    } else if count > 6 {
-        println!("BetterDisplay: {} additional candidates omitted", count - 6);
-    }
+}
+
+#[cfg(test)]
+#[test]
+fn install_exit_zero_requires_successful_readback() {
+    let mut calls = ["--probe", "--check-immediately"].into_iter();
+    let error = check_with_sparkle(
+        |mode| {
+            assert_eq!(Some(mode), calls.next());
+            Ok(0)
+        },
+        || Ok(()),
+        || updated("54070", "54070"),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("build did not change"));
+    assert!(calls.next().is_none());
 }
 
 #[cfg(test)]

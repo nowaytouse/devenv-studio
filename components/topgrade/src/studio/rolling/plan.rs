@@ -7,6 +7,19 @@ use color_eyre::eyre::Result;
 
 use super::{files, process};
 
+const CARGO_EDGE_UPGRADE: &[&str] = &[
+    "cargo",
+    "upgrade",
+    "--incompatible",
+    "allow",
+    "--pinned",
+    "ignore",
+    "--recursive",
+    "true",
+    "--exclude",
+    "bincode",
+];
+
 #[derive(Clone, Copy)]
 pub(super) enum Specialized {
     Zig,
@@ -101,18 +114,7 @@ pub(super) fn detect(repo: &Path, edge: bool) -> Result<Vec<Surface>> {
     for root in dirs(&["Cargo.toml"]) {
         let mut commands: Vec<&[&str]> = Vec::new();
         if edge && process::find_tool("cargo-upgrade")?.is_some() {
-            commands.push(&[
-                "cargo",
-                "upgrade",
-                "--incompatible",
-                "allow",
-                "--pinned",
-                "allow",
-                "--recursive",
-                "true",
-                "--exclude",
-                "bincode",
-            ]);
+            commands.push(CARGO_EDGE_UPGRADE);
         }
         commands.push(&["cargo", "update"]);
         surfaces.push(Surface::commands("Cargo", root, compatible("major+git"), &commands));
@@ -420,6 +422,16 @@ pub(super) fn detect(repo: &Path, edge: bool) -> Result<Vec<Surface>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn edge_cargo_upgrade_respects_project_pins() {
+        assert!(CARGO_EDGE_UPGRADE.windows(2).any(|args| args == ["--pinned", "ignore"]));
+        assert!(
+            CARGO_EDGE_UPGRADE
+                .windows(2)
+                .any(|args| args == ["--incompatible", "allow"])
+        );
+    }
 
     #[test]
     fn compatible_keeps_existing_package_constraints_and_topmost_workspace() -> Result<()> {

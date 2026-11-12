@@ -214,10 +214,21 @@ fn process_repo(
         return Ok((true, 0));
     }
     let stem = files::repo_stem(repo)?;
-    let before = files::snapshot(repo)?;
+    let before = if files::git_clean(repo, "initial")? {
+        let snapshot = files::snapshot(repo)?;
+        files::git_clean(repo, "after dependency snapshot")?.then_some(snapshot)
+    } else {
+        None
+    };
     let mut log = super::create_file(&run.join(format!("{stem}.log")))?;
-    if !files::record_git_status(repo, &mut log, "initial")? {
-        println!("{}: SKIPPED [uncommitted project changes]", repo.display());
+    writeln!(log, "# initial worktree clean: {}", before.is_some())?;
+    let Some(before) = before else {
+        writeln!(
+            log,
+            "# {} dependency surfaces deferred: uncommitted project changes",
+            surfaces.len()
+        )?;
+        log.sync_data()?;
         for surface in surfaces {
             Record {
                 time: Local::now().to_rfc3339(),
@@ -233,7 +244,7 @@ fn process_repo(
             .persist(history)?;
         }
         return Ok((true, surfaces.len()));
-    }
+    };
     let backup = files::backup(repo, &before, run, &stem)?;
     writeln!(log, "# repository: {}\n# backup: {}", repo.display(), backup.display())?;
     let mut current = before;
@@ -301,7 +312,8 @@ fn process_repo(
             break;
         }
     }
-    files::record_git_status(repo, &mut log, "final")?;
+    let clean = files::git_clean(repo, "final")?;
+    writeln!(log, "# final worktree clean: {clean}")?;
     log.sync_all()?;
     Ok((verified, deferred))
 }
@@ -358,7 +370,7 @@ pub(super) fn run(dry_run: bool) -> Result<()> {
     files::create_private_dir(&run)?;
     File::open(&cache)?.sync_all()?;
     let mut verified = true;
-    let mut deferred = 0;
+    let mut deferred = Vec::new();
     for chunk in planned.chunks(config.execution.jobs) {
         let outcomes = thread::scope(|scope| {
             let handles = chunk
@@ -374,7 +386,9 @@ pub(super) fn run(dry_run: bool) -> Result<()> {
             match outcome {
                 Ok(Ok((ok, pending))) => {
                     verified &= ok;
-                    deferred += pending;
+                    if pending > 0 {
+                        deferred.push((repo, pending));
+                    }
                 }
                 Ok(Err(error)) => {
                     verified = false;
@@ -395,9 +409,16 @@ pub(super) fn run(dry_run: bool) -> Result<()> {
         verified && !crate::ctrlc::interrupted(),
         "One or more rolling dependency updates did not complete"
     );
-    if deferred > 0 {
+    if !deferred.is_empty() {
+        let total: usize = deferred.iter().map(|(_, count)| count).sum();
+        let projects = deferred
+            .iter()
+            .map(|(repo, count)| format!("{} ({count})", repo.display()))
+            .collect::<Vec<_>>()
+            .join(", ");
         return Err(PartialStep(format!(
-            "{deferred} dependency surfaces were deferred. See the rolling evidence above."
+            "{total} dependency surfaces were deferred across {} repositories: {projects}. See the rolling evidence above.",
+            deferred.len()
         ))
         .into());
     }
@@ -482,11 +503,20 @@ mod tests {
         assert_eq!(std::fs::read(backup.join("files/Cargo.lock"))?, b"initial");
         let retry = root.join("retry");
         files::create_private_dir(&retry)?;
+        let unrelated_dependency = repo.join("Package.resolved");
+        std::os::unix::fs::symlink(root.join("missing"), &unrelated_dependency)?;
+        assert!(files::snapshot(&repo).is_err());
         assert_eq!(
             process_repo(&repo, &surfaces[1..], &retry, "dirty-fixture", &history)?,
             (true, 1)
         );
         assert_eq!(std::fs::read(repo.join("notes.txt"))?, b"unrelated local work");
+        assert!(!retry.join("before").exists());
+        assert!(
+            std::fs::symlink_metadata(&unrelated_dependency)?
+                .file_type()
+                .is_symlink()
+        );
         let history = std::fs::read_to_string(history_path)?;
         let records = history
             .lines()
@@ -522,6 +552,7 @@ mod tests {
         let outside = root.join("outside");
         std::fs::write(&outside, b"preserve")?;
         std::os::unix::fs::symlink(&outside, repo.join("Cargo.lock"))?;
+        assert!(files::snapshot(&repo).is_err());
         let history_path = root.join("history.jsonl");
         let history = Mutex::new(super::super::create_file(&history_path)?);
         let surface = Surface {

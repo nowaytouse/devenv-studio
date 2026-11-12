@@ -214,7 +214,7 @@ class JpegXlTransaction
     end
   end
 
-  def plan(full, users)
+  def dependency_group(full, users)
     jpeg, = active_row(full)
     raise "Expected the JPEG XL formula" unless jpeg.fetch("name") == "jpeg-xl"
 
@@ -231,11 +231,28 @@ class JpegXlTransaction
 
       row.merge("links" => links) unless links.empty?
     end
-    rows = [jpeg, *consumers]
+    [jpeg, *consumers]
+  end
+
+  def plan(full, users)
+    rows = dependency_group(full, users)
+    jpeg, *consumers = rows
     tools = rows.flat_map { |row| preflight(row).to_a }.to_h
     puts "JPEG XL transaction: #{jpeg.fetch('full')}; direct consumers: #{consumers.map { |r| r.fetch('full') }.join(', ')}"
     puts "Planned optional build tools: #{tools.keys.sort.join(', ')}" unless tools.empty?
     [rows, tools]
+  end
+
+  def repair_plan(full, users)
+    jpeg, *consumers = dependency_group(full, users)
+    current = original(jpeg)
+    broken = consumers.reject { |row| row.fetch("links").all? { |link| link_satisfied?(link, current) } }
+    tools = broken.flat_map { |row| preflight(row).to_a }.to_h
+    unless broken.empty?
+      puts "JPEG XL linkage repair: #{broken.map { |r| r.fetch('full') }.join(', ')}"
+      puts "Planned optional build tools: #{tools.keys.sort.join(', ')}" unless tools.empty?
+    end
+    [[jpeg, *broken], tools]
   end
 
   def manifest(root)
@@ -287,7 +304,7 @@ class JpegXlTransaction
     temp.unlink if temp&.exist?
   end
 
-  def prepare(rows, tools)
+  def prepare(rows, tools, repair: false)
     raise "An unfinished JPEG XL transaction exists" if present?(@journal)
     raise "JPEG XL transaction directory must share the Cellar volume" unless @state.stat.dev == HOMEBREW_CELLAR.stat.dev
 
@@ -301,21 +318,27 @@ class JpegXlTransaction
       raise "JPEG XL backup verification failed: #{path}" unless manifest(saved(row)) == row.fetch("manifest")
     end
     run_command("/bin/sync")
-    @record = { "stage" => @stage.basename.to_s, "rows" => rows, "tools" => tools, "touched" => [], "committed" => false }
+    @record = {
+      "stage" => @stage.basename.to_s, "rows" => rows, "tools" => tools, "touched" => [],
+      "committed" => false, "repair" => repair,
+    }
     checkpoint
   rescue StandardError
     FileUtils.remove_entry_secure(@stage) if @stage&.directory? && !present?(@journal)
     raise
   end
 
-  def mark(row)
+  def verify_original(row)
     short = row.fetch("name")
     prior = original(row)
     raise "Original keg changed before updating #{short}" unless record_target(opt(short), short) == prior &&
       record_target(linked(short), short) == (row.fetch("linked") ? prior : nil) &&
       (prior.dirname.stat.mode & 0o777) == row.fetch("rack_mode") &&
       versions(short) == row.fetch("versions") && manifest(prior) == row.fetch("manifest")
+  end
 
+  def mark(row)
+    verify_original(row)
     @record.fetch("touched") << row.fetch("name")
     checkpoint
   end
@@ -445,6 +468,7 @@ class JpegXlTransaction
     rows = @record.fetch("rows")
     tools = @record.fetch("tools")
     touched = @record.fetch("touched")
+    repair = @record.fetch("repair", false)
     names = rows.map do |row|
       short = name(row.fetch("full"))
       manifest = row.fetch("manifest")
@@ -461,7 +485,8 @@ class JpegXlTransaction
       names.none? { |short| protected?(short) } &&
       tools.is_a?(Hash) && (tools.keys - BUILD_TOOLS).empty? && tools.values.all? { |version| NAME.match?(version) } &&
       (tools.keys & names).empty? && (touched - names).empty? && touched.uniq == touched &&
-      [true, false].include?(@record.fetch("committed"))
+      [true, false].include?(@record.fetch("committed")) &&
+      [true, false].include?(repair) && (!repair || !touched.include?("jpeg-xl"))
   end
 
   def recover
@@ -475,7 +500,12 @@ class JpegXlTransaction
       touched.reverse_each { |short| restore(rows.fetch(short)) }
       @record.fetch("tools").to_a.reverse_each { |short, version| restore_tool(short, version) } unless touched.empty?
       reset_linkage_cache(rows.values_at(*touched))
-      verify_linkage
+      # Repair starts from broken linkage. Check the untouched provider and exact restored kegs.
+      if @record.fetch("repair", false)
+        verify_original(rows.fetch("jpeg-xl"))
+      else
+        verify_linkage
+      end
       puts "JPEG XL transaction rolled back"
     end
     @journal.unlink
@@ -524,46 +554,31 @@ class JpegXlTransaction
     warn "JPEG XL upgrade succeeded; could not remove duplicate backup in #{@stage}: #{error}"
   end
 
-  def run(full, users)
-    %w[INT TERM HUP].each { |signal| Signal.trap(signal) { @signal ||= signal } }
-    rows, tools = plan(full, users)
-    jpeg, *consumers = rows
-    ordered = dependency_order(consumers)
-    verify_linkage
-    prepare(rows, tools)
+  def rebuild_consumers(consumers, candidate, tools)
+    consumers.each do |row|
+      next if row.fetch("links").all? { |link| link_satisfied?(link, candidate) }
+
+      Formula.cache.clear
+      Formulary.clear_cache
+      raise "JPEG XL dependency plan changed during rebuild" unless (preflight(row).to_a - tools.to_a).empty?
+
+      mark(row)
+      brew("reinstall", "--no-ask", "--build-from-source", "--formula", row.fetch("full"),
+           *row.fetch("source").last)
+      verify_replacement(row)
+    end
+    consumers.each do |row|
+      active = keg_directory(record_target(opt(row.fetch("name")), row.fetch("name")))
+      links = direct_links(active)
+      raise "#{row.fetch('full')} does not link the active JPEG XL keg" unless links.any? &&
+        links.all? { |link| link_satisfied?(link, candidate) }
+    end
+  end
+
+  def transact(rows, tools, repair: false)
+    prepare(rows, tools, repair: repair)
     begin
-      mark(jpeg)
-      brew("upgrade", "--no-ask", "--build-from-source", "--formula", "--fetch-HEAD", full,
-           *jpeg.fetch("source").last)
-      candidate = verify_replacement(jpeg)
-      raise "Homebrew did not select a new JPEG XL keg" if candidate == original(jpeg)
-
-      ordered.each do |row|
-        next if row.fetch("links").all? { |link| link_satisfied?(link, candidate) }
-        Formula.cache.clear
-        Formulary.clear_cache
-        raise "JPEG XL dependency plan changed during upgrade" unless (preflight(row).to_a - tools.to_a).empty?
-
-        mark(row)
-        brew("reinstall", "--no-ask", "--build-from-source", "--formula", row.fetch("full"),
-             *row.fetch("source").last)
-        verify_replacement(row)
-      end
-      consumers.each do |row|
-        active = keg_directory(record_target(opt(row.fetch("name")), row.fetch("name")))
-        links = direct_links(active)
-        raise "#{row.fetch('full')} does not link the new JPEG XL keg" unless links.any? &&
-          links.all? { |link| link_satisfied?(link, candidate) }
-      end
-      reset_linkage_cache(rows)
-      smoke(candidate, consumers)
-      FormulaLock.new("jpeg-xl").with_lock do
-        prior = original(jpeg)
-        raise "Prior JPEG XL keg changed before retirement" unless manifest(prior) == jpeg.fetch("manifest")
-
-        archive(prior)
-      end
-      verify_linkage
+      yield
       @record["committed"] = true
       checkpoint
       @journal.unlink
@@ -577,7 +592,51 @@ class JpegXlTransaction
       raise error
     end
     remove_committed_backup
+  end
+
+  def run(full, users)
+    %w[INT TERM HUP].each { |signal| Signal.trap(signal) { @signal ||= signal } }
+    rows, tools = plan(full, users)
+    jpeg, *consumers = rows
+    ordered = dependency_order(consumers)
+    verify_linkage
+    transact(rows, tools) do
+      mark(jpeg)
+      brew("upgrade", "--no-ask", "--build-from-source", "--formula", "--fetch-HEAD", full,
+           *jpeg.fetch("source").last)
+      candidate = verify_replacement(jpeg)
+      raise "Homebrew did not select a new JPEG XL keg" if candidate == original(jpeg)
+
+      rebuild_consumers(ordered, candidate, tools)
+      reset_linkage_cache(rows)
+      smoke(candidate, consumers)
+      FormulaLock.new("jpeg-xl").with_lock do
+        prior = original(jpeg)
+        raise "Prior JPEG XL keg changed before retirement" unless manifest(prior) == jpeg.fetch("manifest")
+
+        archive(prior)
+      end
+      verify_linkage
+    end
     puts "JPEG XL and dependent linkage verified; retired keg stored in #{@stage}"
+  end
+
+  def repair(full, users)
+    %w[INT TERM HUP].each { |signal| Signal.trap(signal) { @signal ||= signal } }
+    rows, tools = repair_plan(full, users)
+    jpeg, *consumers = rows
+    return if consumers.empty?
+
+    ordered = dependency_order(consumers)
+    transact(rows, tools, repair: true) do
+      verify_original(jpeg)
+      current = original(jpeg)
+      rebuild_consumers(ordered, current, tools)
+      reset_linkage_cache(consumers)
+      smoke(current, consumers)
+      verify_original(jpeg)
+    end
+    puts "JPEG XL consumer linkage repaired and verified"
   end
 end
 
@@ -588,7 +647,9 @@ if $PROGRAM_NAME == __FILE__
   case mode
   when "recover" then transaction.recover
   when "plan" then transaction.plan(full, users)
+  when "repair-plan" then transaction.repair_plan(full, users)
+  when "repair" then transaction.repair(full, users)
   when "run" then transaction.run(full, users)
-  else raise "Expected JPEG XL transaction mode: plan, run or recover"
+  else raise "Expected JPEG XL transaction mode: plan, repair-plan, run, repair or recover"
   end
 end

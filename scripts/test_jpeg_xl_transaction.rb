@@ -76,8 +76,13 @@ class Fixture < JpegXlTransaction
   end
 
   def setup
-    install(JXL, OLD, "libjxl.0.13.dylib")
+    abi = repair_fixture? ? "0.14" : "0.13"
+    install(JXL, OLD, "libjxl.#{abi}.dylib")
     install(CONSUMER, "1.0", "libjxl.0.13.dylib", options: ["--with-jxl"])
+  end
+
+  def repair_fixture?
+    %i[repair repair_failed repair_restart repair_still_broken].include?(@scenario)
   end
 
   def plan(full, users)
@@ -127,8 +132,9 @@ class Fixture < JpegXlTransaction
 
       staged = rack("consumer")/"1.0.reinstall"
       old.rename(staged)
-      install(CONSUMER, "1.0", "libjxl.0.14.dylib", options: ["--with-jxl"], stamp: "replacement")
-      raise "synthetic rebuild failure" if @scenario == :failed
+      abi = @scenario == :repair_still_broken ? "0.13" : "0.14"
+      install(CONSUMER, "1.0", "libjxl.#{abi}.dylib", options: ["--with-jxl"], stamp: "replacement")
+      raise "synthetic rebuild failure" if %i[failed repair_failed].include?(@scenario)
 
       FileUtils.remove_entry_secure(staged)
     else raise "Unexpected Brew command: #{args.inspect}"
@@ -137,10 +143,15 @@ class Fixture < JpegXlTransaction
 
   def reset_linkage_cache(_rows); end
 
-  def smoke(_jpeg, _consumers); end
+  def smoke(_jpeg, _consumers)
+    verify_linkage if repair_fixture?
+  end
 
   def capture(*)
     return "Missing libraries:\n  test.dylib\n" if @scenario == :zero_status_broken
+    if repair_fixture? && direct_links(opt("consumer")).any? { |link| !File.file?(link) }
+      return "Broken dependencies:\n  missing JPEG XL library\n"
+    end
     if @scenario == :failed_retirement && versions("jpeg-xl") == [NEW]
       raise "synthetic linkage failure after retirement"
     end
@@ -234,6 +245,62 @@ with_fixture(:zero_status_broken) do |fixture, _state|
   rescue RuntimeError => error
     check(error.message == "Homebrew reported broken linkage", error.message)
   end
+end
+
+with_fixture(:repair) do |fixture, state|
+  provider = fixture.manifest(fixture.opt("jpeg-xl").realpath)
+  rows, = fixture.repair_plan(Fixture::JXL, [Fixture::CONSUMER])
+  check(rows.map { |row| row.fetch("name") } == %w[jpeg-xl consumer], "repair selected wrong consumer")
+  check(fixture.builds.empty? && state.children.empty?, "repair preflight wrote state")
+
+  2.times { fixture.repair(Fixture::JXL, [Fixture::CONSUMER]) }
+  check(fixture.builds == ["reinstall"], "repair rebuilt a current consumer or provider")
+  check(fixture.manifest(fixture.opt("jpeg-xl").realpath) == provider, "repair changed provider")
+  check(fixture.versions("jpeg-xl") == [Fixture::OLD], "repair changed provider rack")
+  check((fixture.opt("consumer")/"stamp").read == "replacement", "repair did not commit the consumer")
+  check(!fixture.present?(state/"jpeg-xl-active.json"), "successful repair left a journal")
+end
+
+[:repair_failed, :repair_still_broken, :repair_restart].each do |scenario|
+  with_fixture(scenario) do |fixture, state|
+    provider = fixture.manifest(fixture.opt("jpeg-xl").realpath)
+    original = fixture.manifest(fixture.opt("consumer").realpath)
+    if scenario == :repair_restart
+      rows, tools = fixture.repair_plan(Fixture::JXL, [Fixture::CONSUMER])
+      fixture.prepare(rows, tools, repair: true)
+      fixture.mark(rows.last)
+      fixture.brew("reinstall")
+      Fixture.new(state, :repair_restart).recover
+    else
+      begin
+        fixture.repair(Fixture::JXL, [Fixture::CONSUMER])
+        raise "synthetic failure incorrectly succeeded"
+      rescue RuntimeError => error
+        expected = scenario == :repair_failed ? "synthetic rebuild failure" : "does not link the active JPEG XL keg"
+        check(error.message.include?(expected) && !error.message.include?("incomplete"), error.message)
+      end
+    end
+    check(fixture.manifest(fixture.opt("jpeg-xl").realpath) == provider, "failed repair changed provider")
+    check(fixture.manifest(fixture.opt("consumer").realpath) == original, "repair did not restore the pre-run consumer")
+    check(fixture.versions("consumer") == ["1.0"], "repair left a partial consumer")
+    check(!fixture.present?(state/"jpeg-xl-active.json"), "verified repair rollback left a journal")
+  end
+end
+
+with_fixture(:repair_restart) do |fixture, state|
+  rows, tools = fixture.repair_plan(Fixture::JXL, [Fixture::CONSUMER])
+  fixture.prepare(rows, tools, repair: true)
+  fixture.mark(rows.last)
+  fixture.brew("reinstall")
+  (fixture.opt("jpeg-xl")/"stamp").write("independent provider change")
+  begin
+    Fixture.new(state, :repair_restart).recover
+    raise "provider drift was incorrectly accepted"
+  rescue RuntimeError => error
+    check(error.message == "Original keg changed before updating jpeg-xl", error.message)
+  end
+  check((fixture.opt("jpeg-xl")/"stamp").read == "independent provider change", "repair overwrote provider drift")
+  check((state/"jpeg-xl-active.json").file?, "provider drift discarded recovery journal")
 end
 
 puts "JPEG XL transaction fixtures passed"

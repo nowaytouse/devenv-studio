@@ -34,10 +34,28 @@ pub(super) fn run_linkage() -> Result<()> {
     verify_linkage(probe(Path::new(BREW), &["linkage", "--test"])?)
 }
 
+fn linkage_details(text: &str) -> String {
+    let mut heading = None;
+    let mut details = String::new();
+    for line in text.lines() {
+        if line.starts_with("==> Checking ") && line.ends_with(" linkage") {
+            heading = Some(line);
+        } else if !line.trim().is_empty() {
+            if let Some(heading) = heading.take() {
+                details.push_str(heading);
+                details.push('\n');
+            }
+            details.push_str(line);
+            details.push('\n');
+        }
+    }
+    details
+}
+
 pub(super) fn verify_linkage(output: Output) -> Result<()> {
     if linkage_failed(&output) {
-        print!("{}", String::from_utf8_lossy(&output.stdout));
-        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        print!("{}", linkage_details(&String::from_utf8_lossy(&output.stdout)));
+        eprint!("{}", linkage_details(&String::from_utf8_lossy(&output.stderr)));
         bail!("Homebrew linkage audit failed ({})", output.status);
     }
     println!("PASS: No missing or broken Homebrew libraries");
@@ -247,6 +265,16 @@ mod tests {
         output.stderr.clear();
         output.status = ExitStatus::from_raw(1 << 8);
         assert!(linkage_failed(&output));
+    }
+
+    #[test]
+    fn linkage_details_preserve_broken_formula_and_other_diagnostics() {
+        let text = "==> Checking healthy linkage\n==> Checking vips linkage\nBroken dependencies:\n  libjxl.dylib\n==> Checking another linkage\n";
+        assert_eq!(
+            linkage_details(text),
+            "==> Checking vips linkage\nBroken dependencies:\n  libjxl.dylib\n"
+        );
+        assert_eq!(linkage_details("Error: probe failed\n"), "Error: probe failed\n");
     }
 
     #[test]

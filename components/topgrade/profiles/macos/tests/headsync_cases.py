@@ -110,7 +110,7 @@ elif args[:1] == ["outdated"]:
 elif args[:1] == ["uses"]:
  if args[-1].endswith("/jpeg-xl"): print(os.environ.get("TEST_JXL_USERS", ""))
  else: print("topgrade\natuin")
-elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover"):
+elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover", "repair"):
  state = (root/"state/brew-headsync").resolve()
  assert pathlib.Path(args[1]).parent == state and pathlib.Path(args[1]).is_file()
  assert pathlib.Path(args[3]) == state
@@ -120,6 +120,8 @@ elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover"):
   assert len(args) == 4
   if os.environ.get("TEST_JXL_LEAVE_PENDING") != "1":
    (state/"jpeg-xl-active.json").unlink(); print("original kegs restored")
+ elif args[2] == "repair":
+  pass
  elif os.environ.get("TEST_JXL_FAIL") == "1":
   (state/"jpeg-xl-active.json").write_text("{}")
   print("synthetic ABI rebuild failure", file=sys.stderr); sys.exit(45)
@@ -430,6 +432,21 @@ def jpeg_xl_abi_transaction(f, users, fail=False):
         assert result.returncode == 0 and len(bulk) == 1, (result.stdout, events)
         assert events.index(transaction) < events.index(bulk[0]), events
         assert (consumer not in bulk[0]) == (consumer in users.splitlines()), events
+        [before, after] = [i for i, line in enumerate(events)
+                           if line.startswith("brew ruby ") and " repair " in line]
+        assert before < events.index(transaction) < events.index(bulk[0]) < after, events
+    f.assert_restored()
+
+
+def jpeg_xl_repairs_current_provider(f):
+    (f.root / "pair-installed").touch()
+    target = "nyamiiko/headfixes/jpeg-xl"
+    result = f.run(TEST_INSTALLED=f"llvm\n{target}\nvips", TEST_JXL_USERS="vips")
+    assert result.returncode == 0 and "No remaining outdated formulae" in result.stdout, result.stdout
+    events = f.events()
+    [repair] = [line for line in events if line.startswith("brew ruby ") and " repair " in line]
+    assert repair.split(" repair ", 1)[1].split()[1:] == [target, "vips"], events
+    assert not any(line.startswith("brew upgrade ") or " run " in line for line in events), events
     f.assert_restored()
 
 
@@ -841,6 +858,7 @@ if native:
         ("JPEG XL and installed dependents use one coordinated upgrade", lambda f: jpeg_xl_abi_transaction(f, "vips\nhomebrew-ffmpeg/ffmpeg/ffmpeg")),
         ("JPEG XL with no declared dependents still uses the transaction", lambda f: jpeg_xl_abi_transaction(f, "")),
         ("JPEG XL rollback stops the rest of the batch", lambda f: jpeg_xl_abi_transaction(f, "vips", True)),
+        ("JPEG XL repair runs even with no outdated formulas", jpeg_xl_repairs_current_provider),
         ("Interrupted JPEG XL recovery runs before Homebrew refresh", jpeg_xl_recovers_before_brew_refresh),
         ("Pending JPEG XL recovery prevents Homebrew refresh", lambda f: jpeg_xl_recovers_before_brew_refresh(f, True)),
         ("broken linkage after a successful Homebrew command is a failure", broken_post_upgrade_linkage_fails),

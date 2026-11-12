@@ -175,7 +175,7 @@ impl Headsync {
                 error.downcast_ref::<TopgradeError>(),
                 Some(TopgradeError::ProcessFailed(_, status)) if status.code().is_some_and(|code| code < 128)
             );
-            if mode == "run" && exited && interrupted().is_ok() && self.jpeg_xl_pending()? {
+            if matches!(mode, "run" | "repair") && exited && interrupted().is_ok() && self.jpeg_xl_pending()? {
                 self.jpeg_xl("recover", &[])
                     .wrap_err_with(|| format!("{error:#}; immediate JPEG XL recovery also failed"))?;
             }
@@ -484,36 +484,22 @@ impl Headsync {
                 }
             })
             .collect();
-        if candidates.is_empty() {
+        let mut jpeg = installed.iter().filter(|formula| basename(formula) == "jpeg-xl");
+        let provider = jpeg.next();
+        ensure!(jpeg.next().is_none(), "Ambiguous installed JPEG XL formula identity");
+        let mut outdated = if candidates.is_empty() {
             println!("No eligible installed formulae; skipping outdated scan");
-            return Ok(Vec::new());
-        }
-
-        let mut outdated = self.outdated(&candidates)?;
-        if outdated.is_empty() {
-            println!("No remaining outdated formulae");
-            return Ok(Vec::new());
-        }
+            Vec::new()
+        } else {
+            self.outdated(&candidates)?
+        };
         let requested = outdated.clone();
         if let Some(index) = outdated.iter().position(|formula| basename(formula) == "jpeg-xl") {
             let jxl = outdated.remove(index);
-            ensure!(
-                !outdated.iter().any(|formula| basename(formula) == "jpeg-xl"),
-                "Ambiguous installed JPEG XL formula identity"
-            );
-            let mut group = names(
-                &command_text(self.brew(&[
-                    "uses",
-                    "--installed",
-                    "--recursive",
-                    "--include-implicit",
-                    "--include-optional",
-                    "--formula",
-                    &jxl,
-                ]))
-                .wrap_err("Unable to verify the installed JPEG XL dependency group")?,
-            )?;
-            group.insert(0, jxl);
+            let group = self.jpeg_group(&jxl)?;
+            // An already-broken consumer must be repaired before changing its provider.
+            self.jpeg_xl("repair", &group)
+                .wrap_err("JPEG XL linkage repair before coordinated upgrade failed")?;
             self.jpeg_xl("run", &group)
                 .wrap_err("Coordinated JPEG XL upgrade failed")?;
             // Rebuilds may already have upgraded an outdated consumer.
@@ -525,9 +511,38 @@ impl Headsync {
         if !outdated.is_empty() {
             self.upgrade_remaining(&outdated)?;
         }
+        if let Some(provider) = provider {
+            // Bottled consumers can reintroduce stale ABI links without an outdated provider.
+            self.jpeg_xl("repair", &self.jpeg_group(provider)?)
+                .wrap_err("JPEG XL dependent linkage repair failed")?;
+        }
+        if !outdated.is_empty() {
+            self.verify_bulk_linkage()?;
+        }
+        if requested.is_empty() {
+            println!("No remaining outdated formulae");
+            return Ok(Vec::new());
+        }
         println!("\n== Verify requested formula upgrades ==");
         let requested: Vec<&str> = requested.iter().map(String::as_str).collect();
         self.outdated(&requested)
+    }
+
+    fn jpeg_group(&self, provider: &str) -> Result<Vec<String>> {
+        let mut group = names(
+            &command_text(self.brew(&[
+                "uses",
+                "--installed",
+                "--recursive",
+                "--include-implicit",
+                "--include-optional",
+                "--formula",
+                provider,
+            ]))
+            .wrap_err("Unable to verify the installed JPEG XL dependency group")?,
+        )?;
+        group.insert(0, provider.to_owned());
+        Ok(group)
     }
 
     fn outdated(&self, candidates: &[&str]) -> Result<Vec<String>> {
@@ -577,7 +592,10 @@ impl Headsync {
             )
             .wrap_err_with(|| format!("Homebrew Rust cannot run; required by {formula}"))?;
         }
-        status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))?;
+        status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))
+    }
+
+    fn verify_bulk_linkage(&self) -> Result<()> {
         let linkage = self
             .brew(&["linkage", "--test"])
             .envs([("LANG", "C"), ("LC_ALL", "C")])
