@@ -116,9 +116,15 @@ class Fixture < JpegXlTransaction
       abi = @scenario == :same_abi ? "0.13" : "0.14"
       install(JXL, NEW, "libjxl.#{abi}.dylib", stamp: "candidate")
       install("homebrew/core/bison", "3.8.2", "", dependency: true) if @scenario == :failed
+      rack("bison").mkdir if @scenario == :failed_missing_rack
     when "reinstall"
       old = rack("consumer")/"1.0"
       Keg.new(old).unlink
+      if @scenario == :failed_missing_rack
+        FileUtils.remove_entry_secure(rack("consumer"))
+        raise "synthetic interruption before the replacement rack exists"
+      end
+
       staged = rack("consumer")/"1.0.reinstall"
       old.rename(staged)
       install(CONSUMER, "1.0", "libjxl.0.14.dylib", options: ["--with-jxl"], stamp: "replacement")
@@ -174,8 +180,9 @@ end
   end
 end
 
-[:failed, :failed_retirement].each do |scenario|
+[:failed, :failed_retirement, :failed_missing_rack].each do |scenario|
   with_fixture(scenario) do |fixture, state|
+    fixture.rack("consumer").chmod(0o755)
     begin
       fixture.run(Fixture::JXL, [Fixture::CONSUMER])
       raise "synthetic failure incorrectly succeeded"
@@ -184,6 +191,7 @@ end
     end
     check(fixture.versions("jpeg-xl") == [Fixture::OLD], "JPEG XL rollback failed")
     check(fixture.versions("consumer") == ["1.0"], "partial consumer keg remains")
+    check((fixture.rack("consumer").stat.mode & 0o777) == 0o755, "restored rack permissions changed")
     check((fixture.opt("consumer")/"stamp").read == "initial", "consumer backup was not restored")
     check(!fixture.present?(fixture.rack("bison")), "build dependency was not removed on rollback")
     check(!fixture.present?(state/"jpeg-xl-active.json"), "verified rollback left a journal")
@@ -198,6 +206,25 @@ with_fixture(:success) do |fixture, state|
   Fixture.new(state).recover
   check(fixture.versions("jpeg-xl") == [Fixture::OLD], "restart recovery did not restore JPEG XL")
   check(!fixture.present?(state/"jpeg-xl-active.json"), "restart recovery left a journal")
+end
+
+with_fixture(:success) do |fixture, state|
+  rows, tools = fixture.plan(Fixture::JXL, [Fixture::CONSUMER])
+  fixture.prepare(rows, tools)
+  fixture.mark(rows.first)
+  fixture.brew("upgrade")
+  journal = state/"jpeg-xl-active.json"
+  record = JSON.parse(journal.read)
+  record.fetch("rows").first["manifest"] = {}
+  journal.write(JSON.generate(record))
+  begin
+    Fixture.new(state).recover
+    raise "malformed rollback manifest was accepted"
+  rescue RuntimeError => error
+    check(error.message == "Invalid JPEG XL journal row", error.message)
+  end
+  check(fixture.versions("jpeg-xl") == [Fixture::OLD, Fixture::NEW], "malformed journal changed kegs")
+  check(journal.file?, "malformed journal was deleted")
 end
 
 with_fixture(:zero_status_broken) do |fixture, _state|

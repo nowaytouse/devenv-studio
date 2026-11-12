@@ -18,6 +18,7 @@ class JpegXlTransaction
   LIBRARY = /\Alibjxl(?:_[a-z0-9_]+)?(?:\.[0-9]+)*\.dylib\z/
   OPTIONS = /\A--(?:with|without)-[a-zA-Z0-9_.+@-]+\z/
   BUILD_TOOLS = %w[bison util-macros xtrans lzip make].freeze
+  MAX_JOURNAL_BYTES = 32 * 1024 * 1024
   BREW_ENV = {
     "HOMEBREW_NO_AUTO_UPDATE" => "1",
     "HOMEBREW_NO_INSTALL_FROM_API" => "1",
@@ -169,6 +170,7 @@ class JpegXlTransaction
     row = {
       "full" => full, "name" => short, "version" => active.basename.to_s, "versions" => installed,
       "linked" => !linked_target.nil?, "source" => source_info(tab),
+      "rack_mode" => rack(short).stat.mode & 0o777,
     }
     [row, active]
   end
@@ -271,9 +273,12 @@ class JpegXlTransaction
   end
 
   def checkpoint
+    data = JSON.generate(@record)
+    raise "JPEG XL journal is too large" if data.bytesize > MAX_JOURNAL_BYTES
+
     temp = @state/".jpeg-xl-journal-#{SecureRandom.hex(12)}"
     temp.open("wx", 0o600) do |file|
-      file.write(JSON.generate(@record))
+      file.write(data)
       file.fsync
     end
     temp.rename(@journal)
@@ -308,6 +313,7 @@ class JpegXlTransaction
     prior = original(row)
     raise "Original keg changed before updating #{short}" unless record_target(opt(short), short) == prior &&
       record_target(linked(short), short) == (row.fetch("linked") ? prior : nil) &&
+      (prior.dirname.stat.mode & 0o777) == row.fetch("rack_mode") &&
       versions(short) == row.fetch("versions") && manifest(prior) == row.fetch("manifest")
 
     @record.fetch("touched") << row.fetch("name")
@@ -357,13 +363,22 @@ class JpegXlTransaction
     backup = saved(row)
     expected = row.fetch("manifest")
     FormulaLock.new(short).with_lock do
+      installed = versions(short)
+      missing = row.fetch("versions") - installed - [row.fetch("version")]
+      raise "Inactive Homebrew kegs disappeared during JPEG XL recovery: #{short}" unless missing.empty?
+
       if !prior.directory? || manifest(prior) != expected
         raise "JPEG XL rollback backup drifted: #{backup}" unless manifest(backup) == expected
       end
       remove_current_links(short)
-      (versions(short) - row.fetch("versions")).each { |version| archive(rack(short)/version) }
+      (installed - row.fetch("versions")).each { |version| archive(rack(short)/version) }
       if !prior.directory? || manifest(prior) != expected
         archive(prior) if present?(prior)
+        unless present?(prior.dirname)
+          prior.dirname.mkdir
+          prior.dirname.chmod(row.fetch("rack_mode"))
+          sync_directory(prior.dirname.dirname)
+        end
         backup.rename(prior)
         sync_directory(prior.dirname)
         sync_directory(backup.dirname)
@@ -378,7 +393,13 @@ class JpegXlTransaction
   def restore_tool(short, version)
     FormulaLock.new(short).with_lock do
       installed = versions(short)
-      return if installed.empty? && !present?(rack(short)) && !present?(opt(short)) && !present?(linked(short))
+      if installed.empty? && !present?(opt(short)) && !present?(linked(short))
+        if rack(short).directory?
+          rack(short).rmdir
+          sync_directory(HOMEBREW_CELLAR)
+        end
+        return
+      end
 
       keg = rack(short)/version
       raise "Unexpected build-tool state during recovery: #{short}" unless installed == [version] &&
@@ -410,9 +431,12 @@ class JpegXlTransaction
   def load_record
     info = @journal.lstat
     raise "Unsafe JPEG XL journal" unless info.file? && info.uid == Process.uid &&
-      info.nlink == 1 && (info.mode & 0o077).zero?
+      info.nlink == 1 && (info.mode & 0o077).zero? && info.size <= MAX_JOURNAL_BYTES
 
-    @record = JSON.parse(@journal.read)
+    data = @journal.binread(MAX_JOURNAL_BYTES + 1)
+    raise "JPEG XL journal is too large" if data.bytesize > MAX_JOURNAL_BYTES
+
+    @record = JSON.parse(data)
     stage = @record.fetch("stage")
     raise "Invalid JPEG XL journal directory" unless STAGE.match?(stage)
 
@@ -423,9 +447,13 @@ class JpegXlTransaction
     touched = @record.fetch("touched")
     names = rows.map do |row|
       short = name(row.fetch("full"))
+      manifest = row.fetch("manifest")
+      mode = row.fetch("rack_mode")
       raise "Invalid JPEG XL journal row" unless row.fetch("name") == short &&
         NAME.match?(row.fetch("version")) && row.fetch("versions").all? { |version| NAME.match?(version) } &&
-        row.fetch("versions").include?(row.fetch("version"))
+        row.fetch("versions").include?(row.fetch("version")) && [true, false].include?(row.fetch("linked")) &&
+        mode.is_a?(Integer) && mode.between?(0o700, 0o777) &&
+        manifest.is_a?(Hash) && manifest["."]&.first == "directory"
 
       short
     end
