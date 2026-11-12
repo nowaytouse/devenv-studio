@@ -83,8 +83,41 @@ async function fetchBuilderLockedTree(ref, token, paths) {
     return null;
   }
 }
+// Google removed the old skill in 68924f89 after adding discover-assets in 5422f53e.
+function reviewedDiscoverySource(entry, approved, host) {
+  return approved && host === "github.com" && entry.sourceType === "github" &&
+    entry.source === "GoogleCloudPlatform/data-agent-kit-plugin" &&
+    entry.sourceUrl === "https://github.com/GoogleCloudPlatform/data-agent-kit-plugin.git" &&
+    !entry.ref && !entry.pinnedRef;
+}
+async function verifiedDiscoveryCheckout(tempDir, entry, approved, host, git) {
+  if (!reviewedDiscoverySource(entry, approved, host)) return false;
+  const old = "skills/discovering-gcp-data-assets";
+  const replacement = "skills/discover-assets/SKILL.md";
+  const options = {
+    timeout: 15_000,
+    maxBuffer: 4096,
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_COUNT: "0",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_ALLOW_PROTOCOL: "https",
+    },
+  };
+  const run = (args) => git("/usr/bin/git", args, options).then(({ stdout }) => stdout.trim());
+  const commit = await run(["-C", tempDir, "rev-parse", "--verify", "HEAD^{commit}"]);
+  const files = await run(["-C", tempDir, "ls-tree", "-r", "HEAD", "--", old, replacement]);
+  if (!/^[0-9a-f]{40}$/.test(commit) ||
+      !/^100(?:644|755) blob [0-9a-f]{40}\tskills\/discover-assets\/SKILL\.md$/.test(files)) return false;
+  return await run(["-c", "http.followRedirects=false", "ls-remote", "--exit-code", entry.sourceUrl,
+    "refs/heads/main"]) === commit + "\trefs/heads/main";
+}
 source = replaceOnce(source, "async function fetchGlobalSource(entry, lockedSkillPaths) {",
-  fetchBuilderLockedTree.toString() + "\nasync function fetchGlobalSource(entry, lockedSkillPaths) {");
+  [fetchBuilderLockedTree, reviewedDiscoverySource, verifiedDiscoveryCheckout]
+    .map(String).join("\n") +
+  "\nasync function fetchGlobalSource(entry, lockedSkillPaths) {");
 source = replaceOnce(source, "\t\t\tconst tree = await fetchRepoTree(entry.source, entry.ref, getGitHubToken);",
   "\t\t\tconst sparse = entry.source.toLowerCase() === 'builderio/agent-native' && getGitHubHost() === 'github.com' " +
   "? await fetchBuilderLockedTree(entry.ref, getGitHubToken(), lockedSkillPaths) : null;\n" +
@@ -153,6 +186,25 @@ global = global.slice(0, fetchStart) + [
 global = replaceOnce(global, "\t\t} catch (error) {\n\t\t\tconsole.log(", "\t\t} catch (error) {\n\t\t\tfailCount++;\n\t\t\tconsole.log(");
 global = replaceOnce(global, "\t\tconst { tempDir, note } = checkout;",
   "\t\tconst { tempDir, note } = checkout;\n\t\tconst beforeSource = updates.length;");
+global = replaceOnce(global,
+  "const resolution = await checkAndPromptForDeletions(source, lockedNamesFor(firstEntry),",
+  [
+    "const locked = lockedNamesFor(firstEntry);",
+    "\t\t\tconst retired = 'discovering-gcp-data-assets';",
+    "\t\t\tconst replacements = discoveredLocations.filter((skill) => skill.name === 'discover-assets');",
+    "\t\t\tconst keepRetired = locked.includes(retired) &&",
+    "\t\t\t\tresolveSkillLocations([retired], lock.skills, discoveredLocations).deletedSkills.includes(retired) &&",
+    "\t\t\t\treplacements.length === 1 && replacements[0].skillPath === 'skills/discover-assets/SKILL.md' &&",
+    "\t\t\t\tawait verifiedDiscoveryCheckout(tempDir, firstEntry, process.env.DEVENV_STUDIO_RETAIN_DISCOVERY === '1', getGitHubHost(), execFileAsync);",
+    "\t\t\tif (keepRetired) console.log('Retained upstream-retired discovering-gcp-data-assets; replacement: discover-assets (not installed)');",
+    "\t\t\tconst resolution = await checkAndPromptForDeletions(source, keepRetired ? locked.filter((name) => name !== retired) : locked,",
+  ].join("\n"));
+global = replaceOnce(global,
+  "\t\t\tconst deletedSkillSet = new Set(resolution.deletedSkills);\n" +
+  "\t\t\tfor (const { name: skillName, entry } of itemsForSource) {\n" +
+  "\t\t\t\tif (deletedSkillSet.has(skillName)) continue;",
+  "\t\t\tif (resolution.deletedSkills.length || resolution.ambiguousSkills.length) { failCount++; continue; }\n" +
+  "\t\t\tfor (const { name: skillName, entry } of itemsForSource) {");
 global = replaceOnce(global, "\t\t} catch (error) {\n\t\t\tfailCount++;",
   "\t\t\tconsole.log('✓ ' + sanitizeMetadata(source) + ' — Git paths verified; ' + " +
   "(updates.length - beforeSource) + ' pending');\n\t\t} catch (error) {\n\t\t\tfailCount++;");

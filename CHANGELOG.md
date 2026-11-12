@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- macOS Skills 对已核验退役的 `discovering-gcp-data-assets` 保留本地副本并提示官方后继 `discover-assets`，其余上游缺失继续报错。
 - macOS 更新中心可分别审核 LLVM 稳定版瓶装更新和 LLVM HEAD 构建。稳定版沿用 LLVM 23.1 的兼容范围，HEAD 使用独立 keg，两项均保留旧版本。
 - LLVM HEAD 首次下载时只获取官方 main 的提交历史和当前提交的文件。下载或提交校验失败时，当前安装仍可用。
 - LLVM 更新使用 Homebrew 的公开接口切换渠道链接，修复构建完成后因访问受保护属性导致的激活失败。

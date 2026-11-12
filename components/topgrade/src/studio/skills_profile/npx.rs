@@ -16,6 +16,13 @@ const SOURCE_URL: &str = "https://github.com/mattpocock/skills";
 const FIELDS: [&str; 4] = ["source", "sourceType", "sourceUrl", "skillPath"];
 const ROOTS: [&str; 4] = [".agents/skills", ".codex/skills", ".claude/skills", ".cursor/skills"];
 const SKILLS_PACKAGE: &str = "skills@1.7.6";
+pub(super) const RETIRED_DISCOVERY: &str = "discovering-gcp-data-assets";
+const DISCOVERY_SOURCE: &str = "GoogleCloudPlatform/data-agent-kit-plugin";
+const DISCOVERY_URL: &str = "https://github.com/GoogleCloudPlatform/data-agent-kit-plugin.git";
+const DISCOVERY_TREE: &str = "db4886d8941a99c86ac44b2fe1ad427763c6c7f5";
+const DISCOVERY_SHA256: &str = "558a0e0738a9d9448463193371400a3a82c6e17d24b6915cd35477f5329d3bd4";
+const DISCOVERY_MARKER: &str =
+    "Retained upstream-retired discovering-gcp-data-assets; replacement: discover-assets (not installed)";
 
 static ANSI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[[0-?]*[ -/]*[@-~]").expect("static ANSI pattern"));
 static FAILURE: LazyLock<Regex> = LazyLock::new(|| {
@@ -45,6 +52,36 @@ fn present_ref(record: &Value) -> bool {
     ["ref", "pinnedRef"]
         .iter()
         .any(|name| !record[name].is_null() && record[name].as_str() != Some(""))
+}
+
+fn reviewed_discovery_lock(record: &Value) -> bool {
+    record["source"] == DISCOVERY_SOURCE
+        && record["sourceType"] == "github"
+        && record["sourceUrl"] == DISCOVERY_URL
+        && record["skillPath"] == "skills/discovering-gcp-data-assets/SKILL.md"
+        && record["skillFolderHash"] == DISCOVERY_TREE
+        && !present_ref(record)
+}
+
+pub(super) fn retained_discovery(home: &Path, record: &Value) -> Result<bool> {
+    if !reviewed_discovery_lock(record) {
+        return Ok(false);
+    }
+    let relative = Path::new(ROOTS[0]).join(RETIRED_DISCOVERY);
+    if !exists(&home.join(&relative))? {
+        return Ok(false);
+    }
+    let local = directory(home, &relative, false)?;
+    let mut files = fs::read_dir(&local)?;
+    if !files
+        .next()
+        .transpose()?
+        .is_some_and(|file| file.file_name() == "SKILL.md")
+        || files.next().transpose()?.is_some()
+    {
+        return Ok(false);
+    }
+    Ok(digest(&bytes(&local.join("SKILL.md"), DATA_LIMIT)?) == DISCOVERY_SHA256)
 }
 
 fn plan(mut lock: Value, rows: &[Row], home: &Path) -> Result<(Value, Vec<Value>)> {
@@ -286,8 +323,13 @@ pub(super) fn run(home: &Path) -> Result<()> {
     let lock_path = lock_path(home)?;
     let original = bytes(&lock_path, DATA_LIMIT)?;
     let before = super::json(&original)?;
-    lock_entries(&before)?;
+    let old = lock_entries(&before)?.get(RETIRED_DISCOVERY).unwrap_or(&Value::Null);
+    let retain_discovery = retained_discovery(home, old)?;
     let mut command = command(home, "npx", Some(&route))?;
+    command.env(
+        "DEVENV_STUDIO_RETAIN_DISCOVERY",
+        if retain_discovery { "1" } else { "0" },
+    );
     let mut secrets = Vec::new();
     for name in ["GITHUB_TOKEN", "GH_TOKEN"] {
         if let Ok(value) = std::env::var(name)
@@ -372,6 +414,14 @@ pub(super) fn run(home: &Path) -> Result<()> {
             archive.display()
         )
     })?;
+    if output.lines().any(|line| line == DISCOVERY_MARKER) {
+        let retained = &after["skills"][RETIRED_DISCOVERY];
+        ensure!(
+            retain_discovery && retained == old && retained_discovery(home, retained)?,
+            "Retired discovery skill changed during the update; pre-update lock saved at {}",
+            archive.display()
+        );
+    }
     Ok(())
 }
 
@@ -446,6 +496,41 @@ mod tests {
         assert!(!accepted("Updated 1 skill(s)\nError: source failed", true));
         assert!(!accepted("Updated 1 skill(s)", false));
         assert!(!accepted("", true));
+    }
+
+    #[test]
+    fn retirement_is_limited_to_the_reviewed_discovery_lock() -> Result<()> {
+        let known = json!({
+            "source": DISCOVERY_SOURCE,
+            "sourceType": "github",
+            "sourceUrl": DISCOVERY_URL,
+            "skillPath": "skills/discovering-gcp-data-assets/SKILL.md",
+            "skillFolderHash": DISCOVERY_TREE,
+        });
+        assert!(reviewed_discovery_lock(&known));
+        for (key, replacement) in [
+            ("source", "example/other"),
+            ("sourceUrl", "https://example.test/other.git"),
+            ("skillPath", "skills/unreviewed/SKILL.md"),
+            ("skillFolderHash", "unreviewed"),
+            ("ref", "old-release"),
+            ("pinnedRef", "old-release"),
+        ] {
+            let mut changed = known.clone();
+            changed[key] = replacement.into();
+            assert!(!reviewed_discovery_lock(&changed), "{key}");
+        }
+        let home = tempfile::tempdir()?;
+        assert!(!retained_discovery(&home.path().canonicalize()?, &known)?);
+        let output = format!("Updated 1 skill(s)\n{DISCOVERY_MARKER}");
+        assert!(accepted(&output, true));
+        assert!(!accepted(
+            &format!(
+                "{output}\nWarning: The following skills from example/other appear to have been deleted upstream:"
+            ),
+            true
+        ));
+        Ok(())
     }
 
     #[test]

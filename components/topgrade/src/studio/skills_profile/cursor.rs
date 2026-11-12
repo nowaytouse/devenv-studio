@@ -324,6 +324,12 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
             "GH_TRACKED"
         } else if mirror {
             "NPX_MIRROR_VERIFIED"
+        } else if npx
+            && name == npx::RETIRED_DISCOVERY
+            && row.path.canonicalize().is_ok_and(|actual| actual == shared.join(name))
+            && npx::retained_discovery(home, entry)?
+        {
+            "NPX_UPSTREAM_RETIRED_RETAINED"
         } else if npx {
             "NPX_TRACKED"
         } else if retained_local_rex(home, row, REVIEWED_REX_SHA)? {
@@ -397,7 +403,7 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
             "unresolved": unresolved,
             "all_entries": all,
             "errors": errors,
-            "note": "Ownership audit. Reviewed local retained entries were not updated or checked for newer versions. Separate updater steps must still succeed.",
+            "note": "Ownership audit. Reviewed local or upstream-retired entries were retained without updating. Separate updater steps must still succeed.",
         }))?,
         0o600,
     )?;
