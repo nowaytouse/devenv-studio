@@ -3,7 +3,7 @@ use anyhow::{Context, Result, ensure};
 #[cfg(any(windows, test))]
 use serde::Deserialize;
 #[cfg(any(windows, test))]
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 #[cfg(any(windows, test))]
 use super::{MAX_PACKAGES, Package};
@@ -42,6 +42,7 @@ pub(crate) struct Inventory {
     pub packages: Vec<Package>,
     pub official_buckets: BTreeSet<String>,
     pub omitted: bool,
+    pub omitted_apps: BTreeSet<String>,
 }
 
 pub(crate) fn valid_identity(name: &str, version: &str) -> bool {
@@ -107,45 +108,41 @@ pub(crate) fn parse_export(text: &str) -> Result<Inventory> {
     );
 
     let mut names = BTreeSet::new();
-    let mut sources = BTreeMap::new();
     let mut official_buckets = BTreeSet::new();
     let mut omitted = false;
     for bucket in export.buckets {
         let name = bucket.name.to_ascii_lowercase();
         ensure!(safe_component(&name), "Invalid Scoop bucket name");
         ensure!(names.insert(name.clone()), "Duplicate Scoop bucket name");
-        let official = official_source(&name, &bucket.source);
-        if official {
-            official_buckets.insert(name.clone());
+        if official_source(&name, &bucket.source) {
+            official_buckets.insert(name);
         }
-        sources.insert(name, official);
     }
 
     let mut packages = Vec::new();
     let mut identities = BTreeSet::new();
+    let mut omitted_apps = BTreeSet::new();
     for app in export.apps {
-        let Some(source) = app.source.as_deref() else {
-            omitted = true;
-            continue;
-        };
-        let bucket = source.to_ascii_lowercase();
-        let Some(true) = sources.get(&bucket) else {
-            omitted = true;
-            continue;
-        };
-        if app
-            .info
+        let name = app
+            .source
             .as_deref()
-            .is_some_and(|info| !info.trim().is_empty())
-        {
+            .map(str::to_ascii_lowercase)
+            .filter(|bucket| official_buckets.contains(bucket))
+            .map(|bucket| format!("{bucket}/{}", app.name))
+            .filter(|name| {
+                valid_identity(name, &app.version)
+                    && app
+                        .info
+                        .as_deref()
+                        .is_none_or(|info| info.trim().is_empty())
+            });
+        let Some(name) = name else {
             omitted = true;
+            if safe_component(&app.name) {
+                omitted_apps.insert(app.name.to_ascii_lowercase());
+            }
             continue;
-        }
-        let name = format!("{bucket}/{}", app.name);
-        if !valid_identity(&name, &app.version) {
-            omitted = true;
-            continue;
-        }
+        };
         ensure!(
             identities.insert(name.to_ascii_lowercase()),
             "Duplicate Scoop package identity"
@@ -163,6 +160,7 @@ pub(crate) fn parse_export(text: &str) -> Result<Inventory> {
         packages,
         official_buckets,
         omitted,
+        omitted_apps,
     })
 }
 
@@ -208,6 +206,15 @@ mod tests {
         let parsed = parse_export(&value).unwrap();
         assert!(parsed.packages.is_empty());
         assert!(parsed.omitted);
+        assert_eq!(
+            parsed.omitted_apps,
+            BTreeSet::from([
+                "admin-tool".into(),
+                "held-tool".into(),
+                "local-manifest".into(),
+                "local-tool".into(),
+            ])
+        );
         assert_eq!(parsed.official_buckets, BTreeSet::from(["main".into()]));
     }
 

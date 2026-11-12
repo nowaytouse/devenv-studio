@@ -8,9 +8,7 @@ use std::time::Duration;
 #[cfg(any(windows, test))]
 use std::{collections::BTreeMap, path::Path, sync::atomic::Ordering};
 
-#[cfg(any(windows, test))]
-use anyhow::Context;
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
 use crate::backup::{self, Package};
@@ -74,9 +72,13 @@ pub fn validate(request: &Request) -> Result<()> {
             backup::scoop::valid_identity(&package.name, &package.version),
             "Invalid Scoop package identity or saved version"
         );
+        let (_, app) = package
+            .name
+            .split_once('/')
+            .context("Invalid Scoop package identity")?;
         ensure!(
-            identities.insert(package.name.to_ascii_lowercase()),
-            "Duplicate selected Scoop package"
+            identities.insert(app.to_ascii_lowercase()),
+            "Duplicate selected Scoop app name"
         );
     }
     Ok(())
@@ -168,15 +170,38 @@ fn run_recorded(
 ) -> Result<Report> {
     validate(request)?;
     let before = inventory(runner, tool, cancel)?;
+    let existing: BTreeMap<_, _> = before
+        .packages
+        .iter()
+        .map(|package| (package.name.to_ascii_lowercase(), package.version.as_str()))
+        .collect();
     for package in &request.packages {
-        let bucket = package
+        let (bucket, app) = package
             .name
             .split_once('/')
-            .context("Invalid Scoop package identity")?
-            .0;
+            .context("Invalid Scoop package identity")?;
         ensure!(
             before.official_buckets.contains(bucket),
             "The official Scoop bucket {bucket} is not registered; it will not be added automatically"
+        );
+        ensure!(
+            !before.packages.iter().any(|installed| {
+                installed
+                    .name
+                    .split_once('/')
+                    .is_some_and(|(installed_bucket, installed_app)| {
+                        installed_bucket != bucket && installed_app.eq_ignore_ascii_case(app)
+                    })
+            }),
+            "Scoop package {} has a same-name installation from another bucket",
+            package.name
+        );
+        ensure!(
+            !before.omitted_apps.contains(&app.to_ascii_lowercase())
+                || existing.get(&package.name.to_ascii_lowercase())
+                    == Some(&package.version.as_str()),
+            "Existing Scoop state prevents reinstalling {}; review its installed source and status",
+            package.name
         );
     }
     persist(
@@ -204,18 +229,13 @@ fn run_recorded(
     )
     .context("Persist Scoop package request before deployment")?;
 
-    let existing: BTreeMap<_, _> = before
-        .packages
-        .iter()
-        .map(|package| (package.name.as_str(), package.version.as_str()))
-        .collect();
     let deployment = (|| {
         for package in &request.packages {
             if cancel.load(Ordering::Acquire) {
                 return Err(Cancelled.into());
             }
             if existing
-                .get(package.name.as_str())
+                .get(&package.name.to_ascii_lowercase())
                 .is_some_and(|version| *version == package.version)
             {
                 continue;
@@ -228,11 +248,11 @@ fn run_recorded(
         let observed: BTreeMap<_, _> = installed
             .packages
             .iter()
-            .map(|package| (package.name.as_str(), package.version.as_str()))
+            .map(|package| (package.name.to_ascii_lowercase(), package.version.as_str()))
             .collect();
         for package in &request.packages {
             ensure!(
-                observed.get(package.name.as_str()) == Some(&package.version.as_str()),
+                observed.get(&package.name.to_ascii_lowercase()) == Some(&package.version.as_str()),
                 "Installed Scoop package does not match its saved exact version"
             );
         }
@@ -268,20 +288,19 @@ fn run_recorded(
         .as_ref()
         .into_iter()
         .flatten()
-        .map(|package| (package.name.as_str(), package.version.as_str()))
+        .map(|package| (package.name.to_ascii_lowercase(), package.version.as_str()))
         .collect();
     let packages = request
         .packages
         .iter()
         .map(|package| {
-            let installed = observed
-                .get(package.name.as_str())
-                .map(|version| (*version).to_owned());
+            let identity = package.name.to_ascii_lowercase();
+            let installed = observed.get(&identity).map(|version| (*version).to_owned());
             let action = match &installed {
                 None => "not installed",
                 Some(version) if version == &package.version => {
                     if existing
-                        .get(package.name.as_str())
+                        .get(&identity)
                         .is_some_and(|before| *before == package.version)
                     {
                         "already satisfied"
@@ -467,6 +486,8 @@ mod tests {
         let mut duplicate = request();
         duplicate.packages.push(duplicate.packages[0].clone());
         assert!(validate(&duplicate).is_err());
+        duplicate.packages[1].name = "extras/Test-Tool".into();
+        assert!(validate(&duplicate).is_err());
     }
 
     #[test]
@@ -532,5 +553,86 @@ mod tests {
         .unwrap_err();
         assert!(error.to_string().contains("not registered"));
         assert_eq!(runner.commands.len(), 1);
+    }
+
+    #[test]
+    fn conflicting_same_name_stops_before_installing_any_selected_package() {
+        for (entry, expected) in [
+            (
+                r#"{"Name":"Test-Tool","Version":"1.2.2","Source":"main","Info":"Held package"}"#,
+                "prevents reinstalling main/test-tool",
+            ),
+            (
+                r#"{"Name":"test-tool","Version":"1.2.3","Source":"extras","Info":"Global install"}"#,
+                "prevents reinstalling main/test-tool",
+            ),
+            (
+                r#"{"Name":"test-tool","Version":"1.2.2","Source":"https://example.invalid/app.json"}"#,
+                "prevents reinstalling main/test-tool",
+            ),
+            (
+                r#"{"Name":"test-tool","Version":"1.2.2","Info":"Install failed"}"#,
+                "prevents reinstalling main/test-tool",
+            ),
+            (
+                r#"{"Name":"Test-Tool","Version":"1.2.3","Source":"extras"}"#,
+                "has a same-name installation from another bucket",
+            ),
+        ] {
+            let before = format!(
+                r#"{{"buckets":[{{"Name":"main","Source":"https://github.com/ScoopInstaller/Main"}},{{"Name":"extras","Source":"https://github.com/ScoopInstaller/Extras"}}],"apps":[{entry}]}}"#
+            );
+            let mut runner = FakeRunner {
+                outputs: VecDeque::from([output(&before, 0)]),
+                commands: Vec::new(),
+            };
+            let mut request = request();
+            request.packages.insert(
+                0,
+                Package {
+                    name: "main/unrelated".into(),
+                    version: "1.0".into(),
+                },
+            );
+            let error = run_recorded(
+                &mut runner,
+                &tool(),
+                &request,
+                &Arc::new(AtomicBool::new(false)),
+                Path::new("/evidence"),
+                &mut |_, _| panic!("preflight must not write deployment records"),
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains(expected), "{error}");
+            assert_eq!(runner.commands.len(), 1);
+            assert_eq!(runner.commands[0].args.last().unwrap(), "export");
+        }
+    }
+
+    #[test]
+    fn verified_exact_install_is_reused_alongside_omitted_same_name() {
+        let inventory = r#"{"buckets":[{"Name":"main","Source":"https://github.com/ScoopInstaller/Main"}],"apps":[{"Name":"Test-Tool","Version":"1.2.3","Source":"main"},{"Name":"test-tool","Version":"2.0","Source":"main","Info":"Global install"}]}"#;
+        let mut runner = FakeRunner {
+            outputs: VecDeque::from([output(inventory, 0), output(inventory, 0)]),
+            commands: Vec::new(),
+        };
+        let report = run_recorded(
+            &mut runner,
+            &tool(),
+            &request(),
+            &Arc::new(AtomicBool::new(false)),
+            Path::new("/evidence"),
+            &mut |_, _| Ok(()),
+        )
+        .unwrap();
+        assert!(report.verified);
+        assert_eq!(report.packages[0].action, "already satisfied");
+        assert_eq!(runner.commands.len(), 2);
+        assert!(
+            runner
+                .commands
+                .iter()
+                .all(|command| command.args.last().unwrap() == "export")
+        );
     }
 }

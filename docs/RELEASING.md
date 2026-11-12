@@ -25,6 +25,14 @@ DevEnv Studio 覆盖 macOS 与 Windows 开发环境备份、配置、网络方�
 2. 使用 Developer ID 签名 macOS 产物，完成 Apple 公证后装订票据，在干净的目标环境验证签名、Gatekeeper、安装与启动。Windows 安装包使用 Authenticode 和 SHA-256 时间戳，按标准用户场景在两代 LTSC 核验签名、启动及权限提示。 [Apple 公证](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) · [Microsoft SignTool](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool)
 3. 在最终签名和封装完成后记录对外产物的 SHA-256。保留已验证上一版及其摘要，在目标设备验证升级和回退。发布记录关联签名验证结果与设备验收记录。
 
+## Windows x64 本地构建
+
+在 PowerShell 7 中进入仓库根目录，运行 `& .\scripts\Enter-DevEnvironment.ps1`，再执行 Cargo 构建。需要已有 Visual Studio 或 Build Tools 的 x64 C++ 工具和 Windows SDK。脚本通过 Visual Studio Installer 查找带 C++ 工具的最新实例（包括预览版），调用该实例的官方开发终端脚本，并核对实际解析到的 `cl.exe`、`link.exe` 和 SDK 文件。发现相对路径、工具链不匹配或缺少 SDK 文件时会恢复当前进程的环境变量并报告原因。初始化只作用于当前 PowerShell，不写用户或系统 PATH。 [Microsoft Developer PowerShell](https://learn.microsoft.com/en-us/visualstudio/ide/reference/command-prompt-powershell?view=visualstudio) · [Microsoft vswhere](https://github.com/microsoft/vswhere/wiki/Find-VC)
+
+### Local Windows x64 build
+
+Open PowerShell 7 in the repository root and run `& .\scripts\Enter-DevEnvironment.ps1` before building with Cargo. Install the x64 C++ tools and Windows SDK through Visual Studio or Build Tools. The script uses Visual Studio Installer to locate the newest qualifying instance, including preview versions. It loads that instance's Developer PowerShell and verifies the resolved `cl.exe`, `link.exe`, and SDK files. A relative path, mismatched toolchain, or missing SDK file restores the original process environment and reports the problem. Initialization affects only the current shell. [Microsoft Developer PowerShell](https://learn.microsoft.com/en-us/visualstudio/ide/reference/command-prompt-powershell?view=visualstudio) · [Microsoft vswhere](https://github.com/microsoft/vswhere/wiki/Find-VC)
+
 ## 更名兼容性
 
 `devenv-studio` 是新的主命令；`ltsc-studio` 保留为调用同一实现的兼容入口。源码目录、`studio-*` 内部 crate 名称不必随产品名移动或更名。

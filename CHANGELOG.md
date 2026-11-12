@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- 桌面常用界面文字的中英对应关系迁入 JSON，并校验重复条目和格式占位符。新增英文项目入口及 Windows 构建与 Scoop 重部署说明。
+- Windows x64 新增当前 PowerShell 的 MSVC 构建入口，核对编译器、链接器和 SDK，失败时恢复进程环境。
+- Windows Scoop 重部署在安装前识别跨 bucket 同名冲突和被清单省略的已安装项目，避免重复安装或覆盖现有来源。
+- Windows Topgrade 的临时自重命名备份与原程序放在同一安装目录，支持程序与系统 TEMP 位于不同驱动器的环境。现有 Windows 检查任务也会执行 Topgrade 自身的测试。
+
 - macOS HEAD-sync 将 JPEG XL 与需要重建的依赖方作为同一事务更新，保留安装来源、渠道和构建选项。失败时恢复旧 keg，运行验证通过后移出旧 JPEG XL。
 - macOS Skills 清理已核验退役的 `discovering-gcp-data-assets` 及其受管链接。来源暂时不可用或路径无法核实会报告警告并继续，安装、写入和完整性错误仍会失败。
 - macOS 更新中心可分别审核 LLVM 稳定版瓶装更新和 LLVM HEAD 构建。稳定版沿用 LLVM 23.1 的兼容范围，HEAD 使用独立 keg，两项均保留旧版本。

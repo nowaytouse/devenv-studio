@@ -1,4 +1,4 @@
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{ContextCompat, Result};
 use std::{env::current_exe, fs, path::PathBuf};
 use tracing::{debug, error};
 
@@ -15,7 +15,11 @@ impl SelfRenamer {
     }
 
     fn create_for_path(exe_path: PathBuf) -> Result<Self> {
-        let tempdir = tempfile::tempdir()?;
+        // The executable and its backup must stay on the same filesystem.
+        let install_dir = exe_path
+            .parent()
+            .wrap_err("Topgrade executable has no installation directory")?;
+        let tempdir = tempfile::tempdir_in(install_dir)?;
         let temp_path = tempdir.path().join("topgrade.exe");
 
         debug!("Current exe in {:?}. Moving it to {:?}", exe_path, temp_path);
@@ -64,6 +68,7 @@ mod tests {
         let renamer = SelfRenamer::create_for_path(exe_path.clone())?;
         let temp_path = renamer.temp_path.clone();
         let temp_dir = temp_path.parent().unwrap().to_owned();
+        assert_eq!(temp_dir.parent(), Some(install_dir.path()));
         assert!(!exe_path.exists());
         assert_eq!(fs::read(&temp_path)?, b"original executable");
 

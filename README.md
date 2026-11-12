@@ -1,5 +1,7 @@
 # DevEnv Studio
 
+简体中文 · [English](README.en.md)
+
 用 Rust 构建的 macOS 与 Windows 开发环境备份、配置工作台。两端均可采集本机开发工具并选择 mise 核心运行时重部署；macOS 另有 Homebrew Bundle、NPM 全局包与 VS Code 扩展重部署，Windows 提供 WinGet、Cargo、uv、Pip、NPM 和 VS Code 的可信任务。Windows LTSC 系统设置继续作为独立区域，Linux 可载入、预览和导出。
 
 当前开发基线为 **0.10.0**；更名及后续改进记录在 **Unreleased**，不会随每轮对话递增版本。正式版本只在经过审查的发布检查点确定，规则见[版本与发布](docs/RELEASING.md)。
