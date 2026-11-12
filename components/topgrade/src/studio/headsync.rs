@@ -14,7 +14,7 @@ use color_eyre::eyre::{Context, ContextCompat, Result, bail, ensure};
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
 use serde::Deserialize;
 
-use crate::{command::CommandExt as _, ctrlc};
+use crate::{command::CommandExt as _, ctrlc, error::TopgradeError};
 
 mod journal;
 #[cfg(test)]
@@ -23,6 +23,7 @@ mod tests;
 const LLAMA_REMOTE: &str = "https://github.com/ggml-org/llama.cpp.git";
 const REF: &str = "refs/heads/master";
 const PAIR: [&str; 2] = ["ggml", "llama.cpp"];
+const JPEG_JOURNAL: &str = "jpeg-xl-active.json";
 static DEFERRED_SIGNAL: AtomicI32 = AtomicI32::new(0);
 
 pub(super) fn run() -> Result<()> {
@@ -98,6 +99,10 @@ impl Headsync {
 
     fn run_locked(&mut self) -> Result<()> {
         let _lock = journal::lock(&self.state)?;
+        if self.jpeg_xl_pending()? {
+            self.jpeg_xl("recover", &[])
+                .wrap_err("JPEG XL transaction recovery failed")?;
+        }
         let core = command_path(self.brew(&["--repo", "homebrew/core"]))?.canonicalize()?;
         let txn = journal::Journal::new(self.state.canonicalize()?, core)?;
         txn.recover()?;
@@ -116,6 +121,49 @@ impl Headsync {
         }
         self.core_clean(txn.core(), "after transaction recovery")?;
         println!("homebrew/core: CLEAN\nHEAD sync transaction: OK");
+        Ok(())
+    }
+
+    fn jpeg_xl_pending(&self) -> Result<bool> {
+        match fs::symlink_metadata(self.state.join(JPEG_JOURNAL)) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn jpeg_xl(&self, mode: &str, formulae: &[String]) -> Result<()> {
+        let state = self.state.canonicalize()?;
+        let mut script = tempfile::Builder::new()
+            .prefix(".jpeg-xl-")
+            .suffix(".rb")
+            .tempfile_in(&state)?;
+        script.write_all(include_bytes!("headsync/jpeg_xl.rb"))?;
+        let result = status(
+            self.brew(&["ruby"])
+                .arg(script.path())
+                .arg(mode)
+                .arg(state)
+                .args(formulae)
+                .envs([
+                    ("HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK", "1"),
+                    ("HOMEBREW_NO_AUTOREMOVE", "1"),
+                    ("LANG", "C"),
+                    ("LC_ALL", "C"),
+                ]),
+        );
+        if let Err(error) = result {
+            let exited = matches!(
+                error.downcast_ref::<TopgradeError>(),
+                Some(TopgradeError::ProcessFailed(_, status)) if status.code().is_some_and(|code| code < 128)
+            );
+            if mode == "run" && exited && interrupted().is_ok() && self.jpeg_xl_pending()? {
+                self.jpeg_xl("recover", &[])
+                    .wrap_err_with(|| format!("{error:#}; immediate JPEG XL recovery also failed"))?;
+            }
+            return Err(error);
+        }
+        ensure!(!self.jpeg_xl_pending()?, "JPEG XL transaction left a pending journal");
         Ok(())
     }
 
@@ -308,10 +356,46 @@ impl Headsync {
             return Ok(());
         }
 
+        let mut outdated = self.outdated(&candidates)?;
+        if let Some(index) = outdated.iter().position(|formula| basename(formula) == "jpeg-xl") {
+            let jxl = outdated.remove(index);
+            ensure!(
+                !outdated.iter().any(|formula| basename(formula) == "jpeg-xl"),
+                "Ambiguous installed JPEG XL formula identity"
+            );
+            let mut group = names(
+                &command_text(self.brew(&[
+                    "uses",
+                    "--installed",
+                    "--recursive",
+                    "--include-implicit",
+                    "--include-optional",
+                    "--formula",
+                    &jxl,
+                ]))
+                .wrap_err("Unable to verify the installed JPEG XL dependency group")?,
+            )?;
+            group.insert(0, jxl);
+            self.jpeg_xl("run", &group)
+                .wrap_err("Coordinated JPEG XL upgrade failed")?;
+            // Rebuilds may already have upgraded an outdated consumer.
+            if !outdated.is_empty() {
+                let pending: Vec<&str> = outdated.iter().map(String::as_str).collect();
+                outdated = self.outdated(&pending)?;
+            }
+        }
+        if outdated.is_empty() {
+            println!("No remaining outdated formulae");
+            return Ok(());
+        }
+        self.upgrade_remaining(&outdated)
+    }
+
+    fn outdated(&self, candidates: &[&str]) -> Result<Vec<String>> {
         interrupted()?;
         let output = self
             .brew(&["outdated", "--formula", "--fetch-HEAD", "--json=v2"])
-            .args(&candidates)
+            .args(candidates)
             .output_checked_with(|output| match output.status.code() {
                 Some(0 | 1) => Ok(()),
                 _ => Err(()),
@@ -323,31 +407,11 @@ impl Headsync {
             "Homebrew returned no formula inventory (exit {:?}); inspect its diagnostic above",
             output.status.code()
         );
-        let outdated = outdated_names(&output.stdout, output.status.code() == Some(1), &candidates)
-            .wrap_err("invalid Homebrew outdated result")?;
-        if outdated.is_empty() {
-            println!("No remaining outdated formulae");
-            return Ok(());
-        }
-        if let Some(jxl) = outdated.iter().find(|formula| basename(formula) == "jpeg-xl") {
-            let users = names(
-                &command_text(self.brew(&[
-                    "uses",
-                    "--installed",
-                    "--recursive",
-                    "--include-implicit",
-                    "--include-optional",
-                    "--formula",
-                    jxl,
-                ]))
-                .wrap_err("Unable to verify the installed JPEG XL dependency group")?,
-            )?;
-            ensure!(
-                users.is_empty(),
-                "JPEG XL upgrade needs a coordinated ABI check for installed dependents: {}. No remaining formulae were upgraded",
-                users.join(", ")
-            );
-        }
+        outdated_names(&output.stdout, output.status.code() == Some(1), candidates)
+            .wrap_err("invalid Homebrew outdated result")
+    }
+
+    fn upgrade_remaining(&self, outdated: &[String]) -> Result<()> {
         let dependents = names(
             &command_text(self.brew(&["uses", "--installed", "--include-build", "--formula", "rust"]))
                 .wrap_err("unable to identify installed Homebrew Rust dependents")?,

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- macOS HEAD-sync 将 JPEG XL 与需要重建的依赖方作为同一事务更新，保留安装来源、渠道和构建选项。失败时恢复旧 keg，运行验证通过后移出旧 JPEG XL。
 - macOS Skills 清理已核验退役的 `discovering-gcp-data-assets` 及其受管链接。来源暂时不可用或路径无法核实会报告警告并继续，安装、写入和完整性错误仍会失败。
 - macOS 更新中心可分别审核 LLVM 稳定版瓶装更新和 LLVM HEAD 构建。稳定版沿用 LLVM 23.1 的兼容范围，HEAD 使用独立 keg，两项均保留旧版本。
 - LLVM HEAD 首次下载时只获取官方 main 的提交历史和当前提交的文件。下载或提交校验失败时，当前安装仍可用。

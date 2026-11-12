@@ -81,6 +81,7 @@ elif args[:1] == ["upgrade"]:
 elif args[:1] == ["outdated"]:
  eligible={name.rsplit("/",1)[-1]:name for name in args[1:] if not name.startswith("--")}
  outdated=set(os.environ.get("TEST_OUTDATED", "topgrade").splitlines())
+ if (root/"jpeg-xl-committed").exists(): outdated.difference_update(os.environ.get("TEST_JXL_REBUILDS", "").splitlines())
  found=[name for short,name in eligible.items() if short in outdated]
  mode=os.environ.get("TEST_OUTDATED_MODE", "normal")
  if mode == "malformed": print("{bad json"); sys.exit(1)
@@ -98,6 +99,21 @@ elif args[:1] == ["outdated"]:
 elif args[:1] == ["uses"]:
  if args[-1].endswith("/jpeg-xl"): print(os.environ.get("TEST_JXL_USERS", ""))
  else: print("topgrade\natuin")
+elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover"):
+ state = (root/"state/brew-headsync").resolve()
+ assert pathlib.Path(args[1]).parent == state and pathlib.Path(args[1]).is_file()
+ assert pathlib.Path(args[3]) == state
+ assert os.environ["HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK"] == "1"
+ assert os.environ["HOMEBREW_NO_INSTALL_CLEANUP"] == "1"
+ if args[2] == "recover":
+  assert len(args) == 4
+  if os.environ.get("TEST_JXL_LEAVE_PENDING") != "1":
+   (state/"jpeg-xl-active.json").unlink(); print("original kegs restored")
+ elif os.environ.get("TEST_JXL_FAIL") == "1":
+  (state/"jpeg-xl-active.json").write_text("{}")
+  print("synthetic ABI rebuild failure", file=sys.stderr); sys.exit(45)
+ else:
+  (root/"jpeg-xl-committed").touch()
 elif args == ["linkage", "--test"]:
  if os.environ.get("TEST_BATCH_BROKEN") == "1":
   print("Broken dependencies:\n  synthetic-jxl-library", file=sys.stderr)
@@ -318,16 +334,42 @@ def outdated_exit_one_without_json_explains_error(f):
     f.assert_restored()
 
 
-def jpeg_xl_abi_gate(f, users):
+def jpeg_xl_abi_transaction(f, users, fail=False):
     target = "nyamiiko/headfixes/jpeg-xl"
-    result = f.run(TEST_INSTALLED=f"llvm\n{target}\nz3", TEST_OUTDATED="jpeg-xl\nz3",
-                   TEST_JXL_USERS=users)
-    upgrades = [line for line in f.events() if line.startswith("brew upgrade ") and target in line]
-    if users:
-        assert result.returncode != 0 and "coordinated ABI check" in result.stdout, result.stdout
-        assert not upgrades and not any(line.startswith("brew upgrade ") and " z3" in line for line in f.events())
+    consumer = "homebrew-ffmpeg/ffmpeg/ffmpeg"
+    result = f.run(TEST_INSTALLED=f"llvm\n{target}\n{consumer}\nz3", TEST_OUTDATED="jpeg-xl\nffmpeg\nz3",
+                   TEST_JXL_USERS=users, TEST_JXL_FAIL=str(int(fail)),
+                   TEST_JXL_REBUILDS="ffmpeg" if consumer in users.splitlines() else "")
+    events = f.events()
+    [transaction] = [line for line in events if line.startswith("brew ruby ") and " run " in line]
+    assert transaction.split(" run ", 1)[1].split()[1:] == [target, *users.splitlines()], events
+    upgrades = [line for line in events if line.startswith("brew upgrade ")]
+    assert all(target not in line for line in upgrades), events
+    bulk = [line for line in upgrades if line.endswith(" z3")]
+    if fail:
+        assert result.returncode != 0 and "original kegs restored" in result.stdout, result.stdout
+        assert not bulk, events
+        assert not (f.state / "jpeg-xl-active.json").exists()
+        [recovery] = [line for line in events if line.startswith("brew ruby ") and " recover " in line]
+        assert events.index(transaction) < events.index(recovery), events
     else:
-        assert result.returncode == 0 and upgrades, (result.stdout, f.events())
+        assert result.returncode == 0 and len(bulk) == 1, (result.stdout, events)
+        assert events.index(transaction) < events.index(bulk[0]), events
+        assert (consumer not in bulk[0]) == (consumer in users.splitlines()), events
+    f.assert_restored()
+
+
+def jpeg_xl_recovers_before_brew_refresh(f, leave_pending=False):
+    f.state.mkdir(parents=True, exist_ok=True)
+    pending = f.state / "jpeg-xl-active.json"
+    pending.write_text("{}")
+    result = f.run(TEST_JXL_LEAVE_PENDING=str(int(leave_pending)))
+    assert f.events()[0].startswith("brew ruby ") and " recover " in f.events()[0], f.events()
+    if leave_pending:
+        assert result.returncode != 0 and "left a pending journal" in result.stdout, result.stdout
+        assert pending.exists() and "brew update" not in f.events(), f.events()
+    else:
+        assert result.returncode == 0 and not pending.exists(), result.stdout
     f.assert_restored()
 
 
@@ -695,8 +737,11 @@ cases = [
 ]
 if native:
     cases += [
-        ("JPEG XL and installed dependents require a coordinated upgrade", lambda f: jpeg_xl_abi_gate(f, "vips\nhomebrew-ffmpeg/ffmpeg/ffmpeg")),
-        ("JPEG XL without installed dependents stays eligible", lambda f: jpeg_xl_abi_gate(f, "")),
+        ("JPEG XL and installed dependents use one coordinated upgrade", lambda f: jpeg_xl_abi_transaction(f, "vips\nhomebrew-ffmpeg/ffmpeg/ffmpeg")),
+        ("JPEG XL with no declared dependents still uses the transaction", lambda f: jpeg_xl_abi_transaction(f, "")),
+        ("JPEG XL rollback stops the rest of the batch", lambda f: jpeg_xl_abi_transaction(f, "vips", True)),
+        ("Interrupted JPEG XL recovery runs before Homebrew refresh", jpeg_xl_recovers_before_brew_refresh),
+        ("Pending JPEG XL recovery prevents Homebrew refresh", lambda f: jpeg_xl_recovers_before_brew_refresh(f, True)),
         ("broken linkage after a successful Homebrew command is a failure", broken_post_upgrade_linkage_fails),
         ("dirty tap defers refresh and reuses an already verified pair", dirty_tap_preserves_checkout),
         ("existing tap conflict stops before either mutation", lambda f: tap_conflict_stops_before_pair(f, False)),

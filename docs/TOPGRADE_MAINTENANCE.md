@@ -97,7 +97,7 @@ mkdir -p "$HOME/Library/LaunchAgents"
 
 HEAD-sync 在刷新目录前检查所有 tap。未解决的 Git 冲突会在构建前停止。有本地改动且无冲突时，暂缓 `brew update`，使用现有目录和配方继续核验。干净的 tap 完成刷新后会再次检查。启用受管 HEAD-sync 时，Apple Silicon 的 Cask 步骤关闭隐式目录刷新。两份活动 keg 已匹配目标完整 SHA 时，直接核验现有运行时，避免因后续公式失败而重建同一配对。普通批量升级保留 LLVM、LLVM HEAD 和版本化 LLVM 配方。
 
-待升级的 JPEG XL 有已安装的依赖方时，HEAD-sync 会在其余公式开始升级前停止。FFmpeg、ImageMagick 和 vips 等使用版本化动态库的程序需要和新的 JPEG XL 一起验证 ABI。其余公式完成安装后立即核验动态链接，链接损坏会使该步骤失败。
+JPEG XL 待升级时，HEAD-sync 先单独处理这组配方。它从 Homebrew 已安装的依赖图出发，检查 keg 的实际动态库引用来识别需要重建的依赖方，保留原 tap、HEAD 或稳定渠道及构建选项。开始写入前保存可核验的旧 keg 和事务记录。构建或验收失败时恢复原安装，异常中断后的下一次 HEAD-sync 先恢复该事务。只有新链接和运行验证通过后才移出旧 JPEG XL keg，再重新检查全机链接，以捕获依赖图以外的损坏。其余配方随后重新枚举并升级。
 
 Mac App Store 已报告安装成功后，若精确核验暂时找不到本轮刚更新的应用 ID，最多等待 15 秒并复查。网络、授权、其他应用 ID 或无法验证的结果继续返回失败。
 
