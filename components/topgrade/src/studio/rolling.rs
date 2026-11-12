@@ -21,6 +21,7 @@ use nix::libc::{O_NOFOLLOW, O_NONBLOCK};
 use serde::{Deserialize, Serialize};
 
 use self::plan::{Action, Surface};
+use crate::error::PartialStep;
 
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
 
@@ -107,12 +108,17 @@ enum Status {
     Discovered,
     UpstreamMissing,
     Retryable,
+    PolicySkipped,
     Skipped,
 }
 
 impl Status {
     fn failed(self) -> bool {
         matches!(self, Self::Failed | Self::Partial | Self::Breaking | Self::Retryable)
+    }
+
+    fn deferred(self) -> bool {
+        matches!(self, Self::Skipped | Self::UpstreamMissing)
     }
 
     fn label(self) -> &'static str {
@@ -122,9 +128,10 @@ impl Status {
             Self::Failed => "FAILED",
             Self::Partial => "PARTIAL",
             Self::Breaking => "BREAKING",
-            Self::Discovered => "DISCOVERED",
+            Self::Discovered => "DISCOVERY NEEDS REVIEW",
             Self::UpstreamMissing => "UPSTREAM_MISSING",
             Self::Retryable => "RETRYABLE",
+            Self::PolicySkipped => "SKIPPED BY POLICY",
             Self::Skipped => "SKIPPED",
         }
     }
@@ -196,21 +203,42 @@ fn execute(surface: &Surface, log: &mut File) -> Result<(Status, Vec<String>)> {
     }
 }
 
-fn process_repo(repo: &Path, surfaces: &[Surface], run: &Path, run_id: &str, history: &Mutex<File>) -> Result<bool> {
+fn process_repo(
+    repo: &Path,
+    surfaces: &[Surface],
+    run: &Path,
+    run_id: &str,
+    history: &Mutex<File>,
+) -> Result<(bool, usize)> {
     if surfaces.is_empty() {
-        return Ok(true);
+        return Ok((true, 0));
     }
     let stem = files::repo_stem(repo)?;
     let before = files::snapshot(repo)?;
     let mut log = super::create_file(&run.join(format!("{stem}.log")))?;
     if !files::record_git_status(repo, &mut log, "initial")? {
         println!("{}: SKIPPED [uncommitted project changes]", repo.display());
-        return Ok(true);
+        for surface in surfaces {
+            Record {
+                time: Local::now().to_rfc3339(),
+                run: run_id,
+                repo,
+                surface: surface.name,
+                level: surface.level,
+                status: Status::Skipped,
+                changed: Vec::new(),
+                failures: vec!["uncommitted project changes".into()],
+                duration_s: 0.0,
+            }
+            .persist(history)?;
+        }
+        return Ok((true, surfaces.len()));
     }
     let backup = files::backup(repo, &before, run, &stem)?;
     writeln!(log, "# repository: {}\n# backup: {}", repo.display(), backup.display())?;
     let mut current = before;
     let mut verified = true;
+    let mut deferred = 0;
     for surface in surfaces {
         ensure!(
             !crate::ctrlc::interrupted(),
@@ -239,7 +267,7 @@ fn process_repo(repo: &Path, surfaces: &[Surface], run: &Path, run_id: &str, his
         if !changed.is_empty() {
             status = match status {
                 Status::Current => Status::Rolled,
-                Status::Failed | Status::Skipped | Status::UpstreamMissing => Status::Partial,
+                Status::Failed | Status::Skipped | Status::PolicySkipped | Status::UpstreamMissing => Status::Partial,
                 other => other,
             };
         }
@@ -268,13 +296,14 @@ fn process_repo(repo: &Path, surfaces: &[Surface], run: &Path, run_id: &str, his
         }
         .persist(history)?;
         verified &= !status.failed();
+        deferred += usize::from(status.deferred());
         if !verified {
             break;
         }
     }
     files::record_git_status(repo, &mut log, "final")?;
     log.sync_all()?;
-    Ok(verified)
+    Ok((verified, deferred))
 }
 
 pub(super) fn run(dry_run: bool) -> Result<()> {
@@ -329,6 +358,7 @@ pub(super) fn run(dry_run: bool) -> Result<()> {
     files::create_private_dir(&run)?;
     File::open(&cache)?.sync_all()?;
     let mut verified = true;
+    let mut deferred = 0;
     for chunk in planned.chunks(config.execution.jobs) {
         let outcomes = thread::scope(|scope| {
             let handles = chunk
@@ -342,7 +372,10 @@ pub(super) fn run(dry_run: bool) -> Result<()> {
         });
         for ((repo, _), outcome) in chunk.iter().zip(outcomes) {
             match outcome {
-                Ok(Ok(ok)) => verified &= ok,
+                Ok(Ok((ok, pending))) => {
+                    verified &= ok;
+                    deferred += pending;
+                }
                 Ok(Err(error)) => {
                     verified = false;
                     eprintln!("{}: {error:#}", repo.display());
@@ -362,6 +395,12 @@ pub(super) fn run(dry_run: bool) -> Result<()> {
         verified && !crate::ctrlc::interrupted(),
         "One or more rolling dependency updates did not complete"
     );
+    if deferred > 0 {
+        return Err(PartialStep(format!(
+            "{deferred} dependency surfaces were deferred. See the rolling evidence above."
+        ))
+        .into());
+    }
     Ok(())
 }
 
@@ -417,22 +456,50 @@ mod tests {
             level: "fixture",
             action: Action::Commands(vec![vec!["/bin/sh".into(), "-c".into(), String::from(fixture)]]),
         };
+        let missing_run = root.join("missing-tool");
+        files::create_private_dir(&missing_run)?;
+        let missing = Surface {
+            name: "missing tool",
+            root: repo.clone(),
+            level: "fixture",
+            action: Action::Commands(vec![vec![root.join("nonexistent-tool").to_string_lossy().into_owned()]]),
+        };
+        assert_eq!(
+            process_repo(&repo, &[missing], &missing_run, "missing-tool-fixture", &history)?,
+            (true, 1)
+        );
         let surfaces = [
             surface("partial fixture", "printf changed > Cargo.lock; exit 42"),
             surface("next fixture", "printf should-not-run > notes.txt"),
         ];
-        assert!(!process_repo(&repo, &surfaces, &run, "fixture-run", &history)?);
+        assert_eq!(
+            process_repo(&repo, &surfaces, &run, "fixture-run", &history)?,
+            (false, 0)
+        );
         assert_eq!(std::fs::read(repo.join("Cargo.lock"))?, b"changed");
         assert_eq!(std::fs::read(repo.join("notes.txt"))?, b"unrelated local work");
         let backup = run.join("before").join(files::repo_stem(&repo)?);
         assert_eq!(std::fs::read(backup.join("files/Cargo.lock"))?, b"initial");
         let retry = root.join("retry");
         files::create_private_dir(&retry)?;
-        assert!(process_repo(&repo, &surfaces[1..], &retry, "dirty-fixture", &history)?);
+        assert_eq!(
+            process_repo(&repo, &surfaces[1..], &retry, "dirty-fixture", &history)?,
+            (true, 1)
+        );
         assert_eq!(std::fs::read(repo.join("notes.txt"))?, b"unrelated local work");
         let history = std::fs::read_to_string(history_path)?;
-        assert_eq!(history.lines().count(), 1);
-        let record: serde_json::Value = serde_json::from_str(&history)?;
+        let records = history
+            .lines()
+            .map(serde_json::from_str::<serde_json::Value>)
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let [missing, record, dirty] = records.as_slice() else {
+            panic!("Expected a missing-tool, a partial-write and a dirty-worktree record")
+        };
+        assert_eq!(missing["run"], "missing-tool-fixture");
+        assert_eq!(missing["status"], "SKIPPED");
+        assert_eq!(dirty["run"], "dirty-fixture");
+        assert_eq!(dirty["status"], "SKIPPED");
+        assert_eq!(dirty["failures"], serde_json::json!(["uncommitted project changes"]));
         assert_eq!(record["run"], "fixture-run");
         assert_eq!(record["status"], "PARTIAL");
         assert_eq!(record["changed"], serde_json::json!(["Cargo.lock"]));

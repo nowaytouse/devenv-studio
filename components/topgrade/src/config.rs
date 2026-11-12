@@ -837,28 +837,18 @@ impl ConfigFile {
                     for include in paths.iter().rev() {
                         let include_path = shellexpand::tilde::<&str>(&include.as_ref()).into_owned();
                         let include_path = PathBuf::from(include_path);
-                        let include_contents = match fs::read_to_string(&include_path) {
-                            Ok(c) => c,
-                            Err(e) => {
-                                error!("Unable to read {}: {e}", include_path.display(),);
-                                continue;
-                            }
-                        };
-                        match toml::from_str::<Self>(&include_contents) {
-                            Ok(mut include_parsed) => result.merge(&mut include_parsed),
-                            Err(e) => {
-                                error!("Failed to deserialize {}: {e}", include_path.display(),);
-                                continue;
-                            }
-                        };
+                        let include_contents = fs::read_to_string(&include_path)
+                            .wrap_err_with(|| format!("Unable to read {}", include_path.display()))?;
+                        let mut include_parsed = toml::from_str::<Self>(&include_contents)
+                            .wrap_err_with(|| format!("Failed to deserialize {}", include_path.display()))?;
+                        result.merge(&mut include_parsed);
                     }
                 }
             }
 
-            match toml::from_str::<Self>(contents) {
-                Ok(mut contents) => result.merge(&mut contents),
-                Err(e) => error!("Failed to deserialize {}: {e}", config_path.display(),),
-            }
+            let mut contents = toml::from_str::<Self>(contents)
+                .wrap_err_with(|| format!("Failed to deserialize {}", config_path.display()))?;
+            result.merge(&mut contents);
         }
 
         debug!("Loaded configuration: {:?}", result);
@@ -1083,13 +1073,8 @@ impl Config {
     /// The function parses the command line arguments and reads the configuration file.
     pub fn load(opt: CommandLineArgs) -> Result<Self> {
         let config_directory = config_directory();
-        let config_file = if config_directory.is_dir() {
-            ConfigFile::read(opt.config.clone()).unwrap_or_else(|e| {
-                // Inform the user about errors when loading the configuration,
-                // but fallback to the default config to at least attempt to do something
-                error!("failed to load configuration: {e}");
-                ConfigFile::default()
-            })
+        let config_file = if opt.config.is_some() || config_directory.is_dir() {
+            ConfigFile::read(opt.config.clone()).wrap_err("Topgrade configuration could not be loaded")?
         } else {
             debug!("Configuration directory {} does not exist", config_directory.display());
             ConfigFile::default()

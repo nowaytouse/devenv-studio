@@ -6,16 +6,27 @@ use std::{
 use color_eyre::eyre::{Result, ensure};
 use serde::Deserialize;
 
-use crate::{command::CommandExt as _, execution_context::ExecutionContext, executor::ExecutorOutput};
+use crate::{
+    command::CommandExt as _, error::PartialStep, execution_context::ExecutionContext, executor::ExecutorOutput,
+};
 
 const TARGET: &str = "claude-code-plugins-plus";
 const SINGLE_FAILURE: &str = "1 marketplace could not be refreshed (see --debug): claude-code-plugins-plus";
+
+fn reports_incomplete(stdout: &str, stderr: &str) -> bool {
+    stdout.lines().chain(stderr.lines()).any(|line| {
+        line.contains("marketplace could not be refreshed")
+            || line.contains("marketplaces could not be refreshed")
+            || line.contains("marketplaces, but not all")
+    })
+}
 
 fn recoverable(stdout: &str, stderr: &str, code: Option<i32>) -> bool {
     let mut failures = stdout
         .lines()
         .chain(stderr.lines())
         .map(str::trim)
+        .map(|line| line.strip_prefix("Updating marketplaces...").unwrap_or(line).trim())
         .filter(|line| line.contains("could not be refreshed"));
     code == Some(1) && failures.next() == Some(SINGLE_FAILURE) && failures.next().is_none()
 }
@@ -45,16 +56,17 @@ pub(super) fn refresh(ctx: &ExecutionContext, claude: &Path) -> Result<()> {
     io::stdout().flush()?;
     io::stderr().write_all(&output.stderr)?;
     io::stderr().flush()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     if output.status.success() {
+        if reports_incomplete(&stdout, &stderr) {
+            return Err(PartialStep("Claude reported an incomplete marketplace refresh despite exit 0".into()).into());
+        }
         return Ok(());
     }
 
     ensure!(
-        recoverable(
-            &String::from_utf8_lossy(&output.stdout),
-            &String::from_utf8_lossy(&output.stderr),
-            output.status.code(),
-        ),
+        recoverable(&stdout, &stderr, output.status.code()),
         "Claude marketplace refresh failed ({})",
         output.status
     );
@@ -65,7 +77,7 @@ pub(super) fn refresh(ctx: &ExecutionContext, claude: &Path) -> Result<()> {
         .args(["plugin", "marketplace", "update", TARGET, "--json"])
         .output_checked_utf8()?;
     ensure!(
-        verified_target(&retry.stdout),
+        verified_target(&retry.stdout) && !reports_incomplete(&retry.stdout, &retry.stderr),
         "Claude did not verify refresh of {TARGET}"
     );
     println!("Refreshed Claude marketplace {TARGET}");
@@ -77,8 +89,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn recognizes_partial_reports_in_either_stream() {
+        assert!(reports_incomplete(
+            "Updating marketplaces...1 marketplace could not be refreshed (see --debug): fixture",
+            "",
+        ));
+        assert!(reports_incomplete("", "✘ Updated 12 marketplaces, but not all"));
+        assert!(reports_incomplete(
+            "",
+            "2 marketplaces could not be refreshed (see --debug): a, b"
+        ));
+        assert!(!reports_incomplete("✓ Updated 12 marketplaces", ""));
+    }
+
+    #[test]
     fn retries_only_the_known_singular_failure() {
         assert!(recoverable("", SINGLE_FAILURE, Some(1)));
+        assert!(recoverable(
+            &format!("Updating marketplaces...{SINGLE_FAILURE}"),
+            "",
+            Some(1)
+        ));
         assert!(!recoverable("", SINGLE_FAILURE, Some(0)));
         assert!(!recoverable("", SINGLE_FAILURE, None));
         assert!(!recoverable("", &SINGLE_FAILURE.replace(TARGET, "unrelated"), Some(1)));

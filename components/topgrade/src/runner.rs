@@ -6,13 +6,15 @@ use std::io;
 use tracing::debug;
 
 use crate::ctrlc;
-use crate::error::{DryRun, MissingSudo, SkipStep};
+use crate::error::{DryRun, MissingSudo, PartialStep, SkipStep};
 use crate::execution_context::ExecutionContext;
 use crate::step::Step;
 use crate::terminal::{ShouldRetry, print_error, print_warning, should_retry};
 
 pub enum StepResult {
     Success,
+    DryRun,
+    Partial(String),
     Failure,
     Ignored,
     SkippedMissingSudo,
@@ -24,8 +26,8 @@ impl StepResult {
         use StepResult::*;
 
         match self {
-            Success | Ignored | Skipped(_) | SkippedMissingSudo => false,
-            Failure => true,
+            Success | DryRun | Ignored | Skipped(_) => false,
+            Failure | Partial(_) | SkippedMissingSudo => true,
         }
     }
 }
@@ -102,10 +104,17 @@ impl<'a> Runner<'a> {
         loop {
             match func() {
                 Ok(()) => {
-                    self.push_result(key, StepResult::Success);
+                    self.push_result(key, self.completed());
                     break;
                 }
-                Err(e) if e.downcast_ref::<DryRun>().is_some() => break,
+                Err(e) if e.downcast_ref::<DryRun>().is_some() => {
+                    self.push_result(key, StepResult::DryRun);
+                    break;
+                }
+                Err(e) if e.downcast_ref::<PartialStep>().is_some() => {
+                    self.push_result(key, StepResult::Partial(e.to_string()));
+                    break;
+                }
                 Err(e) if e.downcast_ref::<MissingSudo>().is_some() => {
                     print_warning(t!("Skipping step, sudo is required"));
                     self.push_result(key, StepResult::SkippedMissingSudo);
@@ -159,6 +168,7 @@ impl<'a> Runner<'a> {
                             }
                         }
                     } else {
+                        print_error(&key, format!("{e:?}"));
                         self.push_result(
                             key,
                             if ignore_failure {
@@ -174,6 +184,30 @@ impl<'a> Runner<'a> {
         }
 
         Ok(())
+    }
+
+    fn completed(&self) -> StepResult {
+        if self.ctx.run_type().dry() {
+            StepResult::DryRun
+        } else {
+            StepResult::Success
+        }
+    }
+
+    pub fn record_post_command(&mut self, name: &str, result: Result<()>) {
+        let key = format!("{}: {name}", rust_i18n::t!("Post-command"));
+        let outcome = match result {
+            Ok(()) => self.completed(),
+            Err(error) if error.downcast_ref::<DryRun>().is_some() => StepResult::DryRun,
+            Err(error) if error.downcast_ref::<PartialStep>().is_some() => StepResult::Partial(error.to_string()),
+            Err(error) if error.downcast_ref::<SkipStep>().is_some() => StepResult::Skipped(error.to_string()),
+            Err(error) if error.downcast_ref::<MissingSudo>().is_some() => StepResult::SkippedMissingSudo,
+            Err(error) => {
+                print_error(&key, format!("{error:?}"));
+                StepResult::Failure
+            }
+        };
+        self.report.push((key.into(), outcome));
     }
 
     pub fn report(&self) -> &Report<'_> {

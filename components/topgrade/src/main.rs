@@ -281,6 +281,13 @@ fn run() -> Result<()> {
         }
     }
 
+    if let Some(commands) = config.post_commands() {
+        for (name, command) in commands {
+            let result = generic::run_custom_command(name, command, &ctx);
+            runner.record_post_command(name, result);
+        }
+    }
+
     let mut failed = false;
 
     let report = runner.report();
@@ -339,15 +346,6 @@ fn run() -> Result<()> {
         distribution.show_summary();
     }
 
-    if let Some(commands) = config.post_commands() {
-        for (name, command) in commands {
-            let result = generic::run_custom_command(name, command, &ctx);
-            if !failed && result.is_err() {
-                failed = true;
-            }
-        }
-    }
-
     if config.keep_at_end() {
         print_info(t!("\n(R)eboot\n(P)oweroff\n(S)hell\n(Q)uit"));
         loop {
@@ -380,8 +378,12 @@ fn run() -> Result<()> {
 
     if should_notify {
         notify_desktop(
-            if failed {
+            if report.iter().any(|(_, result)| matches!(result, StepResult::Failure)) {
                 t!("Topgrade finished with errors")
+            } else if failed || report.iter().any(|(_, result)| matches!(result, StepResult::Ignored)) {
+                t!("Topgrade finished with incomplete steps")
+            } else if ctx.run_type().dry() {
+                t!("Topgrade dry run finished")
             } else {
                 t!("Topgrade finished successfully")
             },

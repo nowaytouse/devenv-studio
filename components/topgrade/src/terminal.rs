@@ -205,6 +205,8 @@ impl Terminal {
                 key,
                 match result {
                     StepResult::Success => format!("{}", style(t!("OK")).bold().green()),
+                    StepResult::DryRun => format!("{}", style(t!("DRY RUN")).bold().blue()),
+                    StepResult::Partial(reason) => format!("{}: {}", style(t!("PARTIAL")).bold().yellow(), reason),
                     StepResult::Failure => format!("{}", style(t!("FAILED")).bold().red()),
                     StepResult::Ignored => format!("{}", style(t!("IGNORED")).bold().yellow()),
                     StepResult::SkippedMissingSudo => format!(

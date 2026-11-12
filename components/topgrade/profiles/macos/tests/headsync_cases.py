@@ -80,11 +80,19 @@ elif args[:1] == ["upgrade"]:
    __import__("time").sleep(.02)
  if os.environ.get("TEST_FAIL") == target: print("injected upgrade failure",file=sys.stderr); sys.exit(34)
  if target == "llama.cpp": (root/"pair-installed").touch()
+ if target == "bulk" and os.environ.get("TEST_HEADSYNC_NATIVE_CHILD"):
+  still_outdated = set(os.environ.get("TEST_BULK_STILL_OUTDATED", "").splitlines())
+  upgraded = [arg.rsplit("/", 1)[-1] for arg in args[1:] if not arg.startswith("--")]
+  (root/"bulk-upgraded").write_text("\n".join(name for name in upgraded if name not in still_outdated))
 elif args[:1] == ["outdated"]:
  eligible={name.rsplit("/",1)[-1]:name for name in args[1:] if not name.startswith("--")}
  outdated=set(os.environ.get("TEST_OUTDATED", "topgrade").splitlines())
  if (root/"core-catalog-refreshed").exists(): outdated.add("postgresql@17")
- if (root/"jpeg-xl-committed").exists(): outdated.difference_update(os.environ.get("TEST_JXL_REBUILDS", "").splitlines())
+ if (root/"jpeg-xl-committed").exists():
+  outdated.difference_update(os.environ.get("TEST_JXL_REBUILDS", "").splitlines())
+  if os.environ.get("TEST_JXL_STILL_OUTDATED") != "1": outdated.discard("jpeg-xl")
+ upgraded = root/"bulk-upgraded"
+ if upgraded.exists(): outdated.difference_update(upgraded.read_text().splitlines())
  found=[name for short,name in eligible.items() if short in outdated]
  mode=os.environ.get("TEST_OUTDATED_MODE", "normal")
  if mode == "malformed": print("{bad json"); sys.exit(1)
@@ -239,6 +247,8 @@ class Fixture:
                     "TEST_INSTALLED": "llvm\ntopgrade\nz3\natuin"}
 
     def run(self, **overrides):
+        for marker in ("bulk-upgraded", "jpeg-xl-committed"):
+            (self.root / marker).unlink(missing_ok=True)
         env = self.env | overrides
         if native:
             env["TEST_HEADSYNC_NATIVE_CHILD"] = "1"
@@ -360,7 +370,11 @@ def dirty_tap_preserves_checkout(f, failed_refresh=""):
         diagnostic = f"injected catalog {failed_refresh.split('-', 1)[0]} failure"
         assert result.returncode != 0 and diagnostic in result.stdout, result.stdout
     else:
-        assert result.returncode == 0, result.stdout
+        assert result.returncode != 0, result.stdout
+        deferred = next((line for line in result.stdout.splitlines()
+                         if "Homebrew catalog refresh deferred for:" in line), "")
+        assert "example/tools" in deferred and "example/local" in deferred, deferred
+        assert "example/clean" not in deferred, deferred
     upgrades = [line for line in events if line.startswith("brew upgrade ")]
     if failed_refresh == "fetch-core":
         assert not upgrades and not (f.root / "core-catalog-refreshed").exists(), events
@@ -369,7 +383,9 @@ def dirty_tap_preserves_checkout(f, failed_refresh=""):
         assert upgrades == ["brew upgrade --formula --fetch-HEAD postgresql@17"], events
         assert (f.root / "core-catalog-refreshed").exists()
         assert (f.root / "clean-tap-catalog-refreshed").exists() == (not failed_refresh)
-        assert events.index(refreshes[-1]) < events.index(upgrades[0]), events
+        [initial, verified] = [i for i, line in enumerate(events)
+                               if line == "brew outdated --formula --fetch-HEAD --json=v2 postgresql@17"]
+        assert events.index(refreshes[-1]) < initial < events.index(upgrades[0]) < verified, events
         for repo, start, end in (("core", 0, 1), ("clean-tap", 2, 3)):
             rechecks = events[events.index(refreshes[start]) + 1:events.index(refreshes[end])]
             assert f"git -C {f.root / repo} branch --show-current" in rechecks, rechecks
@@ -530,6 +546,33 @@ def outdated_exit_one_nonempty_is_parsed(f):
     scan = next(line for line in f.events() if line.startswith("brew outdated "))
     assert "--json=v2" in scan, scan
     assert "brew upgrade --formula --fetch-HEAD atuin" in f.events(), f.events()
+    f.assert_restored()
+
+
+def successful_bulk_upgrade_leaves_outdated_formula(f):
+    result = f.run(TEST_OUTDATED="z3\natuin", TEST_RUST_HEALTH="healthy",
+                   TEST_BULK_STILL_OUTDATED="z3")
+    assert result.returncode != 0, result.stdout
+    assert "Homebrew still reports outdated formulae: z3" in result.stdout, result.stdout
+    events = f.events()
+    [initial, verified] = [i for i, line in enumerate(events)
+                           if line == "brew outdated --formula --fetch-HEAD --json=v2 z3 atuin"]
+    assert initial < events.index("brew upgrade --formula --fetch-HEAD z3 atuin") < verified, events
+    f.assert_restored()
+
+
+def successful_jpeg_xl_upgrade_leaves_outdated_formula(f):
+    target = "nyamiiko/headfixes/jpeg-xl"
+    result = f.run(TEST_INSTALLED=f"llvm\n{target}", TEST_OUTDATED="jpeg-xl",
+                   TEST_JXL_STILL_OUTDATED="1")
+    assert result.returncode != 0, result.stdout
+    assert f"Homebrew still reports outdated formulae: {target}" in result.stdout, result.stdout
+    events = f.events()
+    [initial, verified] = [i for i, line in enumerate(events)
+                           if line == f"brew outdated --formula --fetch-HEAD --json=v2 {target}"]
+    [transaction] = [i for i, line in enumerate(events) if line.startswith("brew ruby ") and " run " in line]
+    assert initial < transaction < verified, events
+    assert not any(line.startswith("brew upgrade ") and target in line for line in events), events
     f.assert_restored()
 
 
@@ -801,6 +844,8 @@ if native:
         ("Interrupted JPEG XL recovery runs before Homebrew refresh", jpeg_xl_recovers_before_brew_refresh),
         ("Pending JPEG XL recovery prevents Homebrew refresh", lambda f: jpeg_xl_recovers_before_brew_refresh(f, True)),
         ("broken linkage after a successful Homebrew command is a failure", broken_post_upgrade_linkage_fails),
+        ("bulk upgrade exit 0 with a remaining outdated formula is incomplete", successful_bulk_upgrade_leaves_outdated_formula),
+        ("JPEG XL transaction exit 0 with an outdated target is incomplete", successful_jpeg_xl_upgrade_leaves_outdated_formula),
         ("dirty tap is preserved while clean catalogs reveal a stable upgrade", dirty_tap_preserves_checkout),
         ("core catalog fetch failure prevents formula upgrades", lambda f: dirty_tap_preserves_checkout(f, "fetch-core")),
         ("clean tap merge failure still upgrades from the refreshed core catalog", lambda f: dirty_tap_preserves_checkout(f, "merge-clean-tap")),

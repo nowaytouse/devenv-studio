@@ -14,7 +14,11 @@ use color_eyre::eyre::{Context, ContextCompat, Result, bail, ensure};
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
 use serde::Deserialize;
 
-use crate::{command::CommandExt as _, ctrlc, error::TopgradeError};
+use crate::{
+    command::CommandExt as _,
+    ctrlc,
+    error::{PartialStep, TopgradeError},
+};
 
 mod journal;
 #[cfg(test)]
@@ -47,6 +51,11 @@ struct Headsync {
     brew: PathBuf,
     state: PathBuf,
     git_config_index: Option<usize>,
+}
+
+struct CatalogRefresh {
+    deferred: Vec<String>,
+    errors: Vec<String>,
 }
 
 struct TapCheckout {
@@ -117,16 +126,19 @@ impl Headsync {
         if result.is_ok() {
             println!("\n== Restore official Homebrew formulae ==");
         }
-        match (result, txn.recover()) {
-            (Ok(()), Ok(())) => {}
+        let incomplete = match (result, txn.recover()) {
+            (Ok(incomplete), Ok(())) => incomplete,
             (Err(error), Ok(())) => return Err(error),
-            (Ok(()), Err(error)) => return Err(error.wrap_err("HEAD-sync transaction recovery failed")),
+            (Ok(_), Err(error)) => return Err(error.wrap_err("HEAD-sync transaction recovery failed")),
             (Err(operation), Err(recovery)) => {
                 bail!("{operation:#}; HEAD-sync transaction recovery failed: {recovery:#}");
             }
-        }
+        };
         self.core_clean(txn.core(), "after transaction recovery")?;
         println!("homebrew/core: CLEAN\nHEAD sync transaction: OK");
+        if !incomplete.is_empty() {
+            return Err(PartialStep(incomplete.join(" | ")).into());
+        }
         Ok(())
     }
 
@@ -173,7 +185,7 @@ impl Headsync {
         Ok(())
     }
 
-    fn upgrade(&mut self, txn: &journal::Journal) -> Result<()> {
+    fn upgrade(&mut self, txn: &journal::Journal) -> Result<Vec<String>> {
         let inherited = env::var_os("GIT_CONFIG_COUNT").unwrap_or_default();
         let inherited = inherited.to_str().context("malformed inherited GIT_CONFIG_COUNT")?;
         ensure!(
@@ -188,7 +200,7 @@ impl Headsync {
             &command_text(self.brew(&["list", "--formula", "--full-name"]))
                 .wrap_err("unable to enumerate installed Homebrew formulae")?,
         )?;
-        let catalog_errors = self.refresh_catalogs(txn.core())?;
+        let catalogs = self.refresh_catalogs(txn.core())?;
         let pins = self.pins()?;
         let revision = self.target_revision()?;
         println!("\nTarget llama.cpp snapshot:\n  {revision}");
@@ -213,50 +225,69 @@ impl Headsync {
             active
         };
         self.verify_runtime(&active)?;
-        self.remaining(&installed, &pins)?;
+        let residual = self.remaining(&installed, &pins)?;
         self.verify_runtime(&self.verify_pair(&revision)?)?;
         let missing = command_text(self.brew(&["missing"]))?;
         ensure!(missing.is_empty(), "Homebrew dependencies are missing:\n{missing}");
         ensure!(
-            catalog_errors.is_empty(),
-            "Homebrew formula upgrades completed, but some tap catalogs could not be refreshed:\n{}",
-            catalog_errors.join("\n")
+            catalogs.errors.is_empty(),
+            "Some Homebrew tap catalogs could not be refreshed:\n{}",
+            catalogs.errors.join("\n")
         );
-        Ok(())
+        let mut incomplete = Vec::new();
+        if !catalogs.deferred.is_empty() {
+            incomplete.push(format!(
+                "Homebrew catalog refresh deferred for: {}",
+                catalogs.deferred.join(", ")
+            ));
+        }
+        if !residual.is_empty() {
+            incomplete.push(format!(
+                "Homebrew still reports outdated formulae: {}",
+                residual.join(", ")
+            ));
+        }
+        Ok(incomplete)
     }
 
-    fn refresh_catalogs(&self, core: &Path) -> Result<Vec<String>> {
+    fn refresh_catalogs(&self, core: &Path) -> Result<CatalogRefresh> {
         let taps = self.tap_checkouts()?;
-        let dirty: Vec<&str> = taps
-            .iter()
-            .filter(|tap| tap.dirty)
-            .map(|tap| tap.name.as_str())
-            .collect();
-        if dirty.is_empty() {
+        let mut refresh = CatalogRefresh {
+            deferred: taps
+                .iter()
+                .filter(|tap| tap.dirty)
+                .map(|tap| tap.name.clone())
+                .collect(),
+            errors: Vec::new(),
+        };
+        if refresh.deferred.is_empty() {
             println!("\n== Homebrew update ==");
             status(&mut self.brew(&["update"]))?;
             self.core_clean(core, "after Homebrew update")?;
             self.tap_checkouts()?;
-            return Ok(Vec::new());
+            return Ok(refresh);
         }
 
         // A regular brew update may reset and stash the index of every tap.
         println!("\n== Refresh clean Homebrew catalogs (Git fast-forward only) ==");
-        println!("Preserving taps with local changes: {}", dirty.join(", "));
+        println!("Preserving taps with local changes: {}", refresh.deferred.join(", "));
         self.refresh_checkout("homebrew/core", core)?;
         self.core_clean(core, "after Homebrew catalog refresh")?;
-        let mut errors = Vec::new();
-        for tap in taps.iter().filter(|tap| !tap.dirty) {
-            if let Err(error) = self.refresh_checkout(&tap.name, &tap.path) {
-                interrupted()?;
-                errors.push(format!("{error:#}"));
+        for tap in taps.into_iter().filter(|tap| !tap.dirty) {
+            match self.refresh_checkout(&tap.name, &tap.path) {
+                Ok(true) => {}
+                Ok(false) => refresh.deferred.push(tap.name),
+                Err(error) => {
+                    interrupted()?;
+                    refresh.errors.push(format!("{error:#}"));
+                }
             }
         }
-        Ok(errors)
+        Ok(refresh)
     }
 
-    fn refresh_checkout(&self, tap: &str, path: &Path) -> Result<()> {
-        let refresh = || -> Result<()> {
+    fn refresh_checkout(&self, tap: &str, path: &Path) -> Result<bool> {
+        let refresh = || -> Result<bool> {
             let branch = command_text(self.git(path, &["branch", "--show-current"]))?;
             let upstream = if branch.is_empty() {
                 String::new()
@@ -273,7 +304,7 @@ impl Headsync {
             if upstream.is_empty() || upstream == "\t\t" {
                 ensure!(tap != "homebrew/core", "homebrew/core has no tracked upstream branch");
                 println!("Preserving {tap}: no tracked upstream branch");
-                return Ok(());
+                return Ok(false);
             }
             let fields: Vec<_> = upstream.split('\t').collect();
             let [tracking, remote, source] = fields.as_slice() else {
@@ -316,7 +347,8 @@ impl Headsync {
                     "--",
                     tracking,
                 ],
-            ))
+            ))?;
+            Ok(true)
         };
         refresh().wrap_err_with(|| format!("Cannot refresh Homebrew tap {tap}"))
     }
@@ -435,7 +467,7 @@ impl Headsync {
         Ok(revision.to_owned())
     }
 
-    fn remaining(&self, installed: &[String], pinned: &[String]) -> Result<()> {
+    fn remaining(&self, installed: &[String], pinned: &[String]) -> Result<Vec<String>> {
         println!("\n== Upgrade remaining formulae ==");
         let candidates: Vec<&str> = installed
             .iter()
@@ -454,10 +486,15 @@ impl Headsync {
             .collect();
         if candidates.is_empty() {
             println!("No eligible installed formulae; skipping outdated scan");
-            return Ok(());
+            return Ok(Vec::new());
         }
 
         let mut outdated = self.outdated(&candidates)?;
+        if outdated.is_empty() {
+            println!("No remaining outdated formulae");
+            return Ok(Vec::new());
+        }
+        let requested = outdated.clone();
         if let Some(index) = outdated.iter().position(|formula| basename(formula) == "jpeg-xl") {
             let jxl = outdated.remove(index);
             ensure!(
@@ -485,11 +522,12 @@ impl Headsync {
                 outdated = self.outdated(&pending)?;
             }
         }
-        if outdated.is_empty() {
-            println!("No remaining outdated formulae");
-            return Ok(());
+        if !outdated.is_empty() {
+            self.upgrade_remaining(&outdated)?;
         }
-        self.upgrade_remaining(&outdated)
+        println!("\n== Verify requested formula upgrades ==");
+        let requested: Vec<&str> = requested.iter().map(String::as_str).collect();
+        self.outdated(&requested)
     }
 
     fn outdated(&self, candidates: &[&str]) -> Result<Vec<String>> {

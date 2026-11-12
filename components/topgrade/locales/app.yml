@@ -1295,6 +1295,26 @@ _version: 2
   ko: "모의 실행"
 
 # Summary texts
+"PARTIAL":
+  en: "PARTIAL"
+  zh_CN: "部分完成"
+  zh_TW: "部分完成"
+"DRY RUN":
+  en: "DRY RUN"
+  zh_CN: "模拟执行"
+  zh_TW: "模擬執行"
+"Post-command":
+  en: "Post-command"
+  zh_CN: "后置命令"
+  zh_TW: "後置命令"
+"Topgrade finished with incomplete steps":
+  en: "Topgrade finished with incomplete steps"
+  zh_CN: "Topgrade 有步骤未完成"
+  zh_TW: "Topgrade 有步驟未完成"
+"Topgrade dry run finished":
+  en: "Topgrade dry run finished"
+  zh_CN: "Topgrade 模拟执行结束"
+  zh_TW: "Topgrade 模擬執行結束"
 "OK":
   en: "OK"
   lt: "Gerai"

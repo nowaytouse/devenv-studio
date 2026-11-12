@@ -108,6 +108,10 @@ impl Display for DryRun {
     }
 }
 
+#[derive(Error, Debug)]
+#[error("{0}")]
+pub struct PartialStep(pub String);
+
 #[derive(Error, Debug, Clone)]
 pub struct SkipStep(pub String);
 

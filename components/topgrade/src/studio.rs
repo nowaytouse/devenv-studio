@@ -20,7 +20,7 @@ use nix::unistd::{Pid, User, geteuid, getuid};
 use serde::{Deserialize, Serialize};
 
 use crate::command::CommandExt as _;
-use crate::error::{MissingSudo, SkipStep};
+
 use crate::execution_context::RunType;
 
 mod diagnostics;
@@ -147,7 +147,7 @@ impl Step {
 }
 
 pub(crate) fn run_native_profile(id: &str, run_type: RunType) -> Result<()> {
-    let result = match (Step::find(id), run_type) {
+    match (Step::find(id), run_type) {
         (None, _) => terminal_profile::run(id, run_type),
         (Some(step), _) if step.manual_llvm() => {
             bail!("LLVM changes require a dedicated Studio review")
@@ -161,13 +161,7 @@ pub(crate) fn run_native_profile(id: &str, run_type: RunType) -> Result<()> {
             println!("Executing: {}", step.label());
             step.run()
         }
-    };
-    // Topgrade's unattended runner records the failure status but hides its reason by default.
-    result.inspect_err(|error| {
-        if error.downcast_ref::<SkipStep>().is_none() && error.downcast_ref::<MissingSudo>().is_none() {
-            eprintln!("{id}: {error:#}");
-        }
-    })
+    }
 }
 
 #[derive(Deserialize)]

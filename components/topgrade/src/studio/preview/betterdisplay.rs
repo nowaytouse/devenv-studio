@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::{path::Path, process::Stdio, time::Duration};
 
 use super::{APPLICATIONS, bounded_output, bundle, field, signature, team, tool_command};
-use crate::command::CommandExt as _;
+use crate::{command::CommandExt as _, error::PartialStep};
 
 const ID: &str = "pro.betterdisplay.BetterDisplay";
 const FEED: &str = "https://betterdisplay.pro/betterdisplay/sparkle/appcast.xml";
@@ -65,8 +65,10 @@ pub(in crate::studio) fn betterdisplay() -> Result<()> {
         status => bail!("BetterDisplay: Sparkle probe exit {status}"),
     }
     preference_hint();
-    println!("BetterDisplay: INTERNAL_PREFERENCE_UNVERIFIED — check Settings > Application > Updates");
-    Ok(())
+    Err(PartialStep(
+        "Sparkle verified the requested BetterDisplay channels. Check the unverified in-app preference in Settings > Application > Updates.".into(),
+    )
+    .into())
 }
 
 fn updated(before: &str, after: &str) -> Result<()> {

@@ -14,7 +14,7 @@ use regex::bytes::Regex;
 use serde::Deserialize;
 
 use super::{resolve_tool, sha256, tool_command};
-use crate::command::CommandExt as _;
+use crate::{command::CommandExt as _, error::SkipStep};
 
 const MAX_INDEX: u64 = 64 * 1024 * 1024;
 const CURL: &str = "/usr/bin/curl";
@@ -83,6 +83,14 @@ fn invoke(command: &mut Command) -> Result<Output> {
 
 fn native(helm: &Path, names: &[&str]) -> Result<()> {
     let result = invoke(tool_command(helm)?.args(["repo", "update"]).args(names))?;
+    if names.is_empty()
+        && result.status.code() == Some(1)
+        && result.stdout.iter().all(u8::is_ascii_whitespace)
+        && String::from_utf8_lossy(&result.stderr).trim()
+            == "Error: no repositories found. You must add one before updating"
+    {
+        return Err(SkipStep("No configured Helm repositories".into()).into());
+    }
     let mut stdout = io::stdout().lock();
     stdout.write_all(&result.stdout)?;
     stdout.flush()?;
@@ -219,8 +227,8 @@ fn run_with_tools(helm: &Path, curl: Option<&Path>) -> Result<()> {
     let repos: Vec<Repository> =
         serde_json::from_slice(&listing.stdout).map_err(|_| eyre!("Invalid Helm repository listing"))?;
     if repos.is_empty() {
-        println!("Helm: no configured repositories");
-        return Ok(());
+        // Helm's listing also returns [] when it cannot read or parse its configuration.
+        return native(helm, &[]);
     }
     let mut seen = HashSet::new();
     let mut names = Vec::new();
@@ -363,6 +371,28 @@ if [ -e transfer-error ]; then exit 18; fi
     }
 
     #[test]
+    fn empty_listing_distinguishes_no_repositories_from_invalid_configuration() {
+        let fixture = Fixture::new();
+        fs::write(fixture.file("listing"), b"[]\n").unwrap();
+        fs::write(fixture.file("native-code"), b"1\n").unwrap();
+        let diagnostic = fixture.file("native-diagnostic");
+        fs::write(
+            &diagnostic,
+            b"Error: no repositories found. You must add one before updating\n",
+        )
+        .unwrap();
+        let skipped = fixture.run().unwrap_err();
+        assert!(skipped.downcast_ref::<SkipStep>().is_some(), "{skipped:#}");
+        assert_eq!(fs::read(fixture.file("native-calls")).unwrap(), b"\n");
+
+        fs::write(&diagnostic, b"Error: failed loading file: malformed YAML\n").unwrap();
+        let failed = fixture.run().unwrap_err();
+        assert!(failed.downcast_ref::<SkipStep>().is_none());
+        assert!(failed.to_string().contains("exit status: 1"), "{failed:#}");
+        assert!(!fixture.file("curl-args").exists());
+    }
+
+    #[test]
     fn identical_official_index_is_verified_without_cache_writes() {
         let fixture = Fixture::new();
         let index = fixture.file("cache/bitnami-index.yaml");
@@ -482,7 +512,7 @@ if [ -e transfer-error ]; then exit 18; fi
     }
 
     #[test]
-    fn invalid_repository_names_fail_and_an_empty_listing_is_a_noop() {
+    fn invalid_repository_names_fail_before_native_update() {
         let fixture = Fixture::new();
         for invalid in [
             br#"[{"name":"../other","url":"https://example.invalid"}]"#.as_slice(),
@@ -491,8 +521,6 @@ if [ -e transfer-error ]; then exit 18; fi
             fs::write(fixture.file("listing"), invalid).unwrap();
             assert!(fixture.run().is_err());
         }
-        fs::write(fixture.file("listing"), b"[]").unwrap();
-        fixture.run().unwrap();
         assert!(!fixture.file("native-calls").exists());
         assert!(!fixture.file("curl-args").exists());
     }

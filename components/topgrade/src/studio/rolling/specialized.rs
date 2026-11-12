@@ -96,27 +96,24 @@ fn zig_dependencies(text: &str) -> Result<(Vec<(String, String)>, usize)> {
 fn zig(root: &Path, edge: bool, log: &mut File) -> Result<(Status, Vec<String>)> {
     if !edge {
         return Ok((
-            Status::Skipped,
+            Status::PolicySkipped,
             vec!["Zig GitHub HEAD rolling is disabled by compatible policy".into()],
         ));
     }
     let manifest = files::read(&root.join("build.zig.zon"), 1024 * 1024)?;
     let (updates, unsupported) = zig_dependencies(std::str::from_utf8(&manifest.bytes)?)?;
-    if unsupported > 0 {
-        writeln!(
-            log,
-            "{unsupported} Zig dependency URLs have no supported GitHub HEAD form"
-        )?;
-    }
+    let (status, notes) = if unsupported > 0 {
+        (
+            Status::Discovered,
+            vec![format!(
+                "{unsupported} Zig dependency URLs have no supported GitHub HEAD form"
+            )],
+        )
+    } else {
+        (Status::Current, Vec::new())
+    };
     if updates.is_empty() {
-        return Ok((
-            if unsupported > 0 {
-                Status::Discovered
-            } else {
-                Status::Current
-            },
-            Vec::new(),
-        ));
+        return Ok((status, notes));
     }
     let Some(zig) = process::find_tool("zig")? else {
         return Ok((Status::Skipped, vec!["missing command: zig".into()]));
@@ -133,7 +130,7 @@ fn zig(root: &Path, edge: bool, log: &mut File) -> Result<(Status, Vec<String>)>
             ));
         }
     }
-    Ok((Status::Current, Vec::new()))
+    Ok((status, notes))
 }
 
 fn image_ref(value: &str) -> Result<(String, &str)> {
