@@ -128,6 +128,10 @@ impl Lock {
         Ok(lock)
     }
 
+    pub(super) fn has_entry(&self, name: &str) -> bool {
+        self.skills.keys().any(|key| key.rsplit('/').next() == Some(name))
+    }
+
     pub(super) fn npx_registered(&self, name: &str) -> bool {
         self.skills.get(name).is_some_and(|entry| {
             entry.source_type == "github"

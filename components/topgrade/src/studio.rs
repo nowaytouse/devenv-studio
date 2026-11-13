@@ -353,8 +353,13 @@ fn lock(state: &Path) -> Result<File> {
         .custom_flags(O_NOFOLLOW | O_NONBLOCK)
         .open(&path)?;
     check_file(&file, &path, true, 0)?;
-    file.try_lock()
-        .wrap_err("Could not acquire Studio maintenance lock; another maintenance run may be active")?;
+    match file.try_lock() {
+        Ok(()) => {}
+        Err(fs::TryLockError::WouldBlock) => {
+            bail!("Another Topgrade or DevEnv Studio maintenance operation is running. Try again after it finishes.");
+        }
+        Err(error) => return Err(error).wrap_err("Could not acquire Studio maintenance lock"),
+    }
     Ok(file)
 }
 

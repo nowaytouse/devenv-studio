@@ -174,6 +174,10 @@ elif len(args)>=3 and args[0] == "-C" and os.environ.get("TEST_CATALOG_REFRESH")
   print("main")
  elif args[2:] == ["for-each-ref", "--format=%(upstream)%09%(upstream:remotename)%09%(upstream:remoteref)", "refs/heads/main"]:
   print("refs/remotes/origin/main\torigin\trefs/heads/main" if repo != "local-tap" else "\t\t")
+ elif args[2:] == ["remote"] and repo == "local-tap":
+  print("origin")
+ elif args[2:] == ["remote", "get-url", "origin"] and repo == "local-tap":
+  print("." if os.environ.get("TEST_SELF_REMOTE") == "1" else "https://example.invalid/tap")
  elif args[2:] == ["fetch", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--", "origin", "refs/heads/main:refs/remotes/origin/main"]:
   assert repo in ("core", "clean-tap"), args
   assert not (root/"state/brew-headsync/active").exists(), "catalog refresh before journal recovery"
@@ -344,7 +348,7 @@ def idempotent(f):
     assert len(upgrades) == (4 if native else 6) and all("topgrade" not in line for line in upgrades), upgrades
 
 
-def dirty_tap_preserves_checkout(f, failed_refresh=""):
+def dirty_tap_preserves_checkout(f, failed_refresh="", self_remote=False):
     (f.root / "pair-installed").touch()
     dirty_tap = f.root / "tap"
     dirty_tap.mkdir()
@@ -353,7 +357,8 @@ def dirty_tap_preserves_checkout(f, failed_refresh=""):
     for name in ("clean-tap", "local-tap"):
         (f.root / name).mkdir()
     result = f.run(TEST_TAP_STATUS="dirty", TEST_CATALOG_REFRESH="1",
-                   TEST_INSTALLED="llvm\npostgresql@17", TEST_FAIL=failed_refresh)
+                   TEST_INSTALLED="llvm\npostgresql@17", TEST_FAIL=failed_refresh,
+                   TEST_SELF_REMOTE=str(int(self_remote)))
     events = f.events()
     refreshes = [line for line in events if line.startswith("git -C ") and
                  (" fetch " in line or " merge " in line)]
@@ -375,7 +380,10 @@ def dirty_tap_preserves_checkout(f, failed_refresh=""):
         assert result.returncode != 0, result.stdout
         deferred = next((line for line in result.stdout.splitlines()
                          if "Homebrew catalog refresh deferred for:" in line), "")
-        assert "example/tools" in deferred and "example/local" in deferred, deferred
+        assert "example/tools" in deferred, deferred
+        assert ("example/local" in deferred) != self_remote, deferred
+        if self_remote:
+            assert "Preserving example/local: local-only catalog" in result.stdout, result.stdout
         assert "example/clean" not in deferred, deferred
     upgrades = [line for line in events if line.startswith("brew upgrade ")]
     if failed_refresh == "fetch-core":
@@ -865,6 +873,7 @@ if native:
         ("bulk upgrade exit 0 with a remaining outdated formula is incomplete", successful_bulk_upgrade_leaves_outdated_formula),
         ("JPEG XL transaction exit 0 with an outdated target is incomplete", successful_jpeg_xl_upgrade_leaves_outdated_formula),
         ("dirty tap is preserved while clean catalogs reveal a stable upgrade", dirty_tap_preserves_checkout),
+        ("self-remote tap has no pending upstream refresh", lambda f: dirty_tap_preserves_checkout(f, self_remote=True)),
         ("core catalog fetch failure prevents formula upgrades", lambda f: dirty_tap_preserves_checkout(f, "fetch-core")),
         ("clean tap merge failure still upgrades from the refreshed core catalog", lambda f: dirty_tap_preserves_checkout(f, "merge-clean-tap")),
         ("existing tap conflict stops before either mutation", lambda f: tap_conflict_stops_before_pair(f, False)),

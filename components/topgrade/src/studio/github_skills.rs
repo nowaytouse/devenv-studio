@@ -14,6 +14,7 @@ use std::{
 mod lock;
 pub(super) mod ownership;
 mod remote;
+mod retirement;
 
 #[cfg(test)]
 mod tests;
@@ -65,8 +66,17 @@ struct Output {
     stderr: String,
 }
 
-fn gh(executable: &Path, args: &[&str]) -> Result<Output> {
-    let mut child = super::tool_command(executable)?
+fn gh(executable: &Path, args: &[&str], stage: Option<&Path>) -> Result<Output> {
+    let mut command = super::tool_command(executable)?;
+    if let Some(stage) = stage {
+        command
+            .env("GH_CONFIG_DIR", super::account_home()?.join(".config/gh"))
+            .env("GH_NO_UPDATE_NOTIFIER", "1")
+            .env("GH_TELEMETRY", "0")
+            .env("HOME", stage)
+            .current_dir(stage);
+    }
+    let mut child = command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -161,7 +171,7 @@ fn accepted(output: &Output, group: &[&Item]) -> Result<()> {
     Ok(())
 }
 
-fn resolve_expected(items: &mut [Item], run: &mut impl FnMut(&[&str]) -> Result<Output>) -> Result<()> {
+fn resolve_expected(items: &mut [&mut Item], run: &mut impl FnMut(&[&str]) -> Result<Output>) -> Result<()> {
     let mut directories = BTreeMap::<&str, BTreeSet<&str>>::new();
     for item in items.iter() {
         directories.entry(&item.repo).or_default().insert(&item.meta.directory);
@@ -248,7 +258,11 @@ struct Summary {
     updated: usize,
 }
 
-fn update(home: &Path, run: &mut impl FnMut(&[&str]) -> Result<Output>) -> Result<Summary> {
+fn update(
+    home: &Path,
+    run: &mut impl FnMut(&[&str]) -> Result<Output>,
+    stage_install: &mut impl FnMut(&Path, &[&str]) -> Result<Output>,
+) -> Result<Summary> {
     let listing = run(&["skill", "list", "--json", "skillName,sourceURL,path,pinned,scope"])?;
     ensure!(
         listing.success,
@@ -259,13 +273,20 @@ fn update(home: &Path, run: &mut impl FnMut(&[&str]) -> Result<Output>) -> Resul
         .map_err(|_| color_eyre::eyre::eyre!("Unsupported GitHub CLI skill discovery schema"))?;
     let mut snapshot = Snapshot::read(home)?;
     let (mut selected, delegated) = preflight(rows, home, &snapshot.lock)?;
-    resolve_expected(&mut selected, run)?;
+    let (mut current, deferred): (Vec<_>, Vec<_>) =
+        selected.iter_mut().partition(|item| !retirement::candidate(home, item));
+    resolve_expected(&mut current, run)?;
+    if !deferred.is_empty() {
+        retirement::migrate(home, &mut selected, &snapshot, stage_install)?;
+        let mut successor: Vec<_> = selected.iter_mut().filter(|item| item.expected.is_empty()).collect();
+        resolve_expected(&mut successor, run)?;
+    }
     snapshot.lock.collisions(&selected)?;
     let planned = selected.iter().filter(|item| item.changed()).count();
     let protected = snapshot.lock.protected();
     ensure!(
         !protected || planned == 0,
-        "{planned} GH skill update(s) pending; native GH cannot preserve NPX lock metadata. No skills or lock entries were changed."
+        "{planned} GH skill update(s) pending; native GH cannot preserve NPX lock metadata. No native skill updates or shared lock changes were applied."
     );
     let mut groups = BTreeMap::<&Path, Vec<&Item>>::new();
     for item in &selected {
@@ -302,7 +323,9 @@ pub(super) fn run() -> Result<()> {
     {
         bail!("GitHub CLI does not resolve to the expected Homebrew executable");
     }
-    let summary = update(&home, &mut |args| gh(&executable, args))?;
+    let summary = update(&home, &mut |args| gh(&executable, args, None), &mut |stage, args| {
+        gh(&executable, args, Some(stage))
+    })?;
     println!(
         "Verified {} GitHub skills ({} updated); delegated {} to NPX and {} to Cursor.",
         summary.github, summary.updated, summary.npx, summary.cursor,

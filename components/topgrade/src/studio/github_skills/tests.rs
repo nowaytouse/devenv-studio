@@ -1,10 +1,14 @@
-use super::{Output, Summary, update};
+use super::{Output, Summary};
 use color_eyre::eyre::Result;
 use serde_json::{Value, json};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+fn update(home: &Path, run: &mut impl FnMut(&[&str]) -> Result<Output>) -> Result<Summary> {
+    super::update(home, run, &mut |_, _| panic!("Unexpected skill migration"))
+}
 
 const OLD: &str = "1111111111111111111111111111111111111111";
 const NEW: &str = "2222222222222222222222222222222222222222";

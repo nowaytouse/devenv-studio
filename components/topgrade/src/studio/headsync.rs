@@ -303,6 +303,13 @@ impl Headsync {
             };
             if upstream.is_empty() || upstream == "\t\t" {
                 ensure!(tap != "homebrew/core", "homebrew/core has no tracked upstream branch");
+                // A self-remote is an explicitly local catalog, not a pending upstream refresh.
+                if command_text(self.git(path, &["remote"]))? == "origin"
+                    && command_text(self.git(path, &["remote", "get-url", "origin"]))? == "."
+                {
+                    println!("Preserving {tap}: local-only catalog");
+                    return Ok(true);
+                }
                 println!("Preserving {tap}: no tracked upstream branch");
                 return Ok(false);
             }

@@ -14,7 +14,8 @@ fn studio_shared_lock_refuses_contention_and_linked_files() {
     let temp = tempfile::tempdir().unwrap();
     let state = temp.path().canonicalize().unwrap();
     let first = lock(&state).unwrap();
-    assert!(lock(&state).is_err());
+    let busy = lock(&state).unwrap_err();
+    assert!(busy.to_string().contains("maintenance operation is running"));
     // Parallel tests spawn processes. A fork can briefly inherit the descriptor
     // before close-on-exec, so explicitly unlock before asserting reacquisition.
     first.unlock().unwrap();

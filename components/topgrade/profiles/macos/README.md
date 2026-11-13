@@ -4,7 +4,7 @@ This Apple Silicon macOS profile configures the managed Rust Topgrade tasks. The
 
 DevEnv Studio builds a reviewed component tree, installs the matching profile with its Rust installer, and activates the engine separately. The built-in Helm and GitHub Skills steps use their native validators. The older standalone helpers remain available for legacy entry points and recovery.
 
-The Homebrew formula step refreshes catalogs before checking for upgrades. When a tap has local changes, the step preserves that checkout and fast-forwards clean tracked tap checkouts, including `homebrew/core`. The log names deferred taps and reports refresh failures. A failed core refresh stops formula upgrades. The step checks the requested formulae again after upgrades. Deferred catalogs or formulae still reported as outdated produce `PARTIAL` with a nonzero exit status. Intentional pin and separately managed formula exclusions remain visible.
+The Homebrew formula step refreshes catalogs before checking for upgrades. When a tap has local changes, the step preserves that checkout and fast-forwards clean tracked tap checkouts, including `homebrew/core`. The log names deferred taps and reports refresh failures. A tap with no tracking branch whose sole remote points to itself is reported as local-only. A failed core refresh stops formula upgrades. The step checks the requested formulae again after upgrades. Deferred catalogs or formulae still reported as outdated produce `PARTIAL` with a nonzero exit status. Intentional pin and separately managed formula exclusions remain visible.
 
 Topgrade reports incomplete checks separately from completed steps. Dry runs and post-commands appear in the summary. If a selected configuration or its includes cannot be loaded, the CLI stops before executing updates.
 
@@ -64,11 +64,13 @@ Before updates, the helper follows native GH's unpinned reference policy: the la
 
 The shared lock can also contain NPX's `lastSelectedAgents` and `pluginName` fields. The helper validates these fields and, when verified remote trees already match, returns without calling the native writer. If an update is pending, it stops before writing because the current GitHub CLI would discard those fields; a dry run remains available. Coverage reports attach repository discovery failures to GitHub-tracked copies, separately from NPX copies with the same display name.
 
+An exact previously installed Gemini copy of Google's retired `discovering-gcp-data-assets` can migrate to the official `discover-assets`. The replacement is staged and verified before publication. The old copy moves to a private recovery directory, and the shared NPX lock is left intact. Changed copies and ambiguous owners require review.
+
 The LeanCTX host and canonical trees may each have a local `SKILL.md.bak` and an empty migration lock. The installer and all other skill file contents must still match.
 
 ## Per-repository dependency compatibility
 
-The fork opts into its existing compatible dependency-update path with the root file `.topgrade-dependencies.json` containing exactly `{"allow_incompatible": false}`. The repository still participates in Rolling updates; Cargo uses `cargo update` within its declared requirements instead of `cargo upgrade --incompatible allow --pinned allow`. Other surfaces retain their existing compatible behavior, including action updates.
+The fork opts into its existing compatible dependency-update path with the root file `.topgrade-dependencies.json` containing exactly `{"allow_incompatible": false}`. The repository still participates in Rolling updates; Cargo uses `cargo update` within its declared requirements instead of the edge-mode `cargo upgrade --incompatible allow --pinned ignore`. Other surfaces retain their existing compatible behavior, including action updates.
 
 The Rust rolling task respects exact Cargo requirements. Dirty checkouts are deferred before dependency snapshots and listed by repository in the summary. The task also applies compatible mode to Zig HEAD, Docker tags and Gradle. A malformed, duplicate-key, oversized, symlinked or nonregular policy file fails before that repository's update commands execute. The policy is included in dependency backups. The task uses installed ncu, disables JavaScript installation hooks, and pins the Gradle report plugin. Gradle wrapper updates require a verified distribution checksum and keep the existing scripts and JAR. Shared version references with unverified impact are reported as discovered candidates.
 

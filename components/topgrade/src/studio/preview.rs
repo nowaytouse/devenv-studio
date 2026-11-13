@@ -272,14 +272,15 @@ fn team(app: &Path) -> Result<String> {
     Ok(teams[0].into())
 }
 
-fn move_exclusive(source: &Path, target: &Path) -> Result<()> {
+pub(super) fn move_exclusive(source: &Path, target: &Path) -> Result<()> {
     let source = CString::new(source.as_os_str().as_bytes())?;
-    let target = CString::new(target.as_os_str().as_bytes())?;
+    let target_name = CString::new(target.as_os_str().as_bytes())?;
     // Both paths are on the same volume, and Darwin commits the no-replace rename atomically.
-    let result = unsafe { nix::libc::renamex_np(source.as_ptr(), target.as_ptr(), nix::libc::RENAME_EXCL) };
+    let result = unsafe { nix::libc::renamex_np(source.as_ptr(), target_name.as_ptr(), nix::libc::RENAME_EXCL) };
     ensure!(
         result == 0,
-        "Could not publish preview app: {}",
+        "Could not move into {}: {}",
+        target.display(),
         io::Error::last_os_error()
     );
     Ok(())
