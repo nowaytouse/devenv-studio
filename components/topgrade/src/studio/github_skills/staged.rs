@@ -8,7 +8,12 @@ use crate::{
     },
 };
 use color_eyre::eyre::{Context, ContextCompat, Result, ensure};
-use std::{fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+};
 
 fn install(
     home: &Path,
@@ -65,7 +70,7 @@ fn prepare(
     backup: &Path,
     item: &Item,
     run: &mut impl FnMut(&Path, &[&str]) -> Result<Output>,
-) -> Result<(Tree, Tree)> {
+) -> Result<(Installed, Installed)> {
     let reference = item.meta.reference.as_deref().context("Missing installed GitHub ref")?;
     ensure!(
         (reference.starts_with("refs/tags/") || reference.starts_with("refs/heads/") || hex(reference, 40))
@@ -78,35 +83,73 @@ fn prepare(
     let old = scratch.join("original");
     install(scratch, &old, item, reference, &item.meta.tree, run)
         .context("Could not reconstruct the installed revision")?;
-    let original = tree(&old.join(&item.meta.name))?;
+    let baseline = tree(&old.join(&item.meta.name))?;
+    let original = installed(&item.path)?;
     ensure!(
-        installed_tree(&item.path)? == original,
+        same_content(&original.files, &baseline),
         "Installed files differ from the original revision; kept local changes"
     );
     let new = scratch.join("candidate");
     install(scratch, &new, item, &item.commit, &item.expected, run)?;
     let candidate = new.join(&item.meta.name);
-    let staged = tree(&candidate)?;
-    for path in staged.keys() {
-        fs::File::open(candidate.join(path))?.sync_all()?;
+    let proposed = installed(&candidate)?;
+    for (path, file) in &proposed.files {
+        let target = candidate.join(path);
+        let handle = fs::File::open(&target)?;
+        if let Some(previous) = original.files.get(path) {
+            handle.set_permissions(fs::Permissions::from_mode(previous.mode))?;
+        } else {
+            handle.set_permissions(fs::Permissions::from_mode(file.mode & !0o077))?;
+        }
+        handle.sync_all()?;
     }
-    fs::File::open(&candidate)?.sync_all()?;
+    for (path, mode) in proposed.dirs.iter().rev() {
+        let handle = fs::File::open(candidate.join(path))?;
+        let mode = original.dirs.get(path).copied().unwrap_or(*mode & !0o077);
+        handle.set_permissions(fs::Permissions::from_mode(mode))?;
+        handle.sync_all()?;
+    }
+    let staged = installed(&candidate)?;
+    ensure!(
+        same_content(&staged.files, &proposed.files),
+        "Staged skill contents changed"
+    );
     super::super::preview::move_exclusive(&candidate, backup)?;
     Ok((original, staged))
 }
 
-fn installed_tree(path: &Path) -> Result<Tree> {
-    let content = tree(path)?;
-    for entry in walkdir::WalkDir::new(path).min_depth(1) {
+#[derive(PartialEq, Eq)]
+struct Installed {
+    files: Tree,
+    dirs: BTreeMap<PathBuf, u32>,
+}
+
+fn installed(root: &Path) -> Result<Installed> {
+    let files = tree(root)?;
+    let mut dirs = BTreeMap::new();
+    for entry in walkdir::WalkDir::new(root) {
         let entry = entry?;
         if entry.file_type().is_dir() {
+            let path = entry.path();
             ensure!(
-                fs::read_dir(entry.path())?.next().transpose()?.is_some(),
-                "Installed skill contains a local empty directory"
+                fs::read_dir(path)?.next().transpose()?.is_some(),
+                "Skill contains an empty directory"
+            );
+            dirs.insert(
+                path.strip_prefix(root)?.to_path_buf(),
+                entry.metadata()?.permissions().mode() & 0o777,
             );
         }
     }
-    Ok(content)
+    Ok(Installed { files, dirs })
+}
+
+fn same_content(left: &Tree, right: &Tree) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|((path, file), (other, entry))| path == other && file.hash == entry.hash)
 }
 
 pub(super) fn update(
@@ -146,7 +189,7 @@ pub(super) fn update(
             &Snapshot::read(home)? == snapshot,
             "Shared skill lock changed during staging"
         );
-        if installed_tree(&item.path)? != original {
+        if installed(&item.path)? != original {
             deferred.push(format!(
                 "{} (installed files changed during staging)",
                 item.path.display()
@@ -155,8 +198,8 @@ pub(super) fn update(
         }
         fs::File::open(&backups)?.sync_all()?;
         exchange(&item.path, &backup)?;
-        let active = tree(&item.path);
-        let saved = installed_tree(&backup);
+        let active = installed(&item.path);
+        let saved = installed(&backup);
         let active_matches = active.is_ok_and(|files| files == staged);
         if !active_matches || !saved.is_ok_and(|files| files == original) {
             if active_matches {

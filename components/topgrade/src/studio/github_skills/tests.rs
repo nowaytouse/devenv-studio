@@ -3,6 +3,7 @@ use color_eyre::eyre::Result;
 use serde_json::{Value, json};
 use std::{
     fs,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
@@ -119,6 +120,8 @@ fn staged_update_preserves_shared_lock_and_locally_edited_skills() {
         let before = fs::read(&lock_path).unwrap();
         let live = fixture.github.join("SKILL.md");
         let pristine = fs::read_to_string(&live).unwrap();
+        fs::set_permissions(&live, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::set_permissions(&fixture.github, fs::Permissions::from_mode(0o700)).unwrap();
         if edited {
             fs::write(&live, pristine.replace("Fixture body", "Local edit")).unwrap();
         }
@@ -150,6 +153,11 @@ fn staged_update_preserves_shared_lock_and_locally_edited_skills() {
         } else {
             assert_eq!(result.unwrap().updated, 1);
             assert!(fs::read_to_string(&live).unwrap().contains(NEW));
+            assert_eq!(fs::metadata(&live).unwrap().permissions().mode() & 0o777, 0o700);
+            assert_eq!(
+                fs::metadata(&fixture.github).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
             let state = super::super::state_dir(&fixture.home).unwrap();
             let backup = fs::read_dir(state).unwrap().next().unwrap().unwrap().path();
             assert_eq!(fs::read_to_string(backup.join("0-demo/SKILL.md")).unwrap(), pristine);

@@ -26,8 +26,8 @@ static ANSI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[[0-?]*[ -/]*[
 
 #[derive(PartialEq, Eq)]
 pub(in crate::studio) struct Entry {
-    hash: String,
-    mode: u32,
+    pub(in crate::studio) hash: String,
+    pub(in crate::studio) mode: u32,
 }
 
 pub(in crate::studio) type Tree = BTreeMap<PathBuf, Entry>;
