@@ -1,4 +1,4 @@
-//! Managed Homebrew HEAD updates with one recoverable ggml/llama.cpp formula transaction.
+//! Managed Homebrew HEAD updates and recoverable repairs of stale consumer linkage.
 use std::{
     collections::BTreeSet,
     env,
@@ -28,6 +28,7 @@ const LLAMA_REMOTE: &str = "https://github.com/ggml-org/llama.cpp.git";
 const REF: &str = "refs/heads/master";
 const PAIR: [&str; 2] = ["ggml", "llama.cpp"];
 const JPEG_JOURNAL: &str = "jpeg-xl-active.json";
+const PAIR_JOURNAL: &str = "ggml-llama-active.json";
 static DEFERRED_SIGNAL: AtomicI32 = AtomicI32::new(0);
 
 pub(super) fn run() -> Result<()> {
@@ -114,9 +115,16 @@ impl Headsync {
 
     fn run_locked(&mut self) -> Result<()> {
         let _lock = journal::lock(&self.state)?;
-        if self.jpeg_xl_pending()? {
-            self.jpeg_xl("recover", &[])
-                .wrap_err("JPEG XL transaction recovery failed")?;
+        if self.abi_pending("whisper-formula-active")? {
+            let core = command_path(self.brew(&["--repo", "homebrew/core"]))?.canonicalize()?;
+            journal::Journal::new(self.state.canonicalize()?, core)?
+                .whisper()
+                .recover()?;
+        }
+        for (journal, mode) in [(PAIR_JOURNAL, "pair-recover"), (JPEG_JOURNAL, "recover")] {
+            if self.abi_pending(journal)? {
+                self.abi_transaction(mode, journal, &[])?;
+            }
         }
         let core = command_path(self.brew(&["--repo", "homebrew/core"]))?.canonicalize()?;
         let txn = journal::Journal::new(self.state.canonicalize()?, core)?;
@@ -142,46 +150,62 @@ impl Headsync {
         Ok(())
     }
 
-    fn jpeg_xl_pending(&self) -> Result<bool> {
-        match fs::symlink_metadata(self.state.join(JPEG_JOURNAL)) {
+    fn abi_pending(&self, journal: &str) -> Result<bool> {
+        match fs::symlink_metadata(self.state.join(journal)) {
             Ok(_) => Ok(true),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
             Err(error) => Err(error.into()),
         }
     }
 
-    fn jpeg_xl(&self, mode: &str, formulae: &[String]) -> Result<()> {
-        let state = self.state.canonicalize()?;
+    fn abi_command(&self, script: &Path, mode: &str, formulae: &[String]) -> Result<Command> {
+        let mut command = self.brew(&["ruby"]);
+        command
+            .arg(script)
+            .arg(mode)
+            .arg(self.state.canonicalize()?)
+            .args(formulae)
+            .envs([
+                ("HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK", "1"),
+                ("HOMEBREW_NO_AUTOREMOVE", "1"),
+                ("LANG", "C"),
+                ("LC_ALL", "C"),
+            ]);
+        Ok(command)
+    }
+
+    fn abi_script(&self) -> Result<tempfile::NamedTempFile> {
         let mut script = tempfile::Builder::new()
-            .prefix(".jpeg-xl-")
+            .prefix(".homebrew-abi-")
             .suffix(".rb")
-            .tempfile_in(&state)?;
+            .tempfile_in(self.state.canonicalize()?)?;
         script.write_all(include_bytes!("headsync/jpeg_xl.rb"))?;
-        let result = status(
-            self.brew(&["ruby"])
-                .arg(script.path())
-                .arg(mode)
-                .arg(state)
-                .args(formulae)
-                .envs([
-                    ("HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK", "1"),
-                    ("HOMEBREW_NO_AUTOREMOVE", "1"),
-                    ("LANG", "C"),
-                    ("LC_ALL", "C"),
-                ]),
-        );
+        Ok(script)
+    }
+
+    fn abi_transaction(&self, mode: &str, journal: &str, formulae: &[String]) -> Result<()> {
+        let script = self.abi_script()?;
+        let result = status(&mut self.abi_command(script.path(), mode, formulae)?);
         if let Err(error) = result {
             let exited = matches!(
                 error.downcast_ref::<TopgradeError>(),
                 Some(TopgradeError::ProcessFailed(_, status)) if status.code().is_some_and(|code| code < 128)
             );
-            if matches!(mode, "run" | "repair") && exited && interrupted().is_ok() && self.jpeg_xl_pending()? {
-                self.jpeg_xl("recover", &[])
-                    .wrap_err_with(|| format!("{error:#}; immediate JPEG XL recovery also failed"))?;
+            if !mode.ends_with("recover") && exited && interrupted().is_ok() && self.abi_pending(journal)? {
+                let recovery = if journal == PAIR_JOURNAL {
+                    "pair-recover"
+                } else {
+                    "recover"
+                };
+                self.abi_transaction(recovery, journal, &[])
+                    .wrap_err_with(|| format!("{error:#}; immediate recovery of {journal} also failed"))?;
             }
             return Err(error);
         }
-        ensure!(!self.jpeg_xl_pending()?, "JPEG XL transaction left a pending journal");
+        ensure!(
+            !self.abi_pending(journal)?,
+            "Homebrew ABI transaction left a pending journal: {journal}"
+        );
         Ok(())
     }
 
@@ -218,15 +242,20 @@ impl Headsync {
                 .wrap_err("Synchronized formula preflight failed before either keg was upgraded; inspect the requirements above and preserve the LLVM pin. The official stable LLVM revision may have advanced since the pinned keg was installed")?;
             for formula in PAIR {
                 println!("\n== Upgrade {formula} at {revision} ==");
-                status(&mut self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula]))?;
+                status(
+                    self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula])
+                        .env("HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK", "1"),
+                )?;
             }
             let active = self.verify_pair(&revision)?;
             txn.recover()?;
             active
         };
         self.verify_runtime(&active)?;
-        let residual = self.remaining(&installed, &pins)?;
+        self.repair_pair_consumers(txn)?;
+        let residual = self.remaining(txn, &installed, &pins)?;
         self.verify_runtime(&self.verify_pair(&revision)?)?;
+        self.verify_linkage()?;
         let missing = command_text(self.brew(&["missing"]))?;
         ensure!(missing.is_empty(), "Homebrew dependencies are missing:\n{missing}");
         ensure!(
@@ -474,7 +503,7 @@ impl Headsync {
         Ok(revision.to_owned())
     }
 
-    fn remaining(&self, installed: &[String], pinned: &[String]) -> Result<Vec<String>> {
+    fn remaining(&self, txn: &journal::Journal, installed: &[String], pinned: &[String]) -> Result<Vec<String>> {
         println!("\n== Upgrade remaining formulae ==");
         let candidates: Vec<&str> = installed
             .iter()
@@ -505,9 +534,9 @@ impl Headsync {
             let jxl = outdated.remove(index);
             let group = self.jpeg_group(&jxl)?;
             // An already-broken consumer must be repaired before changing its provider.
-            self.jpeg_xl("repair", &group)
+            self.abi_transaction("repair", JPEG_JOURNAL, &group)
                 .wrap_err("JPEG XL linkage repair before coordinated upgrade failed")?;
-            self.jpeg_xl("run", &group)
+            self.abi_transaction("run", JPEG_JOURNAL, &group)
                 .wrap_err("Coordinated JPEG XL upgrade failed")?;
             // Rebuilds may already have upgraded an outdated consumer.
             if !outdated.is_empty() {
@@ -517,14 +546,12 @@ impl Headsync {
         }
         if !outdated.is_empty() {
             self.upgrade_remaining(&outdated)?;
+            self.repair_pair_consumers(txn)?;
         }
         if let Some(provider) = provider {
             // Bottled consumers can reintroduce stale ABI links without an outdated provider.
-            self.jpeg_xl("repair", &self.jpeg_group(provider)?)
+            self.abi_transaction("repair", JPEG_JOURNAL, &self.jpeg_group(provider)?)
                 .wrap_err("JPEG XL dependent linkage repair failed")?;
-        }
-        if !outdated.is_empty() {
-            self.verify_bulk_linkage()?;
         }
         if requested.is_empty() {
             println!("No remaining outdated formulae");
@@ -535,8 +562,55 @@ impl Headsync {
         self.outdated(&requested)
     }
 
+    fn repair_pair_consumers(&self, txn: &journal::Journal) -> Result<()> {
+        let mut consumers = BTreeSet::new();
+        for provider in PAIR {
+            consumers.extend(
+                self.abi_consumers(provider)?
+                    .into_iter()
+                    .filter(|formula| !PAIR.contains(&basename(formula))),
+            );
+        }
+        if !consumers.is_empty() {
+            let formulae: Vec<_> = PAIR.into_iter().map(str::to_owned).chain(consumers).collect();
+            let whisper = txn.whisper();
+            let result = (|| {
+                let script = self.abi_script()?;
+                let plan = command_text(self.abi_command(script.path(), "pair-plan", &formulae)?)?;
+                ensure!(
+                    matches!(plan.as_str(), "current" | "repair" | "whisper-compat"),
+                    "Unexpected ggml/llama.cpp repair plan: {plan}"
+                );
+                if plan == "current" {
+                    return Ok(());
+                }
+                if plan == "whisper-compat" {
+                    self.core_clean(txn.core(), "before Whisper compatibility patch")?;
+                    whisper.prepare_whisper(|file| {
+                        status(self.command("ruby").arg("-c").arg(file).stdout(Stdio::null()))
+                    })?;
+                }
+                self.abi_transaction("pair-repair", PAIR_JOURNAL, &formulae)
+                    .wrap_err("ggml/llama.cpp consumer linkage repair failed")
+            })();
+            let recovered = if whisper.pending()? { whisper.recover() } else { Ok(()) };
+            match (result, recovered) {
+                (Ok(()), Ok(())) => {}
+                (Err(error), Ok(())) | (Ok(()), Err(error)) => return Err(error),
+                (Err(error), Err(recovery)) => bail!("{error:#}; Whisper formula recovery failed: {recovery:#}"),
+            }
+        }
+        Ok(())
+    }
+
     fn jpeg_group(&self, provider: &str) -> Result<Vec<String>> {
-        let mut group = names(
+        let mut group = self.abi_consumers(provider)?;
+        group.insert(0, provider.to_owned());
+        Ok(group)
+    }
+
+    fn abi_consumers(&self, provider: &str) -> Result<Vec<String>> {
+        names(
             &command_text(self.brew(&[
                 "uses",
                 "--installed",
@@ -546,10 +620,8 @@ impl Headsync {
                 "--formula",
                 provider,
             ]))
-            .wrap_err("Unable to verify the installed JPEG XL dependency group")?,
-        )?;
-        group.insert(0, provider.to_owned());
-        Ok(group)
+            .wrap_err_with(|| format!("Unable to verify installed consumers of {provider}"))?,
+        )
     }
 
     fn outdated(&self, candidates: &[&str]) -> Result<Vec<String>> {
@@ -602,12 +674,12 @@ impl Headsync {
         status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))
     }
 
-    fn verify_bulk_linkage(&self) -> Result<()> {
+    fn verify_linkage(&self) -> Result<()> {
         let linkage = self
             .brew(&["linkage", "--test"])
             .envs([("LANG", "C"), ("LC_ALL", "C")])
             .output_checked_with(|_| Ok(()))?;
-        super::diagnostics::verify_linkage(linkage).wrap_err("Linkage check after Homebrew formula upgrade")
+        super::diagnostics::verify_linkage(linkage).wrap_err("Linkage check at the end of Homebrew maintenance")
     }
 
     fn verify_pair(&self, revision: &str) -> Result<Vec<PathBuf>> {

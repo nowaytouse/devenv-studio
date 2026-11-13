@@ -304,3 +304,76 @@ with_fixture(:repair_restart) do |fixture, state|
 end
 
 puts "JPEG XL transaction fixtures passed"
+
+class PairFixture < GgmlLlamaRepair
+  def preflight(_row)
+    {}
+  end
+
+  def dependency_order(consumers)
+    consumers
+  end
+
+  def direct_links(keg)
+    path = keg/"links"
+    path.file? ? path.readlines.map(&:chomp) : []
+  end
+
+  def run_command(*args)
+    case args.first
+    when "/usr/bin/ditto" then FileUtils.cp_r(args[1], args[2], preserve: true)
+    when "/bin/sync" then nil
+    else raise "Unexpected fixture command: #{args.inspect}"
+    end
+  end
+
+  def reset_linkage_cache(_rows); end
+
+  def install(short, links: [])
+    path = rack(short)/"1.0"
+    FileUtils.mkdir_p(path/"lib")
+    (path/"INSTALL_RECEIPT.json").write(JSON.generate(
+      "source" => { "tap" => "homebrew/core", "spec" => "stable" },
+      "used_options" => [],
+    ))
+    (path/"links").write(links.join("\n"))
+    Keg.new(path).link unless linked(short).symlink?
+    path
+  end
+
+  def brew(*args)
+    raise "Unexpected rebuild request" unless args == %w[reinstall --no-ask --build-from-source --formula whisper.cpp]
+
+    install("whisper.cpp", links: [opt("ggml")/"lib/libggml.1.dylib", opt("llama.cpp")/"lib/libllama.1.dylib"])
+    raise "Synthetic pair failure" if @fail
+  end
+
+  def fail_rebuild!
+    @fail = true
+  end
+end
+
+with_fixture(:success) do |_, state|
+  pair = PairFixture.new(state)
+  ggml = pair.install("ggml")
+  llama = pair.install("llama.cpp")
+  (ggml/"lib/libggml.1.dylib").write("synthetic ggml")
+  (llama/"lib/libllama.1.dylib").write("synthetic llama")
+  whisper = pair.install("whisper.cpp", links: [pair.opt("ggml")/"lib/libggml.0.dylib",
+                                               pair.opt("llama.cpp")/"lib/libllama.0.dylib"])
+  prior = pair.manifest(whisper)
+  pair.fail_rebuild!
+  begin
+    pair.repair_pair(%w[ggml llama.cpp], ["whisper.cpp"])
+    raise "Synthetic rebuild should fail"
+  rescue RuntimeError => error
+    check(error.message == "Synthetic pair failure", error.message)
+  end
+  check(pair.manifest(whisper) == prior, "Pair repair failed to restore the original consumer")
+  check(!pair.present?(state/"ggml-llama-active.json"), "Pair repair left a pending journal")
+  repaired = PairFixture.new(state)
+  2.times { repaired.repair_pair(%w[ggml llama.cpp], ["whisper.cpp"]) }
+  check(repaired.direct_links(whisper).all? { |link| File.file?(link) }, "Pair repair left a broken link")
+  check(!repaired.present?(state/"ggml-llama-active.json"), "Successful pair repair left a pending journal")
+end
+puts "ggml/llama.cpp consumer repair fixtures passed"

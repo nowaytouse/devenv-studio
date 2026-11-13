@@ -30,6 +30,13 @@ llama = '''class LlamaCpp
   head "https://github.com/ggml-org/llama.cpp.git", branch: "master"
 end
 '''
+whisper = '''class WhisperCpp < Formula
+  url "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz"
+  def install
+    system "cmake", "-S", ".", "-B", "build", *args, *std_cmake_args
+  end
+end
+'''
 
 brew = r'''#!/usr/bin/python3
 import os, pathlib, sys
@@ -109,8 +116,10 @@ elif args[:1] == ["outdated"]:
  if found: sys.exit(1)
 elif args[:1] == ["uses"]:
  if args[-1].endswith("/jpeg-xl"): print(os.environ.get("TEST_JXL_USERS", ""))
+ elif args[-1] == "ggml": print(os.environ.get("TEST_GGML_USERS", ""))
+ elif args[-1] == "llama.cpp": print(os.environ.get("TEST_LLAMA_USERS", ""))
  else: print("topgrade\natuin")
-elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover", "repair"):
+elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover", "repair", "pair-plan", "pair-repair", "pair-recover"):
  state = (root/"state/brew-headsync").resolve()
  assert pathlib.Path(args[1]).parent == state and pathlib.Path(args[1]).is_file()
  assert pathlib.Path(args[3]) == state
@@ -120,6 +129,23 @@ elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover", "rep
   assert len(args) == 4
   if os.environ.get("TEST_JXL_LEAVE_PENDING") != "1":
    (state/"jpeg-xl-active.json").unlink(); print("original kegs restored")
+ elif args[2] == "pair-recover":
+  assert len(args) == 4
+  assert not (state/"whisper-formula-active").exists(), "restore the formula before the keg journal"
+  (state/"ggml-llama-active.json").unlink()
+ elif args[2] in ("pair-plan", "pair-repair"):
+  assert args[4:6] == ["ggml", "llama.cpp"]
+  decision = os.environ.get("TEST_PAIR_PLAN", "repair")
+  if args[2] == "pair-plan":
+   assert not (state/"whisper-formula-active").exists()
+   print(decision)
+  elif decision == "whisper-compat":
+   formula = root/"core/Formula/w/whisper.cpp.rb"
+   assert "find_package(llama REQUIRED)" in formula.read_text()
+   assert (state/"whisper-formula-active").is_dir()
+  if args[2] == "pair-repair" and os.environ.get("TEST_PAIR_REPAIR_FAIL") == "1":
+   (state/"ggml-llama-active.json").write_text("{}")
+   sys.exit(46)
  elif args[2] == "repair":
   pass
  elif os.environ.get("TEST_JXL_FAIL") == "1":
@@ -472,10 +498,76 @@ def jpeg_xl_recovers_before_brew_refresh(f, leave_pending=False):
     f.assert_restored()
 
 
-def broken_post_upgrade_linkage_fails(f):
-    result = f.run(TEST_OUTDATED="z3", TEST_BATCH_BROKEN="1")
-    assert result.returncode != 0 and "Linkage check after Homebrew formula upgrade" in result.stdout, result.stdout
-    assert "synthetic-jxl-library" in result.stdout, result.stdout
+def broken_post_upgrade_linkage_fails(f, outdated="z3"):
+    (f.root / "pair-installed").touch()
+    result = f.run(TEST_OUTDATED=outdated, TEST_BATCH_BROKEN="1")
+    assert result.returncode != 0 and "Linkage check at the end of Homebrew maintenance" in result.stdout, result.stdout
+    assert "synthetic-jxl-library" in result.stdout and "HEAD sync transaction: OK" not in result.stdout, result.stdout
+    f.assert_restored()
+
+
+def pair_consumer_repair_order(f):
+    f.state.mkdir(parents=True, exist_ok=True)
+    (f.state / "ggml-llama-active.json").write_text("{}")
+    result = f.run(TEST_GGML_USERS="llama.cpp\nwhisper.cpp",
+                   TEST_LLAMA_USERS="homebrew-ffmpeg/ffmpeg/ffmpeg\nwhisper.cpp",
+                   TEST_OUTDATED="z3")
+    assert result.returncode == 0, result.stdout
+    events = f.events()
+    assert " pair-recover " in events[0] and not (f.state / "ggml-llama-active.json").exists(), events
+    [first, second] = [i for i, line in enumerate(events) if " pair-repair " in line]
+    [first_plan, second_plan] = [i for i, line in enumerate(events) if " pair-plan " in line]
+    pair_upgrade = events.index("brew upgrade --formula --fetch-HEAD llama.cpp")
+    bulk_upgrade = events.index("brew upgrade --formula --fetch-HEAD z3")
+    linkage = events.index("brew linkage --test")
+    assert pair_upgrade < first_plan < first < bulk_upgrade < second_plan < second < linkage, events
+    expected = ["ggml", "llama.cpp", "homebrew-ffmpeg/ffmpeg/ffmpeg", "whisper.cpp"]
+    assert events[first].split(" pair-repair ", 1)[1].split()[1:] == expected, events
+    assert events[second].split(" pair-repair ", 1)[1].split()[1:] == expected, events
+    f.assert_restored()
+
+
+def pair_consumer_repair_failure_recovers(f):
+    result = f.run(TEST_LLAMA_USERS="whisper.cpp", TEST_OUTDATED="z3", TEST_PAIR_REPAIR_FAIL="1")
+    assert result.returncode != 0 and "ggml/llama.cpp consumer linkage repair failed" in result.stdout, result.stdout
+    events = f.events()
+    assert any(" pair-recover " in line for line in events), events
+    assert "brew upgrade --formula --fetch-HEAD z3" not in events, events
+    assert not (f.state / "ggml-llama-active.json").exists()
+    f.assert_restored()
+
+
+def whisper_compat_overlay_is_restored(f):
+    (f.root / "pair-installed").touch()
+    path = f.core / "Formula/w/whisper.cpp.rb"
+    path.parent.mkdir()
+    path.write_text(whisper)
+    original = path.stat()
+    result = f.run(TEST_GGML_USERS="whisper.cpp", TEST_PAIR_PLAN="whisper-compat", TEST_OUTDATED="")
+    assert result.returncode == 0, result.stdout
+    assert any(" pair-repair " in line for line in f.events()), f.events()
+    assert path.read_text() == whisper
+    restored = path.stat()
+    assert (original.st_mode, original.st_mtime_ns) == (restored.st_mode, restored.st_mtime_ns)
+    assert not (f.state / "whisper-formula-active").exists()
+    f.assert_restored()
+
+
+def whisper_overlay_recovers_before_pair_kegs(f):
+    path = f.core / "Formula/w/whisper.cpp.rb"
+    path.parent.mkdir()
+    journal = f.state / "whisper-formula-active"
+    patched = whisper.replace("def install", "def install\n    # synthetic overlay")
+    for folder, content in (("original", whisper), ("patched", patched)):
+        (journal / folder).mkdir(parents=True)
+        (journal / folder / path.name).write_text(content)
+    path.write_text(patched)
+    (f.state / "ggml-llama-active.json").write_text("{}")
+    result = f.run(TEST_PAIR_PLAN="current", TEST_FAIL="update")
+    assert result.returncode != 0 and "injected brew update failure" in result.stdout, result.stdout
+    assert any(" pair-recover " in line for line in f.events()), f.events()
+    assert path.read_text() == whisper
+    assert not journal.exists() and not (f.state / "ggml-llama-active.json").exists()
     f.assert_restored()
 
 
@@ -870,6 +962,11 @@ if native:
         ("Interrupted JPEG XL recovery runs before Homebrew refresh", jpeg_xl_recovers_before_brew_refresh),
         ("Pending JPEG XL recovery prevents Homebrew refresh", lambda f: jpeg_xl_recovers_before_brew_refresh(f, True)),
         ("broken linkage after a successful Homebrew command is a failure", broken_post_upgrade_linkage_fails),
+        ("broken linkage with zero outdated formulae is still a failure", lambda f: broken_post_upgrade_linkage_fails(f, "")),
+        ("pair repair recovers before refresh and brackets ordinary upgrades", pair_consumer_repair_order),
+        ("pair repair failure recovers before reporting failure", pair_consumer_repair_failure_recovers),
+        ("Whisper compatibility overlay is scoped and restored", whisper_compat_overlay_is_restored),
+        ("interrupted Whisper overlay is restored before pair kegs", whisper_overlay_recovers_before_pair_kegs),
         ("bulk upgrade exit 0 with a remaining outdated formula is incomplete", successful_bulk_upgrade_leaves_outdated_formula),
         ("JPEG XL transaction exit 0 with an outdated target is incomplete", successful_jpeg_xl_upgrade_leaves_outdated_formula),
         ("dirty tap is preserved while clean catalogs reveal a stable upgrade", dirty_tap_preserves_checkout),

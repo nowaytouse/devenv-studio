@@ -209,6 +209,26 @@ pub(super) struct Stamp {
     mtime_ns: i64,
 }
 
+#[derive(Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Fingerprint {
+    sha256: String,
+    mode: u32,
+}
+
+impl Stamp {
+    pub(super) fn fingerprint(&self) -> Fingerprint {
+        Fingerprint {
+            sha256: self.sha256.clone(),
+            mode: self.mode,
+        }
+    }
+}
+
+pub(super) fn fingerprint(path: &Path) -> Result<Fingerprint> {
+    Ok(read(path, MAX_DEPENDENCY_BYTES)?.stamp().fingerprint())
+}
+
 pub(super) struct Content {
     pub(super) bytes: Vec<u8>,
     pub(super) mode: u32,
@@ -420,26 +440,45 @@ pub(super) fn backup(repo: &Path, before: &BTreeMap<PathBuf, Stamp>, run: &Path,
     Ok(backup)
 }
 
-pub(super) fn git_clean(repo: &Path, when: &str) -> Result<bool> {
+fn git(repo: &Path, args: &[&str], operation: &str) -> Result<String> {
     let Some(git) = process::find_tool("git")? else {
-        bail!("Missing Git executable for dependency status verification");
+        bail!("Missing Git executable for dependency verification");
     };
     let mut git = process::command(&git, repo);
-    git.args([
-        "--no-optional-locks",
-        "-c",
-        "core.fsmonitor=false",
-        "status",
-        "--porcelain=v1",
-        "--untracked-files=all",
-    ]);
+    git.args(["--no-optional-locks", "-c", "core.fsmonitor=false"])
+        .args(args);
     let output = process::capture(git, process::QUERY_TIMEOUT)?;
     ensure!(
         output.status.success(),
-        "Cannot record {when} Git status for {}",
+        "Cannot read {operation} for {}",
         repo.display()
     );
-    Ok(output.stdout.is_empty())
+    Ok(output.stdout)
+}
+
+pub(super) fn git_status(repo: &Path, when: &str) -> Result<String> {
+    git(
+        repo,
+        &[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--no-renames",
+        ],
+        &format!("{when} Git status"),
+    )
+}
+
+pub(super) fn git_head(repo: &Path) -> Result<String> {
+    let output = git(repo, &["rev-parse", "--verify", "HEAD^{commit}"], "Git baseline")?;
+    let head = output.trim();
+    ensure!(
+        matches!(head.len(), 40 | 64) && head.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "Invalid Git baseline for {}",
+        repo.display()
+    );
+    Ok(head.to_owned())
 }
 
 #[cfg(test)]

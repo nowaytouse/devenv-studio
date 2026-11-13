@@ -15,6 +15,7 @@ use regex::Regex;
 use super::super::{check_dir, check_file, exists, open_file};
 
 const FILES: [(&str, &str); 2] = [("g", "ggml.rb"), ("l", "llama.cpp.rb")];
+const WHISPER: [(&str, &str); 1] = [("w", "whisper.cpp.rb")];
 const MAX_FORMULA: u64 = 1024 * 1024;
 const CMAKE: &str = r#"    system "cmake", "-S", ".", "-B", "build", *args, *std_cmake_args"#;
 const CMAKE_VENDORED: &str = r#"    source_dir = "."
@@ -70,11 +71,34 @@ pub(super) struct Journal {
     state: PathBuf,
     core: PathBuf,
     active: PathBuf,
+    files: &'static [(&'static str, &'static str)],
 }
 
 impl Journal {
     pub(super) fn new(state: PathBuf, core: PathBuf) -> Result<Self> {
-        for (directory, _) in FILES {
+        Self::with_files(state, core, "active", &FILES)
+    }
+
+    pub(super) fn whisper(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+            core: self.core.clone(),
+            active: self.state.join("whisper-formula-active"),
+            files: &WHISPER,
+        }
+    }
+
+    pub(super) fn pending(&self) -> Result<bool> {
+        exists(&self.active)
+    }
+
+    fn with_files(
+        state: PathBuf,
+        core: PathBuf,
+        active: &str,
+        files: &'static [(&'static str, &'static str)],
+    ) -> Result<Self> {
+        for &(directory, _) in files {
             let parent = core.join("Formula").join(directory);
             ensure!(
                 parent.canonicalize()? == parent,
@@ -82,8 +106,13 @@ impl Journal {
                 parent.display()
             );
         }
-        let active = state.join("active");
-        Ok(Self { state, core, active })
+        let active = state.join(active);
+        Ok(Self {
+            state,
+            core,
+            active,
+            files,
+        })
     }
 
     pub(super) fn core(&self) -> &Path {
@@ -91,6 +120,20 @@ impl Journal {
     }
 
     pub(super) fn prepare(&self, revision: &str, syntax_check: impl Fn(&Path) -> Result<()>) -> Result<()> {
+        self.prepare_patch(|source, name| patch(source, name, revision), syntax_check)
+    }
+
+    pub(super) fn prepare_whisper(&self, syntax_check: impl Fn(&Path) -> Result<()>) -> Result<()> {
+        let path = self.core.join("Formula/w");
+        ensure!(path.canonicalize()? == path, "Unexpected Whisper formula directory");
+        self.prepare_patch(|source, _| whisper_patch(source), syntax_check)
+    }
+
+    fn prepare_patch(
+        &self,
+        patch_formula: impl Fn(&str, &str) -> Result<String>,
+        syntax_check: impl Fn(&Path) -> Result<()>,
+    ) -> Result<()> {
         ensure!(!exists(&self.active)?, "HEAD-sync transaction already exists");
         let stage = tempfile::Builder::new().prefix(".stage.").tempdir_in(&self.state)?;
         let original = stage.path().join("original");
@@ -98,14 +141,14 @@ impl Journal {
         for path in [&original, &patched] {
             DirBuilder::new().mode(0o700).create(path)?;
         }
-        for (directory, name) in FILES {
+        for &(directory, name) in self.files {
             let (dest, pending) = self.paths(directory, name);
             ensure!(!exists(&pending)?, "unexpected pending file beside {}", dest.display());
             let snapshot = original.join(name);
             copy(&dest, &snapshot)?;
             let updated = patched.join(name);
             let source = String::from_utf8(contents(&snapshot)?)?;
-            let updated_source = patch(&source, name, revision)?;
+            let updated_source = patch_formula(&source, name)?;
             copy(&snapshot, &updated)?;
             let mut output = OpenOptions::new()
                 .write(true)
@@ -116,7 +159,7 @@ impl Journal {
             output.sync_all()?;
             syntax_check(&updated)?;
         }
-        for (directory, name) in FILES {
+        for &(directory, name) in self.files {
             let (dest, pending) = self.paths(directory, name);
             ensure!(!exists(&pending)?, "unexpected pending file beside {}", dest.display());
             ensure!(
@@ -134,7 +177,7 @@ impl Journal {
         fs::rename(stage.path(), &self.active)?;
         let _ = stage.keep();
         sync_dir(&self.state)?;
-        for (directory, name) in FILES {
+        for &(directory, name) in self.files {
             let (dest, pending) = self.paths(directory, name);
             let original = self.active.join("original").join(name);
             replace(&dest, &pending, &original, &self.active.join("patched").join(name))?;
@@ -153,7 +196,7 @@ impl Journal {
             check_dir(path, false).wrap_err("incomplete or unsafe transaction journal")?;
         }
         // Validate both formulae and pending paths before changing either.
-        for (directory, name) in FILES {
+        for &(directory, name) in self.files {
             let (dest, pending) = self.paths(directory, name);
             let original = contents(&original.join(name)).wrap_err("incomplete or unsafe transaction journal")?;
             let patched = contents(&patched.join(name)).wrap_err("incomplete or unsafe transaction journal")?;
@@ -167,7 +210,7 @@ impl Journal {
                 open_file(&pending, false, MAX_FORMULA).wrap_err("Unsafe HEAD-sync pending file")?;
             }
         }
-        for (directory, name) in FILES {
+        for &(directory, name) in self.files {
             let (dest, pending) = self.paths(directory, name);
             if exists(&pending)? {
                 fs::remove_file(&pending)?;
@@ -294,6 +337,29 @@ fn patch(source: &str, name: &str, revision: &str) -> Result<String> {
         updated = updated.replacen(CMAKE, CMAKE_VENDORED, 1);
     }
     Ok(updated)
+}
+
+fn whisper_patch(source: &str) -> Result<String> {
+    ensure!(
+        source.contains("class WhisperCpp < Formula")
+            && source.contains("ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz")
+            && source.matches(CMAKE).count() == 1,
+        "The reviewed Whisper 1.9.5 formula changed; compatibility patch needs review"
+    );
+    let patch = r#"    inreplace "examples/talk-llama/CMakeLists.txt",
+              "find_package(llama 0.6.0 REQUIRED)", "find_package(llama REQUIRED)"
+"#;
+    Ok(source.replacen(CMAKE, &format!("{patch}{CMAKE}"), 1))
+}
+
+#[test]
+fn whisper_patch_requires_the_reviewed_formula_and_one_build_call() {
+    let source = format!(
+        "class WhisperCpp < Formula\nurl \"https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz\"\n{CMAKE}"
+    );
+    assert!(whisper_patch(&source).unwrap().contains("find_package(llama REQUIRED)"));
+    assert!(whisper_patch(&source.replace("1.9.5", "1.9.6")).is_err());
+    assert!(whisper_patch(&format!("{source}\n{CMAKE}")).is_err());
 }
 
 #[cfg(test)]

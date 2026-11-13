@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- macOS HEAD-sync 在同步 ggml 和 llama.cpp 后修复依赖方的旧动态库链接，并在没有待升级公式时继续执行链接审计。
+- 项目依赖滚动更新记录前后文件摘要，后续可识别仍待审核的更新草稿。
+
 - 桌面常用界面文字的中英对应关系迁入 JSON，并校验重复条目和格式占位符。新增英文项目入口及 Windows 构建与 Scoop 重部署说明。
 - Windows x64 新增当前 PowerShell 的 MSVC 构建入口，核对编译器、链接器和 SDK，失败时恢复进程环境。
 - Windows Scoop 重部署在安装前识别跨 bucket 同名冲突和被清单省略的已安装项目，避免重复安装或覆盖现有来源。

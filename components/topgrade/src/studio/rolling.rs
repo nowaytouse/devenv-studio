@@ -2,6 +2,7 @@
 mod files;
 mod plan;
 mod process;
+mod receipt;
 mod specialized;
 
 use std::{
@@ -108,6 +109,7 @@ enum Status {
     Discovered,
     UpstreamMissing,
     Retryable,
+    PendingReview,
     PolicySkipped,
     Skipped,
 }
@@ -118,7 +120,7 @@ impl Status {
     }
 
     fn deferred(self) -> bool {
-        matches!(self, Self::Skipped | Self::UpstreamMissing)
+        matches!(self, Self::PendingReview | Self::Skipped | Self::UpstreamMissing)
     }
 
     fn label(self) -> &'static str {
@@ -131,6 +133,7 @@ impl Status {
             Self::Discovered => "DISCOVERY NEEDS REVIEW",
             Self::UpstreamMissing => "UPSTREAM_MISSING",
             Self::Retryable => "RETRYABLE",
+            Self::PendingReview => "PENDING REVIEW",
             Self::PolicySkipped => "SKIPPED BY POLICY",
             Self::Skipped => "SKIPPED",
         }
@@ -214,20 +217,28 @@ fn process_repo(
         return Ok((true, 0));
     }
     let stem = files::repo_stem(repo)?;
-    let before = if files::git_clean(repo, "initial")? {
+    let initial = files::git_status(repo, "initial")?;
+    let before = if initial.is_empty() {
+        let baseline = files::git_head(repo)?;
         let snapshot = files::snapshot(repo)?;
-        files::git_clean(repo, "after dependency snapshot")?.then_some(snapshot)
+        (files::git_status(repo, "after dependency snapshot")?.is_empty() && files::git_head(repo)? == baseline)
+            .then_some((baseline, snapshot))
     } else {
         None
     };
     let mut log = super::create_file(&run.join(format!("{stem}.log")))?;
     writeln!(log, "# initial worktree clean: {}", before.is_some())?;
-    let Some(before) = before else {
-        writeln!(
-            log,
-            "# {} dependency surfaces deferred: uncommitted project changes",
-            surfaces.len()
-        )?;
+    let Some((baseline, before)) = before else {
+        let known = receipt::pending(repo, run, &stem, &initial)?;
+        let (status, reason) = match known {
+            Some(receipt) => (
+                Status::PendingReview,
+                format!("prior rolling update awaiting review; evidence: {}", receipt.display()),
+            ),
+            None => (Status::Skipped, "uncommitted project changes".into()),
+        };
+        writeln!(log, "# {} dependency surfaces deferred: {reason}", surfaces.len())?;
+        println!("{}: {} — {reason}", repo.display(), status.label());
         log.sync_data()?;
         for surface in surfaces {
             Record {
@@ -236,9 +247,9 @@ fn process_repo(
                 repo,
                 surface: surface.name,
                 level: surface.level,
-                status: Status::Skipped,
+                status,
                 changed: Vec::new(),
-                failures: vec!["uncommitted project changes".into()],
+                failures: vec![reason.clone()],
                 duration_s: 0.0,
             }
             .persist(history)?;
@@ -246,8 +257,24 @@ fn process_repo(
         return Ok((true, surfaces.len()));
     };
     let backup = files::backup(repo, &before, run, &stem)?;
-    writeln!(log, "# repository: {}\n# backup: {}", repo.display(), backup.display())?;
-    let mut current = before;
+    ensure!(
+        files::git_head(repo)? == baseline && files::git_status(repo, "after dependency backup")?.is_empty(),
+        "Git baseline changed before rolling update in {}",
+        repo.display()
+    );
+    receipt::invalidate(run, &stem)?;
+    writeln!(
+        log,
+        "# repository: {}\n# Git baseline: {baseline}\n# backup: {}",
+        repo.display(),
+        backup.display()
+    )?;
+    let mut current = files::snapshot(repo)?;
+    ensure!(
+        current == before,
+        "Dependency files changed after backup in {}",
+        repo.display()
+    );
     let mut verified = true;
     let mut deferred = 0;
     for surface in surfaces {
@@ -312,9 +339,11 @@ fn process_repo(
             break;
         }
     }
-    let clean = files::git_clean(repo, "final")?;
-    writeln!(log, "# final worktree clean: {clean}")?;
+    let status = files::git_status(repo, "final")?;
+    verified &= files::git_head(repo)? == baseline;
+    writeln!(log, "# final worktree clean: {}", status.is_empty())?;
     log.sync_all()?;
+    receipt::save(repo, run, &stem, baseline, (&before, &current), &status, verified)?;
     Ok((verified, deferred))
 }
 
@@ -489,6 +518,54 @@ mod tests {
             process_repo(&repo, &[missing], &missing_run, "missing-tool-fixture", &history)?,
             (true, 1)
         );
+        let successful = root.join("successful");
+        files::create_private_dir(&successful)?;
+        assert_eq!(
+            process_repo(
+                &repo,
+                &[surface("update fixture", "printf generated > Cargo.lock")],
+                &successful,
+                "successful",
+                &history
+            )?,
+            (true, 0)
+        );
+        let stem = files::repo_stem(&repo)?;
+        let evidence = successful.join(format!("{stem}.receipt.json"));
+        let payload: serde_json::Value = serde_json::from_slice(&std::fs::read(&evidence)?)?;
+        assert_eq!(payload["baseline"], files::git_head(&repo)?);
+        assert_ne!(
+            payload["changes"]["Cargo.lock"]["before"],
+            payload["changes"]["Cargo.lock"]["after"]
+        );
+        let pending = root.join("pending");
+        files::create_private_dir(&pending)?;
+        assert_eq!(
+            process_repo(
+                &repo,
+                &[surface("must defer", "printf should-not-run > notes.txt")],
+                &pending,
+                "pending",
+                &history
+            )?,
+            (true, 1)
+        );
+        assert_eq!(std::fs::read(repo.join("Cargo.lock"))?, b"generated");
+        std::fs::write(repo.join("Cargo.lock"), b"user edit")?;
+        let edited = root.join("edited");
+        files::create_private_dir(&edited)?;
+        assert_eq!(
+            process_repo(
+                &repo,
+                &[surface("must defer", "printf should-not-run > notes.txt")],
+                &edited,
+                "edited",
+                &history
+            )?,
+            (true, 1)
+        );
+        assert_eq!(std::fs::read(repo.join("Cargo.lock"))?, b"user edit");
+        std::fs::write(repo.join("Cargo.lock"), b"initial")?;
         let surfaces = [
             surface("partial fixture", "printf changed > Cargo.lock; exit 42"),
             surface("next fixture", "printf should-not-run > notes.txt"),
@@ -522,11 +599,19 @@ mod tests {
             .lines()
             .map(serde_json::from_str::<serde_json::Value>)
             .collect::<std::result::Result<Vec<_>, _>>()?;
-        let [missing, record, dirty] = records.as_slice() else {
+        let [missing, successful, pending, edited, record, dirty] = records.as_slice() else {
             panic!("Expected a missing-tool, a partial-write and a dirty-worktree record")
         };
         assert_eq!(missing["run"], "missing-tool-fixture");
         assert_eq!(missing["status"], "SKIPPED");
+        assert_eq!(successful["status"], "ROLLED");
+        assert_eq!(pending["status"], "PENDING_REVIEW");
+        assert!(
+            pending["failures"][0]
+                .as_str()
+                .is_some_and(|value| value.contains(&*evidence.to_string_lossy()))
+        );
+        assert_eq!(edited["status"], "SKIPPED");
         assert_eq!(dirty["run"], "dirty-fixture");
         assert_eq!(dirty["status"], "SKIPPED");
         assert_eq!(dirty["failures"], serde_json::json!(["uncommitted project changes"]));

@@ -14,7 +14,6 @@ require "securerandom"
 
 class JpegXlTransaction
   NAME = /\A[a-zA-Z0-9][a-zA-Z0-9_.+@-]*\z/
-  STAGE = /\Ajpeg-xl-[a-f0-9]{24}\z/
   LIBRARY = /\Alibjxl(?:_[a-z0-9_]+)?(?:\.[0-9]+)*\.dylib\z/
   OPTIONS = /\A--(?:with|without)-[a-zA-Z0-9_.+@-]+\z/
   BUILD_TOOLS = %w[bison util-macros xtrans lzip make].freeze
@@ -33,7 +32,15 @@ class JpegXlTransaction
   def initialize(state)
     @state = Pathname(state)
     private_directory(@state)
-    @journal = @state/"jpeg-xl-active.json"
+    @journal = @state/"#{transaction_name}-active.json"
+  end
+
+  def transaction_name
+    "jpeg-xl"
+  end
+
+  def providers
+    ["jpeg-xl"]
   end
 
   def protected?(short)
@@ -175,12 +182,16 @@ class JpegXlTransaction
     [row, active]
   end
 
-  def direct_links(keg)
+  def dylib_links(keg)
     Keg.new(keg).binary_executable_or_library_files.flat_map do |file|
       next [] unless file.arch_compatible?(Hardware::CPU.arch)
 
       file.dynamically_linked_libraries(except: :DYLIB_USE_WEAK_LINK)
-    end.uniq.grep(%r{\A(?:#{Regexp.escape(opt("jpeg-xl").to_s)}/|#{Regexp.escape(rack("jpeg-xl").to_s)}/|@rpath/|@loader_path/|@executable_path/)}).select do |link|
+    end.uniq
+  end
+
+  def direct_links(keg)
+    dylib_links(keg).grep(%r{\A(?:#{Regexp.escape(opt("jpeg-xl").to_s)}/|#{Regexp.escape(rack("jpeg-xl").to_s)}/|@rpath/|@loader_path/|@executable_path/)}).select do |link|
       LIBRARY.match?(File.basename(link))
     end
   end
@@ -293,7 +304,7 @@ class JpegXlTransaction
     data = JSON.generate(@record)
     raise "JPEG XL journal is too large" if data.bytesize > MAX_JOURNAL_BYTES
 
-    temp = @state/".jpeg-xl-journal-#{SecureRandom.hex(12)}"
+    temp = @state/".#{transaction_name}-journal-#{SecureRandom.hex(12)}"
     temp.open("wx", 0o600) do |file|
       file.write(data)
       file.fsync
@@ -308,7 +319,7 @@ class JpegXlTransaction
     raise "An unfinished JPEG XL transaction exists" if present?(@journal)
     raise "JPEG XL transaction directory must share the Cellar volume" unless @state.stat.dev == HOMEBREW_CELLAR.stat.dev
 
-    @stage = @state/"jpeg-xl-#{SecureRandom.hex(12)}"
+    @stage = @state/"#{transaction_name}-#{SecureRandom.hex(12)}"
     @stage.mkdir(0o700)
     (@stage/"backup").mkdir(0o700)
     rows.each do |row|
@@ -461,7 +472,7 @@ class JpegXlTransaction
 
     @record = JSON.parse(data)
     stage = @record.fetch("stage")
-    raise "Invalid JPEG XL journal directory" unless STAGE.match?(stage)
+    raise "Invalid JPEG XL journal directory" unless stage.is_a?(String) && stage.match?(/\A#{Regexp.escape(transaction_name)}-[a-f0-9]{24}\z/)
 
     @stage = @state/stage
     private_directory(@stage)
@@ -481,12 +492,13 @@ class JpegXlTransaction
 
       short
     end
-    raise "Invalid JPEG XL journal package group" unless names.first == "jpeg-xl" && names.uniq == names &&
-      names.none? { |short| protected?(short) } &&
+    raise "Invalid #{transaction_name} journal package group" unless names.take(providers.size) == providers &&
+      names.uniq == names && names.drop(providers.size).none? { |short| protected?(short) } &&
       tools.is_a?(Hash) && (tools.keys - BUILD_TOOLS).empty? && tools.values.all? { |version| NAME.match?(version) } &&
       (tools.keys & names).empty? && (touched - names).empty? && touched.uniq == touched &&
       [true, false].include?(@record.fetch("committed")) &&
-      [true, false].include?(repair) && (!repair || !touched.include?("jpeg-xl"))
+      [true, false].include?(repair) && (providers == ["jpeg-xl"] || repair) &&
+      (!repair || (touched & providers).empty?)
   end
 
   def recover
@@ -502,11 +514,11 @@ class JpegXlTransaction
       reset_linkage_cache(rows.values_at(*touched))
       # Repair starts from broken linkage. Check the untouched provider and exact restored kegs.
       if @record.fetch("repair", false)
-        verify_original(rows.fetch("jpeg-xl"))
+        providers.each { |provider| verify_original(rows.fetch(provider)) }
       else
         verify_linkage
       end
-      puts "JPEG XL transaction rolled back"
+      puts "#{transaction_name} transaction rolled back"
     end
     @journal.unlink
     sync_directory(@state)
@@ -551,7 +563,11 @@ class JpegXlTransaction
   def remove_committed_backup
     FileUtils.remove_entry_secure(@stage/"backup") if (@stage/"backup").directory?
   rescue SystemCallError => error
-    warn "JPEG XL upgrade succeeded; could not remove duplicate backup in #{@stage}: #{error}"
+    warn "#{linkage_group} upgrade succeeded; could not remove duplicate backup in #{@stage}: #{error}"
+  end
+
+  def linkage_group
+    "JPEG XL"
   end
 
   def rebuild_consumers(consumers, candidate, tools)
@@ -560,7 +576,7 @@ class JpegXlTransaction
 
       Formula.cache.clear
       Formulary.clear_cache
-      raise "JPEG XL dependency plan changed during rebuild" unless (preflight(row).to_a - tools.to_a).empty?
+      raise "#{linkage_group} dependency plan changed during rebuild" unless (preflight(row).to_a - tools.to_a).empty?
 
       mark(row)
       brew("reinstall", "--no-ask", "--build-from-source", "--formula", row.fetch("full"),
@@ -570,7 +586,7 @@ class JpegXlTransaction
     consumers.each do |row|
       active = keg_directory(record_target(opt(row.fetch("name")), row.fetch("name")))
       links = direct_links(active)
-      raise "#{row.fetch('full')} does not link the active JPEG XL keg" unless links.any? &&
+      raise "#{row.fetch('full')} does not link the active #{linkage_group} keg" unless links.any? &&
         links.all? { |link| link_satisfied?(link, candidate) }
     end
   end
@@ -587,7 +603,7 @@ class JpegXlTransaction
       begin
         recover
       rescue StandardError => recovery
-        raise "#{error.message}; JPEG XL recovery incomplete: #{recovery.message}; journal: #{@journal}"
+        raise "#{error.message}; #{linkage_group} recovery incomplete: #{recovery.message}; journal: #{@journal}"
       end
       raise error
     end
@@ -640,9 +656,110 @@ class JpegXlTransaction
   end
 end
 
+# Reuse the keg journal for consumers of the synchronized pair. The provider
+# kegs have already been selected by HEAD-sync and are verified read-only here.
+class GgmlLlamaRepair < JpegXlTransaction
+  PAIR_LIBRARY = /\Alib(?:ggml|llama|mtmd)(?:[-_][a-z0-9_]+)*(?:\.[0-9]+)*\.dylib\z/
+
+  def transaction_name
+    "ggml-llama"
+  end
+
+  def linkage_group
+    "ggml/llama.cpp"
+  end
+
+  def providers
+    %w[ggml llama.cpp]
+  end
+
+  def direct_links(keg)
+    dylib_links(keg).select do |link|
+      providers.any? { |provider| link.start_with?("#{opt(provider)}/", "#{rack(provider)}/") } ||
+        (link.start_with?("@") && PAIR_LIBRARY.match?(File.basename(link)))
+    end
+  end
+
+  def link_satisfied?(link, active)
+    provider = providers.find { |short| link.start_with?("#{opt(short)}/", "#{rack(short)}/") }
+    return false unless provider
+
+    file = Pathname(link)
+    file.file? && file.realpath.to_s.start_with?("#{active.fetch(provider)}/")
+  end
+
+  def pair_group(full, users)
+    raise "Unexpected synchronized provider group" unless full.all? && full.map { |formula| name(formula) } == providers
+
+    provider_rows = full.map { |formula| active_row(formula).first }
+    active = provider_rows.to_h { |row| [row.fetch("name"), original(row)] }
+    names = users.map { |user| name(user) }
+    raise "Ambiguous synchronized dependency group" unless names.uniq == names && (names & providers).empty?
+
+    broken = users.filter_map do |user|
+      row, keg = active_row(user)
+      links = direct_links(keg)
+      next if links.all? { |link| link_satisfied?(link, active) }
+
+      raise "Protected formula has stale #{linkage_group} linkage: #{user}" if protected?(row.fetch("name"))
+      raise "Ambiguous #{linkage_group} load path in #{user}" if links.any? { |link| link.start_with?("@") }
+
+      row.merge("links" => links)
+    end
+    [provider_rows, active, broken]
+  end
+
+  def plan_pair(full, users)
+    _, active, broken = pair_group(full, users)
+    return "current" if broken.empty?
+
+    whisper = broken.find do |row|
+      row.fetch("name") == "whisper.cpp" && row.fetch("source").take(2) == ["homebrew/core", "stable"]
+    end
+    if whisper && resolve(whisper).version.to_s == "1.9.5" &&
+        (active.fetch("llama.cpp")/"lib/cmake/llama/llama-config-version.cmake").read.match?(
+          /^set\(PACKAGE_VERSION "[1-9][0-9]*\./,
+        )
+      "whisper-compat"
+    else
+      "repair"
+    end
+  end
+
+  def repair_pair(full, users)
+    %w[INT TERM HUP].each { |signal| Signal.trap(signal) { @signal ||= signal } }
+    provider_rows, active, broken = pair_group(full, users)
+    return if broken.empty?
+
+    tools = broken.flat_map { |row| preflight(row).to_a }.to_h
+    puts "#{linkage_group} linkage repair: #{broken.map { |row| row.fetch('full') }.join(', ')}"
+    rows = provider_rows + broken
+    transact(rows, tools, repair: true) do
+      provider_rows.each { |row| verify_original(row) }
+      rebuild_consumers(dependency_order(broken), active, tools)
+      reset_linkage_cache(broken)
+      provider_rows.each { |row| verify_original(row) }
+    end
+    puts "#{linkage_group} consumer linkage repaired and verified"
+  end
+end
+
 if $PROGRAM_NAME == __FILE__
   File.umask(0o077)
   mode, state, full, *users = ARGV
+  if %w[pair-plan pair-repair].include?(mode)
+    llama, *consumers = users
+    pair = GgmlLlamaRepair.new(state)
+    if mode == "pair-plan"
+      puts pair.plan_pair([full, llama], consumers)
+    else
+      pair.repair_pair([full, llama], consumers)
+    end
+    exit
+  elsif mode == "pair-recover"
+    GgmlLlamaRepair.new(state).recover
+    exit
+  end
   transaction = JpegXlTransaction.new(state)
   case mode
   when "recover" then transaction.recover
