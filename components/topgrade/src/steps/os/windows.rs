@@ -15,6 +15,10 @@ use crate::terminal::{print_separator, print_warning};
 use crate::utils::{require, which};
 use crate::{error::SkipStep, steps::git::RepoStep};
 
+mod scoop;
+mod winget;
+mod wsl_update;
+
 pub fn run_chocolatey(ctx: &ExecutionContext) -> Result<()> {
     let choco = require("choco")?;
     let yes = ctx.config().yes(Step::Chocolatey);
@@ -40,7 +44,7 @@ pub fn run_winget(ctx: &ExecutionContext) -> Result<()> {
         let sudo = ctx.require_sudo()?;
         sudo.execute(ctx, &winget)?
     } else {
-        ctx.execute(winget)
+        ctx.execute(&winget)
     };
 
     let mut args = vec!["upgrade", "--all"];
@@ -50,22 +54,11 @@ pub fn run_winget(ctx: &ExecutionContext) -> Result<()> {
 
     command.args(args).status_checked()?;
 
-    Ok(())
+    winget::verify_after_upgrade(ctx, &winget)
 }
 
 pub fn run_scoop(ctx: &ExecutionContext) -> Result<()> {
-    let scoop = require("scoop")?;
-
-    print_separator("Scoop");
-
-    ctx.execute(&scoop).args(["update"]).status_checked()?;
-    ctx.execute(&scoop).args(["update", "*"]).status_checked()?;
-
-    if ctx.config().cleanup() {
-        ctx.execute(&scoop).args(["cleanup", "*"]).status_checked()?;
-        ctx.execute(&scoop).args(["cache", "rm", "-a"]).status_checked()?
-    }
-    Ok(())
+    scoop::run(ctx)
 }
 
 pub fn update_wsl(ctx: &ExecutionContext) -> Result<()> {
@@ -77,13 +70,7 @@ pub fn update_wsl(ctx: &ExecutionContext) -> Result<()> {
 
     print_separator(t!("Update WSL"));
 
-    ctx.execute(wsl)
-        .args(["--update"])
-        .arg_if(ctx.config().wsl_update_pre_release(), "--pre-release")
-        .arg_if(ctx.config().wsl_update_use_web_download(), "--web-download")
-        .status_checked()?;
-
-    Ok(())
+    wsl_update::run(ctx, &wsl)
 }
 
 /// Detect if WSL is installed or not.

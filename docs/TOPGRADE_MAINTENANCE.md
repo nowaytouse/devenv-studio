@@ -7,6 +7,16 @@
 
 Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来匹配软件。清单显示导出范围和可获得的版本，升级可用性由终端的核对命令确定。只有官方社区源且 ID 唯一的行提供可复制命令。升级在终端处理，Studio 的部署记录涵盖由 Studio 执行的任务。Windows LTSC 2021 和 2024 仍按各自的目标和主机检查控制配置写入。 [WinGet 导出](https://learn.microsoft.com/en-us/windows/package-manager/winget/export) · [WinGet 核对与升级](https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade)
 
+## Windows 更新完成状态
+
+Scoop 使用现有 PowerShell 入口并显式传播子脚本退出码。更新后读取本地状态对象，仍有非 held 的过期包、失败安装、缺失依赖或已移除清单时报告未完成。状态按结构化字段判断。只有确认更新完成才执行可选清理。预演不会运行更新或额外状态查询。
+
+WinGet 在升级后导出来源清单，并逐个核对默认参与搜索的来源，逐一检查所有适用来源，来源错误优先于剩余候选导致的部分完成。显式来源、用户的版本限制及未知版本包继续遵守 WinGet 原有范围；剩余候选报告未完成。该核验不等于覆盖未纳入 WinGet 的软件。
+
+WSL 原生更新遇到不随界面语言变化的 HTTP 403／429 错误码时，可通过 WinGet 社区源的精确 `Microsoft.WSL` 稳定包更新或确认无适用更新。其他安装错误继续失败，预发布配置不会改走稳定渠道；备用升级返回成功后还会核对该包的剩余候选。GitHub 的匿名请求限额可能自行恢复，不把一次重试成功当作已永久消除限流。
+
+GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来源的副本及原生警告会报告未完成，即使原命令最后输出已是最新并返回 0。没有符合条件的 GitHub 跟踪项时，直接返回盘点结果。其他安装器管理的副本保留原有文件和元数据。自定义更新器与 macOS 原生验证器保持各自的责任范围。
+
 ## Windows ClamAV 病毒库更新
 
 如果已经在 `%LOCALAPPDATA%\ClamAV\freshclam.conf` 配置了可用的 FreshClam，可以在现有的 `[windows]` 段加入 `clamav_user_config = true`。确保 `freshclam.exe` 在 PATH 中，并启用原生 `clam_av_db` 步骤。迁移时可移除同一病毒库的自定义更新入口，以免重复运行。先用 `topgrade --only clam_av_db --dry-run` 核对配置及调度范围，预演不会更新病毒库。
@@ -15,7 +25,7 @@ Windows 读取使用 WinGet 的版本化导出，可能访问已配置的源来�
 
 ## macOS Topgrade
 
-当前组件已同步上游 [v17.16.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) 与随后提交 `77eef190429850607c41cedfec904f43d66c8394`。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。滚动依赖维护会跳过有未提交改动的工作区。
+当前组件已同步上游 [v17.16.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) 与随后官方 main 提交 [`b7ae844e64fb3bd32cd06c00859884f8b916635d`](https://github.com/topgrade-rs/topgrade/commit/b7ae844e64fb3bd32cd06c00859884f8b916635d)。在原同步点 `77eef190429850607c41cedfec904f43d66c8394` 之后，继续纳入 Vim／Neovim 的可选 `vim.show_output` 配置与官方发布证明工作流更新；程序版本仍为 17.16.0，官方发布跟踪文件继续记录已审核的稳定版本标签。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。滚动依赖维护会跳过有未提交改动的工作区。
 
 `Project Source Indexes` 使用 Repomix 和 LeanCTX 为 `~/Downloads/GitHub` 下的 Git 项目更新私有索引。直接运行 `~/.local/bin/topgrade-project-indexes.py /path/to/checkout` 可单独刷新项目。索引只读取已提交的普通源码文件，先排除私有目录、再执行秘密扫描，最终仅保存相对路径和 token 计数。`${XDG_STATE_HOME:-$HOME/.local/state}/project-indexes/<checkout-name>/latest.json` 记录完整提交、工具版本、UTC 生成时间及检出目录的摘要。刷新时会将过时的已知索引移入 `history/`，将格式、路径或内容边界校验失败的普通私有索引移入 `quarantine/`。原文件保留以备核对。生成失败会报告错误，此时没有已核验的新索引，历史文件仍可查阅。
 

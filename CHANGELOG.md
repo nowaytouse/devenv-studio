@@ -5,6 +5,10 @@
 - macOS HEAD-sync 在同步 ggml 和 llama.cpp 后修复依赖方的旧动态库链接，并在没有待升级公式时继续执行链接审计。
 - 项目依赖滚动更新记录前后文件摘要，后续可识别仍待审核的更新草稿。
 
+- Topgrade 修复 Scoop 子脚本失败后仍成功退出、WinGet 部分来源或剩余候选未核验、GitHub 技能缺元数据却汇总成功的问题。WSL 稳定版更新遭遇 HTTP 403／429 时可通过精确的 WinGet 官方社区包核验，保留预发布选择和其他失败。
+
+- Topgrade 组件继续同步官方 main 至 `b7ae844e64fb3bd32cd06c00859884f8b916635d`，加入可选的 Vim／Neovim 插件更新输出，并保留 Windows 驱动排除、WSL 与 PowerShell 修复。发布版本仍为 17.16.0。
+
 - 桌面常用界面文字的中英对应关系迁入 JSON，并校验重复条目和格式占位符。新增英文项目入口及 Windows 构建与 Scoop 重部署说明。
 - Windows x64 新增当前 PowerShell 的 MSVC 构建入口，核对编译器、链接器和 SDK，失败时恢复进程环境。
 - Windows Scoop 重部署在安装前识别跨 bucket 同名冲突和被清单省略的已安装项目，避免重复安装或覆盖现有来源。

@@ -37,7 +37,7 @@ use crate::utils::{
     PathExt, check_is_python_2_or_shim, is_installed_via_homebrew, require, require_one, require_option, which,
 };
 use crate::{
-    error::{DryRun, SkipStep, StepFailed},
+    error::{DryRun, PartialStep, SkipStep, StepFailed, TopgradeError},
     terminal::print_warning,
 };
 
@@ -2027,7 +2027,221 @@ fn update_github_cli_skills(run_type: RunType, gh: &Path, updater: Option<&Path>
             .status_checked();
     }
 
-    run_type.execute(gh).args(["skill", "update", "--all"]).status_checked()
+    if run_type.dry() {
+        return run_type.execute(gh).args(["skill", "update", "--all"]).status_checked();
+    }
+
+    // JSON describes GitHub tracking, not ownership by another installer. Do not
+    // infer a repository or inject metadata into copies managed by another tool.
+    let ExecutorOutput::Wet(inventory) = run_type
+        .execute(gh)
+        .args(["skill", "list", "--json", "sourceURL,pinned"])
+        .output()?
+    else {
+        return Ok(());
+    };
+    std::io::stderr().lock().write_all(&inventory.stderr)?;
+    if !inventory.status.success() {
+        std::io::stdout().lock().write_all(&inventory.stdout)?;
+        return Err(github_cli_skills_process_error(&inventory, "gh skill list"));
+    }
+    let skills: Vec<GithubCliSkillTracking> = serde_json::from_slice(&inventory.stdout)
+        .wrap_err("Could not verify GitHub CLI skill tracking from JSON; no skills were updated")?;
+    let (untracked, tracked) = skills
+        .iter()
+        .filter(|skill| !skill.pinned)
+        .fold((0, 0), |(missing, tracked), skill| {
+            if skill.source_url.trim().is_empty() {
+                (missing + 1, tracked)
+            } else {
+                (missing, tracked + 1)
+            }
+        });
+    let inventory_warnings = github_cli_skills_warning_count(&inventory.stderr);
+    if tracked == 0 {
+        verify_github_cli_skills_coverage(untracked, inventory_warnings)?;
+        println!("No unpinned GitHub-tracked skills to update.");
+        return Ok(());
+    }
+
+    let ExecutorOutput::Wet(output) = run_type.execute(gh).args(["skill", "update", "--all"]).output()? else {
+        return Ok(());
+    };
+    std::io::stdout().lock().write_all(&output.stdout)?;
+    std::io::stderr().lock().write_all(&output.stderr)?;
+    verify_github_cli_skills_output(&output, untracked, inventory_warnings)
+}
+
+#[derive(Deserialize)]
+struct GithubCliSkillTracking {
+    #[serde(rename = "sourceURL")]
+    source_url: String,
+    pinned: bool,
+}
+
+fn github_cli_skills_process_error(output: &std::process::Output, command: &str) -> color_eyre::eyre::Report {
+    TopgradeError::ProcessFailedWithOutput(
+        command.into(),
+        output.status,
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    )
+    .into()
+}
+
+fn github_cli_skills_warning_count(output: &[u8]) -> usize {
+    static ANSI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[[0-?]*[ -/]*[@-~]").expect("static ANSI regex"));
+    let plain = ANSI.replace_all(output, &b""[..]);
+    String::from_utf8_lossy(&plain)
+        .lines()
+        .filter(|line| {
+            let line = line.trim().to_ascii_lowercase();
+            line.contains("has no github metadata")
+                || line.starts_with("skipping ")
+                || line.starts_with(['!', '⚠', '✗', '✘'])
+                || line.starts_with("warning:")
+                || line.starts_with("error:")
+        })
+        .count()
+}
+
+fn verify_github_cli_skills_output(
+    output: &std::process::Output,
+    untracked: usize,
+    inventory_warnings: usize,
+) -> Result<()> {
+    // A real process failure must remain a failure, even if it also printed
+    // metadata warnings or an optimistic "up to date" message.
+    if !output.status.success() {
+        return Err(github_cli_skills_process_error(output, "gh skill update --all"));
+    }
+    let warnings = inventory_warnings
+        + github_cli_skills_warning_count(&output.stdout)
+        + github_cli_skills_warning_count(&output.stderr);
+    verify_github_cli_skills_coverage(untracked, warnings)
+}
+
+fn verify_github_cli_skills_coverage(untracked: usize, warnings: usize) -> Result<()> {
+    if untracked > 0 || warnings > 0 {
+        return Err(PartialStep(format!(
+            "GitHub CLI skills update is incomplete: {untracked} unpinned skill(s) without GitHub metadata remain unverified; \
+             {warnings} warning line(s) were reported."
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod github_cli_skills_output_tests {
+    use super::{GithubCliSkillTracking, update_github_cli_skills, verify_github_cli_skills_output};
+    use crate::error::{PartialStep, TopgradeError};
+    use crate::execution_context::RunType;
+    use std::path::Path;
+    use std::process::{ExitStatus, Output};
+
+    fn output(code: u32, stdout: &str, stderr: &str) -> Output {
+        #[cfg(unix)]
+        let status = {
+            use std::os::unix::process::ExitStatusExt;
+            ExitStatus::from_raw((code as i32) << 8)
+        };
+        #[cfg(windows)]
+        let status = {
+            use std::os::windows::process::ExitStatusExt;
+            ExitStatus::from_raw(code)
+        };
+        Output {
+            status,
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn missing_metadata_and_up_to_date_are_partial_despite_exit_zero() {
+        let output = output(
+            0,
+            "",
+            "\u{1b}[33m!\u{1b}[0m example has no GitHub metadata\nAll skills are up to date.\n",
+        );
+        let error = verify_github_cli_skills_output(&output, 56, 0).unwrap_err();
+        assert!(error.downcast_ref::<PartialStep>().is_some());
+        assert!(error.to_string().contains("56 unpinned skill(s)"));
+        assert!(error.to_string().contains("1 warning line(s)"));
+    }
+
+    #[test]
+    fn json_tracking_gaps_are_partial_even_without_a_text_warning() {
+        let skills: Vec<GithubCliSkillTracking> =
+            serde_json::from_str(r#"[{"sourceURL":"","pinned":false},{"sourceURL":"","pinned":true}]"#).unwrap();
+        let untracked = skills
+            .iter()
+            .filter(|skill| !skill.pinned && skill.source_url.trim().is_empty())
+            .count();
+        assert_eq!(untracked, 1);
+        assert!(
+            verify_github_cli_skills_output(&output(0, "", "All skills are up to date.\n"), untracked, 0)
+                .unwrap_err()
+                .downcast_ref::<PartialStep>()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn skipping_or_inventory_warning_prevents_clean_success() {
+        for (stderr, inventory_warnings) in [("! Skipping example: could not resolve source\n", 0), ("", 1)] {
+            assert!(
+                verify_github_cli_skills_output(
+                    &output(0, "All skills are up to date.\n", stderr),
+                    0,
+                    inventory_warnings
+                )
+                .unwrap_err()
+                .downcast_ref::<PartialStep>()
+                .is_some()
+            );
+        }
+    }
+
+    #[test]
+    fn native_nonzero_preserves_failure_and_diagnostics() {
+        let error = verify_github_cli_skills_output(&output(23, "partial progress\n", "! metadata warning\n"), 56, 0)
+            .unwrap_err();
+        match error.downcast_ref::<TopgradeError>().unwrap() {
+            TopgradeError::ProcessFailedWithOutput(command, status, diagnostics) => {
+                assert_eq!(command, "gh skill update --all");
+                assert_eq!(status.code(), Some(23));
+                assert!(diagnostics.contains("partial progress"));
+                assert!(diagnostics.contains("metadata warning"));
+            }
+            other => panic!("Unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn clean_success_and_intentional_pins_remain_successful() {
+        for text in [
+            "All skills are up to date.\n",
+            "Updated example\n",
+            "Updated my-skipping-helper\n",
+            "⊘ example is pinned to v1 (skipped)\nAll skills are up to date.\n",
+        ] {
+            verify_github_cli_skills_output(&output(0, "", text), 0, 0).unwrap();
+        }
+    }
+
+    #[test]
+    fn dry_run_never_starts_a_native_command_or_updater() {
+        let missing_gh = Path::new("nonexistent-gh-skill-test-command");
+        let missing_updater = Path::new("nonexistent-gh-skill-test-updater");
+        for updater in [None, Some(missing_updater)] {
+            update_github_cli_skills(RunType::Dry, missing_gh, updater).unwrap();
+        }
+    }
 }
 
 pub fn update_julia_packages(ctx: &ExecutionContext) -> Result<()> {
@@ -2124,9 +2338,62 @@ mod helm_tests {
 
     #[test]
     fn github_cli_native_skills_update_keeps_all_arguments() {
-        let (_dir, gh, calls) =
-            fake_helm(r#"test "$#" = 3 && test "$1" = skill && test "$2" = update && test "$3" = --all || exit 99"#);
+        let (_dir, gh, calls) = fake_helm(
+            r#"test "$1" = skill || exit 99
+case "$2" in
+list)
+  test "$#" = 4 && test "$3" = --json && test "$4" = sourceURL,pinned || exit 99
+  printf '[{"sourceURL":"https://github.com/example/skills","pinned":false}]\n'
+  ;;
+update)
+  test "$#" = 3 && test "$3" = --all || exit 99
+  printf 'All skills are up to date.\n' >&2
+  ;;
+*) exit 99 ;;
+esac"#,
+        );
         update_github_cli_skills(RunType::Wet, &gh, None).unwrap();
+        assert_eq!(call_count(&calls), 2);
+    }
+
+    #[test]
+    fn github_cli_skills_skips_native_update_when_no_tracked_skill_is_eligible() {
+        for (inventory, partial) in [
+            (r#"[]"#, false),
+            (
+                r#"[{"sourceURL":"https://github.com/example/skills","pinned":true}]"#,
+                false,
+            ),
+            (r#"[{"sourceURL":"","pinned":false}]"#, true),
+        ] {
+            let script = format!("test \"$2\" = list || exit 99\nprintf '%s\\n' '{inventory}'");
+            let (_dir, gh, calls) = fake_helm(&script);
+            let result = update_github_cli_skills(RunType::Wet, &gh, None);
+            if partial {
+                assert!(
+                    result
+                        .unwrap_err()
+                        .downcast_ref::<crate::error::PartialStep>()
+                        .is_some()
+                );
+            } else {
+                result.unwrap();
+            }
+            assert_eq!(call_count(&calls), 1);
+        }
+    }
+
+    #[test]
+    fn github_cli_skills_inventory_failure_does_not_start_an_update() {
+        let (_dir, gh, calls) = fake_helm("echo 'inventory unavailable' >&2\nexit 23");
+        let error = update_github_cli_skills(RunType::Wet, &gh, None).unwrap_err();
+        match error.downcast_ref::<TopgradeError>().unwrap() {
+            TopgradeError::ProcessFailedWithOutput(_, status, diagnostics) => {
+                assert_eq!(status.code(), Some(23));
+                assert!(diagnostics.contains("inventory unavailable"));
+            }
+            other => panic!("Unexpected error: {other:?}"),
+        }
         assert_eq!(call_count(&calls), 1);
     }
 

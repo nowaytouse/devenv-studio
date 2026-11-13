@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- *(vim)* Add opt-in `vim.show_output` for successful Vim/Neovim plugin upgrade output, following upstream [#2415](https://github.com/topgrade-rs/topgrade/pull/2415).
+
+### Fixed
+- *(windows)* Preserve nested Scoop PowerShell failures and verify unresolved packages after updates, respecting held packages and dry runs.
+- *(winget)* Verify remaining candidates separately for each implicit source instead of treating a zero aggregate exit status as complete coverage.
+- *(wsl)* On an HTTP 403/429 rejection, allow the exact Microsoft.WSL stable package from WinGet as a verified fallback; preserve the prerelease channel and unrelated errors.
+- *(github-cli-skills)* Report untracked skills and native warnings as incomplete, preserve native failures, and leave other installers' metadata and ownership unchanged.
+
 ## [17.16.0](https://github.com/topgrade-rs/topgrade/compare/v17.15.0...v17.16.0) - 2026-11-09
 
 ### Added
