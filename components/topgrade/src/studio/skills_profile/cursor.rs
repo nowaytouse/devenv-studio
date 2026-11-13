@@ -25,14 +25,14 @@ static SKIPPED: LazyLock<Regex> =
 static ANSI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[[0-?]*[ -/]*[@-~]").expect("static ANSI pattern"));
 
 #[derive(PartialEq, Eq)]
-struct Entry {
+pub(in crate::studio) struct Entry {
     hash: String,
     mode: u32,
 }
 
-type Tree = BTreeMap<PathBuf, Entry>;
+pub(in crate::studio) type Tree = BTreeMap<PathBuf, Entry>;
 
-fn tree(root: &Path) -> Result<Tree> {
+pub(in crate::studio) fn tree(root: &Path) -> Result<Tree> {
     check_dir(root, false)?;
     ensure!(root.canonicalize()? == root, "Unexpected Cursor skill root");
     let mut files = Tree::new();
@@ -89,12 +89,12 @@ fn copy(root: &Path, stage: &Path, path: &Path, entry: &Entry) -> Result<()> {
     atomic_write(&stage.join(path), &data, entry.mode)
 }
 
-fn exchange(left: &Path, right: &Path) -> Result<()> {
+pub(in crate::studio) fn exchange(left: &Path, right: &Path) -> Result<()> {
     let left = CString::new(left.as_os_str().as_bytes())?;
     let right = CString::new(right.as_os_str().as_bytes())?;
     // One rename keeps the prior installation at the private backup path even on abrupt exit.
     if unsafe { nix::libc::renamex_np(left.as_ptr(), right.as_ptr(), nix::libc::RENAME_SWAP) } != 0 {
-        return Err(io::Error::last_os_error()).context("Atomically exchange Cursor skill and backup");
+        return Err(io::Error::last_os_error()).context("Atomically exchange skill and backup");
     }
     Ok(())
 }

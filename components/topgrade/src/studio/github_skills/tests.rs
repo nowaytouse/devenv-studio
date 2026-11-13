@@ -55,7 +55,7 @@ fn row(path: &Path, alias: &str, source: &str) -> Value {
 fn skill(path: &Path, name: &str, tree: Option<&str>) {
     fs::create_dir_all(path).unwrap();
     let metadata = tree.map_or_else(String::new, |tree| {
-        format!("metadata:\n  github-repo: {SOURCE}\n  github-path: skills/demo\n  github-tree-sha: {tree}\n")
+        format!("metadata:\n  github-repo: {SOURCE}\n  github-path: skills/demo\n  github-tree-sha: {tree}\n  github-ref: refs/tags/release/v1\n")
     });
     fs::write(
         path.join("SKILL.md"),
@@ -112,21 +112,48 @@ fn fake_read(args: &[&str], rows: &[Value], expected: &str) -> Result<Output> {
 }
 
 #[test]
-fn lossy_lock_is_immutable_for_current_and_pending_skills() {
-    for expected in [OLD, NEW] {
+fn staged_update_preserves_shared_lock_and_locally_edited_skills() {
+    for edited in [false, true] {
         let fixture = Fixture::new(OLD);
         let lock_path = fixture.lock(&json!({"version":3, "skills":{}, "lastSelectedAgents":["cursor"]}));
         let before = fs::read(&lock_path).unwrap();
-        let result = update(&fixture.home, &mut |args| fake_read(args, &fixture.rows, expected));
-        if expected == OLD {
-            assert_eq!(result.unwrap().updated, 0);
+        let live = fixture.github.join("SKILL.md");
+        let pristine = fs::read_to_string(&live).unwrap();
+        if edited {
+            fs::write(&live, pristine.replace("Fixture body", "Local edit")).unwrap();
+        }
+        let mut staged = 0;
+        let result = super::update(
+            &fixture.home,
+            &mut |args| fake_read(args, &fixture.rows, NEW),
+            &mut |home, args| {
+                assert_ne!(home, fixture.home);
+                assert_eq!(&args[..3], ["skill", "install", "demo/repo"]);
+                let revision = if staged == 0 {
+                    assert_eq!(args[3], "skills/demo/SKILL.md@refs/tags/release/v1");
+                    OLD
+                } else {
+                    assert_eq!(args[3], format!("skills/demo/SKILL.md@{COMMIT}"));
+                    NEW
+                };
+                staged += 1;
+                skill(&Path::new(args[5]).join("demo"), "demo", Some(revision));
+                Ok(output(String::new(), 0))
+            },
+        );
+        if edited {
+            let error = result.unwrap_err();
+            assert!(error.downcast_ref::<crate::error::PartialStep>().is_some());
+            assert!(error.to_string().contains("kept local changes"));
+            assert!(fs::read_to_string(&live).unwrap().contains("Local edit"));
+            assert_eq!(staged, 1);
         } else {
-            assert!(
-                result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("cannot preserve NPX lock metadata")
-            );
+            assert_eq!(result.unwrap().updated, 1);
+            assert!(fs::read_to_string(&live).unwrap().contains(NEW));
+            let state = super::super::state_dir(&fixture.home).unwrap();
+            let backup = fs::read_dir(state).unwrap().next().unwrap().unwrap().path();
+            assert_eq!(fs::read_to_string(backup.join("0-demo/SKILL.md")).unwrap(), pristine);
+            assert_eq!(staged, 2);
         }
         assert_eq!(fs::read(lock_path).unwrap(), before);
     }

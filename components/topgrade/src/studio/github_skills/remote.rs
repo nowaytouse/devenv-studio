@@ -155,7 +155,7 @@ pub(super) fn expectations(
     repo: &str,
     directories: &BTreeSet<&str>,
     missing: &mut Vec<String>,
-) -> Result<BTreeMap<String, String>> {
+) -> Result<(String, BTreeMap<String, String>)> {
     let commit = native_reference(run, repo)?;
     let (root_sha, root) = tree(run, repo, &commit, None)?;
     let mut cache = BTreeMap::from([(root_sha.clone(), root)]);
@@ -198,5 +198,5 @@ pub(super) fn expectations(
             ));
         }
     }
-    Ok(expected)
+    Ok((commit, expected))
 }

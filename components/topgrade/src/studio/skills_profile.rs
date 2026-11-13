@@ -1,5 +1,5 @@
 //! Managed global skill maintenance and coverage.
-mod cursor;
+pub(super) mod cursor;
 mod design;
 mod npx;
 

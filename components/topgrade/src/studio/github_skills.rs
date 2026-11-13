@@ -15,6 +15,7 @@ mod lock;
 pub(super) mod ownership;
 mod remote;
 mod retirement;
+mod staged;
 
 #[cfg(test)]
 mod tests;
@@ -32,6 +33,7 @@ struct Item {
     repo: String,
     meta: Metadata,
     expected: String,
+    commit: String,
 }
 
 impl Item {
@@ -66,11 +68,12 @@ struct Output {
     stderr: String,
 }
 
-fn gh(executable: &Path, args: &[&str], stage: Option<&Path>) -> Result<Output> {
+fn gh(executable: &Path, args: &[&str], stage: Option<(&Path, &str)>) -> Result<Output> {
     let mut command = super::tool_command(executable)?;
-    if let Some(stage) = stage {
+    if let Some((stage, token)) = stage {
         command
-            .env("GH_CONFIG_DIR", super::account_home()?.join(".config/gh"))
+            .env("GH_TOKEN", token)
+            .env("GH_CONFIG_DIR", stage.join("config"))
             .env("GH_NO_UPDATE_NOTIFIER", "1")
             .env("GH_TELEMETRY", "0")
             .env("HOME", stage)
@@ -187,7 +190,9 @@ fn resolve_expected(items: &mut [&mut Item], run: &mut impl FnMut(&[&str]) -> Re
         missing.join("\n")
     );
     for item in items {
-        item.expected = expected[&item.repo][directory(&item.meta.directory)?].clone();
+        let (commit, trees) = &expected[&item.repo];
+        item.expected = trees[directory(&item.meta.directory)?].clone();
+        item.commit = commit.clone();
     }
     Ok(())
 }
@@ -197,7 +202,6 @@ fn apply_group(
     parent: &Path,
     group: &[&Item],
     snapshot: &Snapshot,
-    protected: bool,
     run: &mut impl FnMut(&[&str]) -> Result<Output>,
 ) -> Result<Snapshot> {
     let before = Snapshot::read(home)?;
@@ -209,12 +213,6 @@ fn apply_group(
             item.path.display()
         );
     }
-    if protected {
-        // All remote hashes were already verified current. A native call could select a newer ref
-        // and write away fields that the current GitHub CLI cannot preserve.
-        return Ok(before);
-    }
-
     let parent = parent.to_str().context("Non-UTF-8 GitHub skill root")?;
     let mut args = vec!["skill", "update", "--dir", parent, "--all"];
     let mut names = group.iter().map(|item| item.meta.name.as_str()).collect::<Vec<_>>();
@@ -282,26 +280,26 @@ fn update(
         resolve_expected(&mut successor, run)?;
     }
     snapshot.lock.collisions(&selected)?;
-    let planned = selected.iter().filter(|item| item.changed()).count();
     let protected = snapshot.lock.protected();
-    ensure!(
-        !protected || planned == 0,
-        "{planned} GH skill update(s) pending; native GH cannot preserve NPX lock metadata. No native skill updates or shared lock changes were applied."
-    );
-    let mut groups = BTreeMap::<&Path, Vec<&Item>>::new();
-    for item in &selected {
-        let parent = item.path.parent().context("GitHub skill directory has no parent")?;
-        groups.entry(parent).or_default().push(item);
-    }
-    for (parent, group) in groups {
-        snapshot = apply_group(home, parent, &group, &snapshot, protected, run)?;
-    }
+    let updated = if protected {
+        staged::update(home, &selected, &snapshot, stage_install)?
+    } else {
+        let mut groups = BTreeMap::<&Path, Vec<&Item>>::new();
+        for item in &selected {
+            let parent = item.path.parent().context("GitHub skill directory has no parent")?;
+            groups.entry(parent).or_default().push(item);
+        }
+        for (parent, group) in groups {
+            snapshot = apply_group(home, parent, &group, &snapshot, run)?;
+        }
+        selected.iter().filter(|item| item.changed()).count()
+    };
     Ok(Summary {
         github: selected.len(),
         npx: delegated.npx,
         cursor: delegated.cursor,
         local: delegated.local,
-        updated: planned,
+        updated,
     })
 }
 
@@ -323,8 +321,22 @@ pub(super) fn run() -> Result<()> {
     {
         bail!("GitHub CLI does not resolve to the expected Homebrew executable");
     }
+    let mut token = None;
     let summary = update(&home, &mut |args| gh(&executable, args, None), &mut |stage, args| {
-        gh(&executable, args, Some(stage))
+        if token.is_none() {
+            let output = gh(&executable, &["auth", "token", "--hostname", "github.com"], None)?;
+            let value = output.stdout.trim();
+            ensure!(
+                output.success && !value.is_empty() && !value.chars().any(char::is_whitespace),
+                "GitHub CLI sign-in is required to authenticate the isolated skill installer"
+            );
+            token = Some(value.to_owned());
+        }
+        gh(
+            &executable,
+            args,
+            Some((stage, token.as_deref().context("Missing GitHub sign-in")?)),
+        )
     })?;
     println!(
         "Verified {} GitHub skills ({} updated); delegated {} to NPX and {} to Cursor.",

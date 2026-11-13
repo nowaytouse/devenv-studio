@@ -112,6 +112,7 @@ pub(super) fn migrate(
             alias: SUCCESSOR.into(),
             repo: old_item.repo,
             expected: String::new(),
+            commit: String::new(),
         });
     }
     println!(
@@ -144,6 +145,7 @@ mod tests {
             meta: metadata(&old)?,
             repo: REPO.into(),
             expected: String::new(),
+            commit: String::new(),
         };
         assert!(!candidate(&home, &item));
         item.path = old.clone();

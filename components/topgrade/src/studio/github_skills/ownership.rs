@@ -73,6 +73,7 @@ pub(in crate::studio) struct Metadata {
     pub source: String,
     pub directory: String,
     pub tree: String,
+    pub reference: Option<String>,
 }
 
 pub(in crate::studio) fn repository(url: &str) -> Result<String> {
@@ -134,7 +135,7 @@ fn header(path: &Path) -> Result<String> {
 
 pub(in crate::studio) fn metadata(path: &Path) -> Result<Metadata> {
     let header = header(path).wrap_err_with(|| format!("Incomplete GitHub skill metadata: {}", path.display()))?;
-    let value = |field: &str, nested: bool| -> Result<String> {
+    let value = |field: &str, nested: bool| -> Result<Option<String>> {
         let mut matches = header.lines().filter_map(|line| {
             let indented = line.starts_with([' ', '\t']);
             (indented == nested)
@@ -142,18 +143,21 @@ pub(in crate::studio) fn metadata(path: &Path) -> Result<Metadata> {
                 .and_then(|line| line.split_once(':'))
                 .and_then(|(key, value)| (key == field).then_some(value))
         });
-        let first = matches.next().context("Missing GitHub skill metadata field")?;
+        let Some(first) = matches.next() else {
+            return Ok(None);
+        };
         ensure!(
             matches.next().is_none() && !first.trim().is_empty(),
             "Missing or duplicate GitHub skill metadata field {field}"
         );
-        Ok(first.trim().trim_matches(['\'', '"']).into())
+        Ok(Some(first.trim().trim_matches(['\'', '"']).into()))
     };
     let result = Metadata {
-        name: value("name", false)?,
-        source: value("github-repo", true)?,
-        directory: value("github-path", true)?,
-        tree: value("github-tree-sha", true)?,
+        name: value("name", false)?.context("Missing name metadata")?,
+        source: value("github-repo", true)?.context("Missing github-repo metadata")?,
+        directory: value("github-path", true)?.context("Missing github-path metadata")?,
+        tree: value("github-tree-sha", true)?.context("Missing github-tree-sha metadata")?,
+        reference: value("github-ref", true)?,
     };
     ensure!(
         path.file_name().and_then(|name| name.to_str()) == Some(&result.name) && hex(&result.tree, 40),
@@ -317,6 +321,7 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
                 repo,
                 meta,
                 expected: String::new(),
+                commit: String::new(),
             });
             continue;
         }

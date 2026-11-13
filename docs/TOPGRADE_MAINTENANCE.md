@@ -59,7 +59,7 @@ NPX 清理已确认退役的 `discovering-gcp-data-assets`。核对旧锁记录�
 
 Krita Next 跟随 KDE 官方 `master/macos-universal` 滚动渠道。目录中最新发布的合格构建可以跨版本系列更新，Qt 5、Krita Plus 和稳定版使用独立渠道。同一应用版本的新 Git 提交仍会更新；同 Git SHA 的包若官方发布时间严格晚于收据中的安装时间，也作为重新打包候选核验，缺少或无效时间不推断为更新。候选与复制后的应用必须同时具有一致的 QtCore、QtGui 完整 `CFBundleVersion`，最低为 6.11.3。只有主、次版本号的元数据不能用于准入。没有较新构建证据且已装 Qt 不符合下限时，报告 `BLOCKED_INCOMPATIBLE_QT` 并返回失败；未来的新兼容候选仍可替换旧 Qt 构建。现有发布者、Git 祖先关系、禁止降级、锁、安装收据与交换恢复校验继续生效；成功安装的收据记录 `channel` 和 `qt_version`。兼容 Python 入口使用同一渠道与 Qt 准入规则。
 
-GitHub CLI 对 Gemini 中已核对的旧版 `discovering-gcp-data-assets` 单独迁移。先验证官方 `discover-assets` 候选，再切换并归档旧文件。共享 NPX 锁保持原样，内容或归属有歧义时停止。
+GitHub CLI 对 Gemini 中已核对的旧版 `discovering-gcp-data-assets` 单独迁移。先验证官方 `discover-assets` 候选，再切换并归档旧文件。有待更新的 GitHub 技能时，先用独立临时目录复现已安装版本，再核验并原子替换候选。替换后保留上一份目录。共享 NPX 锁逐字节保留。存在本地修改或无法复现旧版的技能报告延期。
 
 项目滚动更新保留既有依赖面和每仓库策略。Cargo 自动更新尊重清单中的精确版本固定。带有未提交改动的仓库会在读取和备份依赖文件前延期，摘要按仓库列出待处理项。BetterDisplay 使用官方 Sparkle 源和指定渠道进行更新检查，应用自身管理内部频道偏好。npm 检查使用本机已安装的 ncu，禁用依赖安装脚本。Gradle 依赖报告固定使用 0.67.0 插件；wrapper 仅更新校验通过的版本与分发属性，保留原启动脚本和 JAR。共享版本引用影响范围无法证明时，只记录发现的候选。旧独立滚动更新命令和预览应用手动启动选项仍可作为兼容入口。
 
