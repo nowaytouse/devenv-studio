@@ -10,8 +10,12 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 studio-core.workspace = true
-blake3 = "1.8"
-getrandom = "0.4"
 
 [target.'cfg(windows)'.dependencies]
+blake3 = "1.8"
+getrandom = "0.4"
 winreg = "0.56"
+
+[dev-dependencies]
+blake3 = "1.8"
+getrandom = "0.4"

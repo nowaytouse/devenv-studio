@@ -1,12 +1,12 @@
 [workspace]
 members = ["crates/studio-core", "crates/studio-platform", "crates/studio-deployment", "crates/studio-legacy", "crates/studio-app"]
 exclude = ["components/topgrade"]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 version = "0.10.0"
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.100"
 license = "MIT"
 authors = ["nowaytouse"]
 repository = "https://github.com/nowaytouse/devenv-studio"

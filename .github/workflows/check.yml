@@ -23,21 +23,21 @@ jobs:
       - name: Linux native GUI dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libegl1-mesa-dev libfontconfig1-dev libfreetype6-dev
-      - name: Stable Rust
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Project Rust toolchain
+        run: rustup toolchain install --no-self-update && rustc --version --verbose
       - name: Format
-        run: cargo +stable fmt --all -- --check
+        run: cargo fmt --all -- --check
       - name: Test
-        run: cargo +stable test --workspace --locked --no-fail-fast
+        run: cargo test --workspace --locked --no-fail-fast
       - name: Clippy
-        run: cargo +stable clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Topgrade component
         if: runner.os == 'macOS' || runner.os == 'Windows'
         working-directory: components/topgrade
-        run: |
-          cargo +stable fmt --all -- --check
-          cargo +stable test --locked
-          cargo +stable clippy --all-targets --locked -- -D warnings
+        run: >-
+          cargo fmt --all -- --check &&
+          cargo test --locked &&
+          cargo clippy --all-targets --locked -- -D warnings
       - name: Topgrade profile
         if: runner.os == 'macOS'
         working-directory: components/topgrade

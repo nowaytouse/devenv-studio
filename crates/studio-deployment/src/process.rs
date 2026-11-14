@@ -303,18 +303,17 @@ fn capture(mut reader: impl Read) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 fn decode(bytes: Vec<u8>) -> String {
-    if bytes.starts_with(&[0xff, 0xfe]) || (bytes.len() > 3 && bytes[1] == 0 && bytes[3] == 0) {
-        String::from_utf16_lossy(
-            &bytes
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|b| u16::from_le_bytes([b[0], b[1]]))
-                .filter(|&n| n != 0xfeff)
-                .collect::<Vec<_>>(),
-        )
+    const UTF16_LE_BOM: &[u8] = &[0xff, 0xfe];
+    if bytes.starts_with(UTF16_LE_BOM) || (bytes.len() > 3 && bytes[1] == 0 && bytes[3] == 0) {
+        let bytes = bytes.trim_prefix(UTF16_LE_BOM);
+        let (words, trailing) = bytes.as_chunks::<2>();
+        char::decode_utf16(words.iter().copied().map(u16::from_le_bytes))
+            .map(|character| character.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .chain((!trailing.is_empty()).then_some(char::REPLACEMENT_CHARACTER))
+            .collect()
     } else {
-        String::from_utf8_lossy(&bytes).into_owned()
+        String::from_utf8(bytes)
+            .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned())
     }
 }
 pub(crate) fn run_bounded(
@@ -1279,6 +1278,23 @@ mod tests {
             ),
             "State : Enabled"
         );
+    }
+
+    #[test]
+    fn utf16_decode_strips_only_the_initial_bom_and_reports_incomplete_units() {
+        let mut bytes: Vec<_> = [0xfeff, b'A' as u16, 0xfeff, 0xd800, b'B' as u16]
+            .into_iter()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        bytes.push(0x42);
+
+        assert_eq!(decode(bytes), "A\u{feff}\u{fffd}B\u{fffd}");
+    }
+
+    #[test]
+    fn utf8_decode_handles_valid_text_and_malformed_bytes() {
+        assert_eq!(decode("部署完成".as_bytes().to_vec()), "部署完成");
+        assert_eq!(decode(b"status: \xff".to_vec()), "status: \u{fffd}");
     }
 
     #[test]

@@ -17,10 +17,10 @@ jobs:
       - name: Linux native GUI dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libegl1-mesa-dev libfontconfig1-dev libfreetype6-dev
-      - name: Stable Rust
-        run: rustup toolchain install stable --profile minimal
+      - name: Project Rust toolchain
+        run: rustup toolchain install --no-self-update && rustc --version --verbose
       - name: Build
-        run: cargo +stable build --release --locked -p devenv-studio
+        run: cargo build --release --locked -p devenv-studio
       - name: Upload desktop executable
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

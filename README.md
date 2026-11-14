@@ -160,7 +160,7 @@ macOS与Windows均有本机开发清单采集入口，Mac可明确执行Homebrew
 
 ## 在 macOS 使用
 
-需要 Rust 1.95 或更新版本；仓库默认使用 stable。GUI 使用 eframe/egui，业务与界面均为 Rust。
+最低编译版本为 Rust 1.100。仓库的 `rust-toolchain.toml` 选择滚动 nightly，CI 检查和打包读取同一配置。Cargo 使用 resolver 3，在更新依赖时优先选择符合最低编译版本的版本。GUI 使用 eframe/egui，业务与界面均为 Rust。
 
 ```sh
 cargo run -p devenv-studio
@@ -222,7 +222,7 @@ cargo build --release --locked -p devenv-studio
 
 工作区包含 `studio-core`（配置与计划）、`studio-platform`（注册表与恢复）、`studio-deployment`（软件、功能、维护及进程历史）和 `devenv-studio`（原生界面与命令行）。设计与首版边界见 [DESIGN.md](docs/DESIGN.md)，验证记录见 [VALIDATION.md](docs/VALIDATION.md)，版本选择与发布检查点见 [RELEASING.md](docs/RELEASING.md)。
 
-Check 工作流在三种桌面系统上运行检查；Package desktop 工作流需手动触发，生成对应运行器平台的可执行文件及许可证，不自动发布 Release。当前仓库不附带未经验证的旧 EXE。
+Check 工作流在 macOS 和 Windows 上运行检查。Package desktop 工作流需手动触发，生成对应运行器平台的可执行文件及许可证，不自动发布 Release。当前仓库不附带未经验证的旧 EXE。
 
 若 Actions 提示付款或支出限制、且任务没有任何步骤或日志，需由账户所有者在 [Billing & licensing](https://github.com/settings/billing) 检查付款状态和 Actions 预算；仓库代码及重跑任务不能解除该门禁。页面没有可处理问题时，可按 [GitHub 账户计费锁说明](https://docs.github.com/en/billing/how-tos/troubleshooting/locked-account) 联系 Support。`macos-latest` 的 ARM 容量排队通知是独立的服务提示；保留原生 ARM 检查与打包覆盖，不将其视作源码检查通过或失败。
 

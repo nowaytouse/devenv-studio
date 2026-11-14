@@ -78,9 +78,8 @@ fn parse(bytes: &[u8]) -> Result<Inventory> {
         bytes.len() as u64 <= studio_core::MAX_INPUT_BYTES,
         "WinGet export exceeds the inventory size limit"
     );
-    let export: Export =
-        serde_json::from_slice(bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes))
-            .map_err(|_| anyhow::anyhow!("WinGet returned an invalid package export"))?;
+    let export: Export = serde_json::from_slice(bytes.trim_prefix(b"\xef\xbb\xbf"))
+        .map_err(|_| anyhow::anyhow!("WinGet returned an invalid package export"))?;
     ensure!(
         export.schema == "https://aka.ms/winget-packages.schema.2.0.json",
         "Only WinGet package export schema 2.0 is supported"
@@ -301,6 +300,14 @@ mod tests {
         assert!(!lookup("Python.Python.3.14").can_target);
         assert!(!lookup("Mozilla.Firefox").official_winget);
         assert!(!lookup("Mozilla.Firefox").can_target);
+        Ok(())
+    }
+
+    #[test]
+    fn accepts_win_get_export_with_utf8_bom() -> Result<()> {
+        let mut bytes = b"\xef\xbb\xbf".to_vec();
+        bytes.extend_from_slice(EXAMPLE);
+        assert_eq!(parse(&bytes)?.packages, parse(EXAMPLE)?.packages);
         Ok(())
     }
 
