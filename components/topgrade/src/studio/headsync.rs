@@ -282,14 +282,10 @@ impl Headsync {
     fn refresh_catalogs(&self, core: &Path) -> Result<CatalogRefresh> {
         let taps = self.tap_checkouts()?;
         let mut refresh = CatalogRefresh {
-            deferred: taps
-                .iter()
-                .filter(|tap| tap.dirty)
-                .map(|tap| tap.name.clone())
-                .collect(),
+            deferred: Vec::new(),
             errors: Vec::new(),
         };
-        if refresh.deferred.is_empty() {
+        if taps.iter().all(|tap| !tap.dirty) {
             println!("\n== Homebrew update ==");
             status(&mut self.brew(&["update"]))?;
             self.core_clean(core, "after Homebrew update")?;
@@ -298,12 +294,14 @@ impl Headsync {
         }
 
         // A regular brew update may reset and stash the index of every tap.
-        println!("\n== Refresh clean Homebrew catalogs (Git fast-forward only) ==");
-        println!("Preserving taps with local changes: {}", refresh.deferred.join(", "));
-        self.refresh_checkout("homebrew/core", core)?;
+        println!("\n== Refresh Homebrew catalogs (Git fast-forward only) ==");
+        ensure!(
+            self.refresh_checkout("homebrew/core", core, false)?,
+            "Cannot safely refresh homebrew/core"
+        );
         self.core_clean(core, "after Homebrew catalog refresh")?;
-        for tap in taps.into_iter().filter(|tap| !tap.dirty) {
-            match self.refresh_checkout(&tap.name, &tap.path) {
+        for tap in taps {
+            match self.refresh_checkout(&tap.name, &tap.path, true) {
                 Ok(true) => {}
                 Ok(false) => refresh.deferred.push(tap.name),
                 Err(error) => {
@@ -315,7 +313,7 @@ impl Headsync {
         Ok(refresh)
     }
 
-    fn refresh_checkout(&self, tap: &str, path: &Path) -> Result<bool> {
+    fn refresh_checkout(&self, tap: &str, path: &Path, allow_local_changes: bool) -> Result<bool> {
         let refresh = || -> Result<bool> {
             let branch = command_text(self.git(path, &["branch", "--show-current"]))?;
             let upstream = if branch.is_empty() {
@@ -350,8 +348,10 @@ impl Headsync {
                 tracking.starts_with("refs/remotes/") && !remote.is_empty() && source.starts_with("refs/heads/"),
                 "Invalid remote branch for {tap}"
             );
+            let head = command_text(self.git(path, &["rev-parse", "--verify", "HEAD"]))?;
+            let changes = self.catalog_changes(path)?;
             ensure!(
-                self.worktree_changes(path)?.is_empty(),
+                allow_local_changes || changes.is_empty(),
                 "{tap} changed during catalog refresh"
             );
             println!("Refreshing {tap}");
@@ -369,9 +369,32 @@ impl Headsync {
             ))?;
             ensure!(
                 command_text(self.git(path, &["branch", "--show-current"]))? == branch
-                    && self.worktree_changes(path)?.is_empty(),
+                    && command_text(self.git(path, &["rev-parse", "--verify", "HEAD"]))? == head
+                    && self.catalog_changes(path)? == changes,
                 "{tap} changed during catalog refresh"
             );
+            let target = command_text(self.git(path, &["rev-parse", "--verify", tracking]))?;
+            if self.is_ancestor(path, &target, &head)? {
+                println!("Current {tap}: contains tracked upstream {target}");
+                return Ok(true);
+            }
+            if !self.is_ancestor(path, &head, &target)? {
+                println!("Preserving {tap}: tracked upstream diverged");
+                return Ok(false);
+            }
+            if !changes.is_empty() {
+                let touched = self.git_bytes(
+                    path,
+                    &["diff", "--name-only", "--no-renames", "-z", &head, &target, "--"],
+                )?;
+                for entry in changes.split(|byte| *byte == 0).filter(|entry| !entry.is_empty()) {
+                    let local = entry.get(3..).context("Malformed Git status entry")?;
+                    if touched.split(|byte| *byte == 0).any(|remote| overlaps(local, remote)) {
+                        println!("Preserving {tap}: incoming paths overlap local changes");
+                        return Ok(false);
+                    }
+                }
+            }
             status(&mut self.git(
                 path,
                 &[
@@ -381,12 +404,50 @@ impl Headsync {
                     "--no-squash",
                     "--no-overwrite-ignore",
                     "--",
-                    tracking,
+                    &target,
                 ],
             ))?;
+            ensure!(
+                command_text(self.git(path, &["branch", "--show-current"]))? == branch
+                    && command_text(self.git(path, &["rev-parse", "--verify", "HEAD"]))? == target
+                    && self.catalog_changes(path)? == changes,
+                "{tap} could not be verified after catalog fast-forward"
+            );
+            println!("Updated {tap}: {head} -> {target}");
             Ok(true)
         };
         refresh().wrap_err_with(|| format!("Cannot refresh Homebrew tap {tap}"))
+    }
+
+    fn git_bytes(&self, path: &Path, args: &[&str]) -> Result<Vec<u8>> {
+        interrupted()?;
+        let output = self.git(path, args).env("GIT_OPTIONAL_LOCKS", "0").output_checked()?;
+        io::stderr().write_all(&output.stderr)?;
+        interrupted()?;
+        Ok(output.stdout)
+    }
+
+    fn catalog_changes(&self, path: &Path) -> Result<Vec<u8>> {
+        self.git_bytes(
+            path,
+            &[
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+                "--no-renames",
+                "-z",
+            ],
+        )
+    }
+
+    fn is_ancestor(&self, path: &Path, ancestor: &str, descendant: &str) -> Result<bool> {
+        interrupted()?;
+        let output = self
+            .git(path, &["merge-base", "--is-ancestor", ancestor, descendant])
+            .output_checked_with(|output| matches!(output.status.code(), Some(0 | 1)).then_some(()).ok_or(()))?;
+        io::stderr().write_all(&output.stderr)?;
+        interrupted()?;
+        Ok(output.status.success())
     }
 
     fn git(&self, path: &Path, args: &[&str]) -> Command {
@@ -740,6 +801,12 @@ impl Headsync {
         status(self.command(active[1].join("bin/llama-cli")).arg("--version"))?;
         Ok(())
     }
+}
+
+fn overlaps(left: &[u8], right: &[u8]) -> bool {
+    left == right
+        || left.strip_prefix(right).is_some_and(|suffix| suffix.starts_with(b"/"))
+        || right.strip_prefix(left).is_some_and(|suffix| suffix.starts_with(b"/"))
 }
 
 fn interrupted() -> Result<()> {

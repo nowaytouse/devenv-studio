@@ -480,7 +480,10 @@ pub(super) fn run(root: &Path, edge: bool, log: &mut File) -> Result<(Status, Ve
     let report: Report = serde_json::from_slice(&files::read(report, MAX)?.bytes)?;
     report.check()?;
     let mut sources = BTreeMap::new();
-    for path in files::walk(root)?.into_iter().filter(|path| files::gradle_source(path)) {
+    for path in files::tracked(root)?
+        .into_iter()
+        .filter(|path| files::gradle_source(path))
+    {
         let original = files::read(&path, MAX)?;
         let text = std::str::from_utf8(&original.bytes)?.to_owned();
         sources.insert(path, Source { original, text });

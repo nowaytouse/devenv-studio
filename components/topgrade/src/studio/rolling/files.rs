@@ -166,6 +166,48 @@ pub(super) fn walk(repo: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
+pub(super) fn tracked(root: &Path) -> Result<Vec<PathBuf>> {
+    let listing = git(
+        root,
+        &["ls-files", "--cached", "--deduplicate", "-z"],
+        "tracked dependency inputs",
+    )?;
+    if listing.is_empty() {
+        return Ok(Vec::new());
+    }
+    let listing = listing
+        .strip_suffix('\0')
+        .context("Incomplete Git dependency inventory")?;
+    let mut paths = Vec::new();
+    for relative in listing.split('\0') {
+        let path = Path::new(relative);
+        ensure!(
+            !relative.is_empty()
+                && !relative.contains('\u{fffd}')
+                && path
+                    .components()
+                    .all(|part| matches!(part, std::path::Component::Normal(_))),
+            "Invalid path in Git dependency inventory for {}",
+            root.display()
+        );
+        if path.parent().is_some_and(|parent| {
+            parent
+                .components()
+                .any(|part| part.as_os_str().to_str().is_some_and(|name| SKIP_DIRS.contains(&name)))
+        }) {
+            continue;
+        }
+        let path = root.join(path);
+        match fs::symlink_metadata(&path) {
+            Ok(info) if info.is_file() && path.canonicalize()? == path => paths.push(path),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(paths)
+}
+
 pub(super) fn name(path: &Path) -> &str {
     path.file_name().and_then(|name| name.to_str()).unwrap_or_default()
 }

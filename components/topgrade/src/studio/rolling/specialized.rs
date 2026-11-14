@@ -198,10 +198,23 @@ enum RegistryFailure {
     Other,
 }
 
-fn crane(executable: &Path, root: &Path, args: &[&str]) -> Result<std::result::Result<String, RegistryFailure>> {
+fn official_docker_image(repo: &str) -> bool {
+    repo.strip_prefix("docker.io/library/")
+        .is_some_and(|name| !name.is_empty() && !name.contains('/'))
+}
+
+fn crane(
+    executable: &Path,
+    root: &Path,
+    args: &[&str],
+    anonymous: Option<&Path>,
+) -> Result<std::result::Result<String, RegistryFailure>> {
     for attempt in 0..3 {
         let mut command = process::command(executable, root);
         command.args(args);
+        if let Some(config) = anonymous {
+            command.env("DOCKER_CONFIG", config).env_remove("REGISTRY_AUTH_FILE");
+        }
         let output = process::capture(command, process::QUERY_TIMEOUT)?;
         if output.status.success() {
             return Ok(Ok(output.stdout));
@@ -238,11 +251,14 @@ fn resolve_image(
     root: &Path,
     value: &str,
     edge: bool,
+    public_config: &Path,
 ) -> Result<std::result::Result<String, RegistryFailure>> {
     let (repo, current) = image_ref(value)?;
+    // Public official images do not need the interactive Docker credential helper.
+    let anonymous = official_docker_image(&repo).then_some(public_config);
     let tags;
     let tag = if edge && numeric_tag(current).is_some() {
-        tags = match crane(executable, root, &["ls", &repo])? {
+        tags = match crane(executable, root, &["ls", &repo], anonymous)? {
             Ok(tags) => tags,
             Err(status) => return Ok(Err(status)),
         };
@@ -251,7 +267,7 @@ fn resolve_image(
         current
     };
     let selected = format!("{repo}:{tag}");
-    let digest = match crane(executable, root, &["digest", &selected])? {
+    let digest = match crane(executable, root, &["digest", &selected], anonymous)? {
         Ok(digest) => digest,
         Err(status) => return Ok(Err(status)),
     };
@@ -316,16 +332,17 @@ fn docker(root: &Path, edge: bool, log: &mut File) -> Result<(Status, Vec<String
     let Some(crane_executable) = process::find_tool("crane")? else {
         return Ok((Status::Skipped, vec!["missing command: crane".into()]));
     };
+    let public_config = tempfile::tempdir()?;
     let mut resolutions = BTreeMap::new();
     let mut failures = Vec::new();
     let mut edits = Vec::new();
-    for path in files::walk(root)?.into_iter().filter(|path| files::dockerfile(path)) {
+    for path in files::tracked(root)?.into_iter().filter(|path| files::dockerfile(path)) {
         let original = files::read(&path, 1024 * 1024)?;
         let (updated, problems) = rewrite_docker(std::str::from_utf8(&original.bytes)?, |reference| {
             if let Some(cached) = resolutions.get(reference) {
                 return Ok(<std::result::Result<String, RegistryFailure>>::clone(cached));
             }
-            let result = resolve_image(&crane_executable, root, reference, edge)?;
+            let result = resolve_image(&crane_executable, root, reference, edge, public_config.path())?;
             resolutions.insert(reference.to_owned(), result.clone());
             Ok(result)
         })?;
@@ -393,6 +410,14 @@ mod tests {
 
     #[test]
     fn docker_preserves_channels_and_stage_aliases() -> Result<()> {
+        assert!(official_docker_image(&image_ref("ubuntu:26.10")?.0));
+        assert!(!official_docker_image(&image_ref("docker.io/owner/image:1.0")?.0));
+        assert!(!official_docker_image(
+            &image_ref("registry.example/library/ubuntu:26.10")?.0
+        ));
+        assert!(!official_docker_image(
+            &image_ref("docker.io/library/nested/image:1.0")?.0
+        ));
         let source = "FROM --platform=linux/arm64 rust:1.90-bookworm AS build\r\nFROM build AS copy\nFROM scratch\n";
         let (text, failed) = rewrite_docker(source, |reference| {
             assert_eq!(reference, "rust:1.90-bookworm");

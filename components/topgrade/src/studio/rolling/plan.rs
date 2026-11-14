@@ -92,7 +92,7 @@ fn topmost(paths: &[PathBuf], matches: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
 }
 
 pub(super) fn detect(repo: &Path, edge: bool) -> Result<Vec<Surface>> {
-    let paths = files::walk(repo)?;
+    let paths = files::tracked(repo)?;
     let dirs = |names: &[&str]| topmost(&paths, |path| names.contains(&files::name(path)));
     let suffix_dirs = |suffixes: &[&str]| {
         topmost(&paths, |path| {
@@ -119,7 +119,21 @@ pub(super) fn detect(repo: &Path, edge: bool) -> Result<Vec<Surface>> {
         commands.push(&["cargo", "update"]);
         surfaces.push(Surface::commands("Cargo", root, compatible("major+git"), &commands));
     }
-    direct!("uv", &["uv.lock"], "constraints+git", &["uv", "lock", "--upgrade"]);
+    for root in topmost(&paths, |path| {
+        files::name(path) == "uv.lock"
+            || (files::name(path) == "pyproject.toml"
+                && path
+                    .with_file_name("uv.lock")
+                    .symlink_metadata()
+                    .is_ok_and(|info| info.is_file()))
+    }) {
+        surfaces.push(Surface::commands(
+            "uv",
+            root,
+            "constraints+git",
+            &[&["uv", "lock", "--upgrade"]],
+        ));
+    }
     direct!(
         "Poetry",
         &["poetry.lock"],
@@ -149,7 +163,7 @@ pub(super) fn detect(repo: &Path, edge: bool) -> Result<Vec<Surface>> {
         &["pixi", if edge { "upgrade" } else { "update" }, "--no-install"]
     );
     for root in dirs(&["environment.yml", "environment.yaml"]) {
-        let file = if root.join("environment.yml").exists() {
+        let file = if paths.contains(&root.join("environment.yml")) {
             "environment.yml"
         } else {
             "environment.yaml"
@@ -163,7 +177,7 @@ pub(super) fn detect(repo: &Path, edge: bool) -> Result<Vec<Surface>> {
     }
 
     for root in dirs(&["package.json"]) {
-        let workspace = root.join("pnpm-workspace.yaml").exists();
+        let workspace = paths.contains(&root.join("pnpm-workspace.yaml"));
         if workspace || root.join("pnpm-lock.yaml").exists() {
             let mut command = vec!["pnpm", "up"];
             if edge {
@@ -383,7 +397,7 @@ pub(super) fn detect(repo: &Path, edge: bool) -> Result<Vec<Surface>> {
         "edge",
         &["pre-commit", "autoupdate"]
     );
-    if repo.join(".gitmodules").exists() {
+    if paths.contains(&repo.join(".gitmodules")) {
         surfaces.push(Surface::commands(
             "Git submodules",
             repo.into(),
@@ -442,13 +456,45 @@ mod tests {
         std::fs::write(root.join("member/Cargo.toml"), "")?;
         std::fs::write(root.join("package.json"), "{}")?;
         std::fs::write(root.join("pnpm-lock.yaml"), "")?;
+        std::fs::write(root.join(".gitignore"), "uv.lock\nlauncher_app/\npackage.json\n")?;
+        std::fs::create_dir(root.join("misc"))?;
+        std::fs::write(root.join("misc/pyproject.toml"), "")?;
+        std::fs::create_dir(root.join("launcher_app"))?;
+        std::fs::write(root.join("launcher_app/package.json"), "{}")?;
+        std::fs::write(root.join("launcher_app/package-lock.json"), "{}")?;
+        std::fs::write(root.join("uv.lock"), "")?;
+        std::fs::write(root.join("misc/uv.lock"), "")?;
+        let git =
+            process::find_tool("git")?.ok_or_else(|| color_eyre::eyre::eyre!("Git fixture dependency missing"))?;
+        for args in [
+            &["init", "--quiet"][..],
+            &[
+                "add",
+                "--",
+                ".gitignore",
+                "Cargo.toml",
+                "member/Cargo.toml",
+                "pnpm-lock.yaml",
+                "misc/pyproject.toml",
+            ][..],
+            &["add", "--force", "--", "package.json"][..],
+        ] {
+            let mut command = process::command(&git, &root);
+            command.args(args);
+            assert!(process::capture(command, process::QUERY_TIMEOUT)?.status.success());
+        }
         let plan = detect(&root, false)?;
-        assert_eq!(plan.len(), 2);
+        assert_eq!(
+            plan.iter().map(|surface| surface.name).collect::<Vec<_>>(),
+            ["Cargo", "uv", "pnpm"],
+        );
         let Action::Commands(cargo) = &plan[0].action else {
             panic!("not Cargo commands")
         };
         assert_eq!(cargo, &[vec!["cargo", "update"]]);
-        let Action::Commands(pnpm) = &plan[1].action else {
+        assert_eq!(plan[1].root, root.join("misc"));
+        assert!(files::snapshot(&root)?.contains_key(Path::new("misc/uv.lock")));
+        let Action::Commands(pnpm) = &plan[2].action else {
             panic!("not pnpm commands")
         };
         assert!(!pnpm[0].iter().any(|argument| argument == "--latest"));

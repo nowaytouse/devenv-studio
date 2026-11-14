@@ -182,6 +182,8 @@ import os,pathlib,sys
 args=sys.argv[1:]
 root=pathlib.Path(os.environ["TEST_ROOT"])
 with (root/"events").open("a") as f: f.write("git " + " ".join(args) + "\n")
+if len(args)>=3 and args[0] == "-C" and pathlib.Path(args[1]).name == "tap" and os.environ.get("TEST_REAL_TAP") == "1":
+ os.execv("/usr/bin/git", ["/usr/bin/git", *args])
 if len(args)>=4 and args[0] == "-C" and args[2] == "status":
  if pathlib.Path(args[1]).resolve() == (root/"tap").resolve():
   state = os.environ.get("TEST_TAP_STATUS", "clean")
@@ -204,13 +206,20 @@ elif len(args)>=3 and args[0] == "-C" and os.environ.get("TEST_CATALOG_REFRESH")
   print("origin")
  elif args[2:] == ["remote", "get-url", "origin"] and repo == "local-tap":
   print("." if os.environ.get("TEST_SELF_REMOTE") == "1" else "https://example.invalid/tap")
+ elif args[2:] == ["rev-parse", "--verify", "HEAD"]:
+  print("b"*40 if (root/f"{repo}-catalog-refreshed").exists() else "a"*40)
+ elif args[2:] == ["rev-parse", "--verify", "refs/remotes/origin/main"]:
+  print("b"*40)
+ elif args[2:4] == ["merge-base", "--is-ancestor"]:
+  assert args[4:] in (["b"*40, "a"*40], ["a"*40, "b"*40]), args
+  sys.exit(1 if args[4] == "b"*40 else 0)
  elif args[2:] == ["fetch", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--", "origin", "refs/heads/main:refs/remotes/origin/main"]:
   assert repo in ("core", "clean-tap"), args
   assert not (root/"state/brew-headsync/active").exists(), "catalog refresh before journal recovery"
   if os.environ.get("TEST_FAIL") == "fetch-" + repo:
    print("injected catalog fetch failure", file=sys.stderr); sys.exit(46)
   (root/f"{repo}-catalog-fetched").touch()
- elif args[2:] == ["merge", "--ff-only", "--no-autostash", "--no-squash", "--no-overwrite-ignore", "--", "refs/remotes/origin/main"]:
+ elif args[2:] == ["merge", "--ff-only", "--no-autostash", "--no-squash", "--no-overwrite-ignore", "--", "b"*40]:
   assert repo in ("core", "clean-tap") and (root/f"{repo}-catalog-fetched").exists(), args
   if os.environ.get("TEST_FAIL") == "merge-" + repo:
    print("injected catalog merge failure", file=sys.stderr); sys.exit(46)
@@ -374,46 +383,100 @@ def idempotent(f):
     assert len(upgrades) == (4 if native else 6) and all("topgrade" not in line for line in upgrades), upgrades
 
 
-def dirty_tap_preserves_checkout(f, failed_refresh="", self_remote=False):
+def dirty_tap_preserves_checkout(f, mode, failed_refresh="", self_remote=False):
     (f.root / "pair-installed").touch()
-    dirty_tap = f.root / "tap"
-    dirty_tap.mkdir()
-    draft = dirty_tap / "local-formula.rb"
-    draft.write_text("# local draft\n")
-    for name in ("clean-tap", "local-tap"):
-        (f.root / name).mkdir()
-    result = f.run(TEST_TAP_STATUS="dirty", TEST_CATALOG_REFRESH="1",
+    tap = f.root / "tap"
+    upstream = f.root / "upstream"
+    for path in (upstream, f.root / "clean-tap", f.root / "local-tap"):
+        path.mkdir()
+    git_env = f.env | {
+        "GIT_AUTHOR_NAME": "Fixture", "GIT_AUTHOR_EMAIL": "fixture@example.test",
+        "GIT_COMMITTER_NAME": "Fixture", "GIT_COMMITTER_EMAIL": "fixture@example.test",
+    }
+
+    def run_git(path, *args):
+        return subprocess.check_output(
+            ["/usr/bin/git", "-C", str(path), *args], env=git_env, stderr=subprocess.DEVNULL,
+        ).strip()
+
+    run_git(upstream, "init", "-b", "main")
+    local_paths = ("staged.rb", "unstaged.rb", "untracked.rb", "ignored.rb")
+    staged, unstaged, untracked, ignored = local_paths
+    (upstream / ".gitignore").write_text("ignored.rb\n")
+    for name in (staged, unstaged, "safe.rb"):
+        (upstream / name).write_text("base\n")
+    run_git(upstream, "add", "--", ".gitignore", staged, unstaged, "safe.rb")
+    run_git(upstream, "commit", "-m", "base")
+    run_git(f.root, "clone", str(upstream), str(tap))
+    original = run_git(tap, "rev-parse", "HEAD")
+    (tap / staged).write_text("preserve index and bytes\n")
+    run_git(tap, "add", "--", staged)
+    for name in (unstaged, untracked, ignored):
+        (tap / name).write_text(f"preserve {name}\n")
+    if mode in ("fast-forward", "diverged"):
+        (upstream / "safe.rb").write_text("catalog refresh\n")
+        run_git(upstream, "commit", "-am", "update catalog")
+    elif mode == "overlap":
+        # Git's fast-forward could absorb an identical staged change.
+        (upstream / staged).write_bytes((tap / staged).read_bytes())
+        run_git(upstream, "commit", "-am", "update staged path")
+    elif mode == "ignored-overlap":
+        (upstream / ignored).write_text("tracked upstream\n")
+        run_git(upstream, "add", "-f", "--", ignored)
+        run_git(upstream, "commit", "-m", "track ignored file")
+    if mode == "diverged":
+        (tap / "fork.rb").write_text("fork-only committed file\n")
+        run_git(tap, "add", "--", "fork.rb")
+        run_git(tap, "commit", "--only", "-m", "fork commit", "--", "fork.rb")
+    start = run_git(tap, "rev-parse", "HEAD")
+    before = run_git(tap, "status", "--porcelain=v1", "--untracked-files=all")
+    staged_before = run_git(tap, "diff", "--cached", "--binary")
+    originals = {name: (tap / name).read_bytes() for name in local_paths}
+    target = run_git(upstream, "rev-parse", "HEAD")
+
+    result = f.run(TEST_REAL_TAP="1", TEST_CATALOG_REFRESH="1",
                    TEST_INSTALLED="llvm\npostgresql@17", TEST_FAIL=failed_refresh,
                    TEST_SELF_REMOTE=str(int(self_remote)))
     events = f.events()
-    refreshes = [line for line in events if line.startswith("git -C ") and
-                 (" fetch " in line or " merge " in line)]
-    expected = [("core", "fetch")]
-    if failed_refresh != "fetch-core":
-        expected.extend([("core", "merge"), ("clean-tap", "fetch"), ("clean-tap", "merge")])
-    assert len(refreshes) == len(expected) and all(
-        event.startswith(f"git -C {f.root / repo} {operation} ")
-        for event, (repo, operation) in zip(refreshes, expected, strict=True)
-    ), events
     assert "brew update" not in events, events
-    dirty_events = [line for line in events if line.startswith(f"git -C {dirty_tap} ")]
-    assert dirty_events and all(line.startswith(f"git -C {dirty_tap} status ") for line in dirty_events), events
-    assert draft.read_text() == "# local draft\n"
+    assert run_git(tap, "status", "--porcelain=v1", "--untracked-files=all") == before
+    assert run_git(tap, "diff", "--cached", "--binary") == staged_before
+    assert {name: (tap / name).read_bytes() for name in local_paths} == originals
+    core_refreshed = failed_refresh != "fetch-core"
+    if core_refreshed:
+        assert run_git(tap, "rev-parse", "refs/remotes/origin/main") == target
+    if mode == "fast-forward" and core_refreshed:
+        assert run_git(tap, "rev-parse", "HEAD") == target
+        assert (tap / "safe.rb").read_text() == "catalog refresh\n"
+        assert "Updated example/tools:" in result.stdout, result.stdout
+    else:
+        assert run_git(tap, "rev-parse", "HEAD") == start
+    assert not (tap / ".git/MERGE_HEAD").exists()
+    assert not (tap / ".git/refs/stash").exists()
+
     if failed_refresh:
         diagnostic = f"injected catalog {failed_refresh.split('-', 1)[0]} failure"
         assert result.returncode != 0 and diagnostic in result.stdout, result.stdout
+    elif mode == "ignored-overlap":
+        assert result.returncode != 0 and "would be overwritten by merge" in result.stdout, result.stdout
     else:
-        assert result.returncode != 0, result.stdout
+        tap_deferred = mode in ("overlap", "diverged")
+        expected_deferred = tap_deferred or not self_remote
+        assert (result.returncode != 0) == expected_deferred, result.stdout
         deferred = next((line for line in result.stdout.splitlines()
                          if "Homebrew catalog refresh deferred for:" in line), "")
-        assert "example/tools" in deferred, deferred
+        assert ("example/tools" in deferred) == tap_deferred, deferred
         assert ("example/local" in deferred) != self_remote, deferred
+        assert "example/clean" not in deferred, deferred
+        if mode == "current":
+            assert "Current example/tools:" in result.stdout and start == original, result.stdout
         if self_remote:
             assert "Preserving example/local: local-only catalog" in result.stdout, result.stdout
-        assert "example/clean" not in deferred, deferred
+
     upgrades = [line for line in events if line.startswith("brew upgrade ")]
-    if failed_refresh == "fetch-core":
+    if not core_refreshed:
         assert not upgrades and not (f.root / "core-catalog-refreshed").exists(), events
+        assert not any(line.startswith(f"git -C {tap} fetch ") for line in events), events
     else:
         assert "already installed at the full target revision" in result.stdout, result.stdout
         assert upgrades == ["brew upgrade --formula --fetch-HEAD postgresql@17"], events
@@ -421,11 +484,9 @@ def dirty_tap_preserves_checkout(f, failed_refresh="", self_remote=False):
         assert (f.root / "clean-tap-catalog-refreshed").exists() == (not failed_refresh)
         [initial, verified] = [i for i, line in enumerate(events)
                                if line == "brew outdated --formula --fetch-HEAD --json=v2 postgresql@17"]
-        assert events.index(refreshes[-1]) < initial < events.index(upgrades[0]) < verified, events
-        for repo, start, end in (("core", 0, 1), ("clean-tap", 2, 3)):
-            rechecks = events[events.index(refreshes[start]) + 1:events.index(refreshes[end])]
-            assert f"git -C {f.root / repo} branch --show-current" in rechecks, rechecks
-            assert f"git -C {f.root / repo} status --porcelain=v1 --untracked-files=all" in rechecks, rechecks
+        refreshes = [i for i, line in enumerate(events) if line.startswith("git -C ") and
+                     (" fetch " in line or " merge " in line)]
+        assert refreshes[-1] < initial < events.index(upgrades[0]) < verified, events
     f.assert_restored()
 
 
@@ -969,10 +1030,14 @@ if native:
         ("interrupted Whisper overlay is restored before pair kegs", whisper_overlay_recovers_before_pair_kegs),
         ("bulk upgrade exit 0 with a remaining outdated formula is incomplete", successful_bulk_upgrade_leaves_outdated_formula),
         ("JPEG XL transaction exit 0 with an outdated target is incomplete", successful_jpeg_xl_upgrade_leaves_outdated_formula),
-        ("dirty tap is preserved while clean catalogs reveal a stable upgrade", dirty_tap_preserves_checkout),
-        ("self-remote tap has no pending upstream refresh", lambda f: dirty_tap_preserves_checkout(f, self_remote=True)),
-        ("core catalog fetch failure prevents formula upgrades", lambda f: dirty_tap_preserves_checkout(f, "fetch-core")),
-        ("clean tap merge failure still upgrades from the refreshed core catalog", lambda f: dirty_tap_preserves_checkout(f, "merge-clean-tap")),
+        ("current dirty tap checks the tracker and preserves its local files", lambda f: dirty_tap_preserves_checkout(f, "current")),
+        ("self-remote tap has no pending upstream refresh", lambda f: dirty_tap_preserves_checkout(f, "current", self_remote=True)),
+        ("disjoint dirty tap fast-forward preserves index and working files", lambda f: dirty_tap_preserves_checkout(f, "fast-forward", self_remote=True)),
+        ("staged path overlap leaves local edits and tracking separate", lambda f: dirty_tap_preserves_checkout(f, "overlap", self_remote=True)),
+        ("diverged dirty tap is deferred without creating a merge", lambda f: dirty_tap_preserves_checkout(f, "diverged", self_remote=True)),
+        ("ignored file is protected when upstream starts tracking it", lambda f: dirty_tap_preserves_checkout(f, "ignored-overlap", self_remote=True)),
+        ("core catalog fetch failure prevents formula upgrades", lambda f: dirty_tap_preserves_checkout(f, "current", "fetch-core")),
+        ("clean tap merge failure still upgrades from the refreshed core catalog", lambda f: dirty_tap_preserves_checkout(f, "current", "merge-clean-tap")),
         ("existing tap conflict stops before either mutation", lambda f: tap_conflict_stops_before_pair(f, False)),
         ("tap conflict after refresh stops before either keg upgrade", lambda f: tap_conflict_stops_before_pair(f, True)),
         ("exit 1 without JSON retains the Homebrew diagnostic", outdated_exit_one_without_json_explains_error),
