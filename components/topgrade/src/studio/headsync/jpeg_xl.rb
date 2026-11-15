@@ -68,8 +68,61 @@ class JpegXlTransaction
     raise "Failed: #{args.join(' ')}" unless status
   end
 
-  def brew(*args)
-    run_command(HOMEBREW_BREW_FILE, *args)
+  def brew(action, owner)
+    run_command(HOMEBREW_BREW_FILE, "ruby", __FILE__, "#{transaction_name}-install", @state, owner.fetch("name"), action)
+    load_record
+  end
+
+  def run_install(owner_name, action)
+    require "install"
+    require "upgrade"
+
+    load_record
+    owner = @record.fetch("rows").find { |row| row.fetch("name") == owner_name }
+    raise "Invalid Homebrew transaction installer" unless @record.key?("touched_tools") && owner&.key?("dependencies") &&
+      !@record.fetch("touched").include?(owner_name) && !@record.fetch("committed") &&
+      action == (providers.include?(owner_name) ? "upgrade" : "reinstall") &&
+      (!providers.include?(owner_name) || !@record.fetch("repair"))
+
+    Homebrew.running_command = action
+    verify_original(owner)
+    context = install_context(owner)
+    installer = context.formula_installer
+    formula = context.formula
+    if action == "upgrade"
+      raise "Homebrew would unlink a keg outside this transaction" unless
+        (Homebrew::Upgrade.outdated_kegs(formula).map(&:to_path) - [original(owner).to_s]).empty?
+      raise "No current HEAD update for #{owner.fetch('full')}" unless formula.outdated?(fetch_head: true)
+    end
+
+    verify_dependency_plan(owner, dependency_writes(owner, installer))
+    transaction = self
+    # Homebrew recomputes dependencies and can install them from nested installers.
+    FormulaInstaller.prepend(Module.new do
+      define_method(:install_dependency) do |dep, target = dep.to_formula|
+        transaction.admit_dependency(owner, dep, target)
+        super(dep, target)
+        transaction.verify_dependency(owner, target.name)
+      end
+    end)
+
+    Homebrew::Unlink.singleton_class.prepend(Module.new do
+      def unlink(keg, **)
+        raise "Unjournaled Homebrew unlink required for #{keg.name}"
+      end
+    end)
+
+    Homebrew::Install.perform_preinstall_checks_once
+    valid = Homebrew::Install.fetch_formulae([installer])
+    raise "Homebrew could not prepare #{owner.fetch('full')}" unless valid.include?(installer) && !Homebrew.failed?
+
+    mark(owner)
+    if action == "upgrade"
+      Homebrew::Install.install_formula(installer, upgrade: true)
+    else
+      Homebrew::Reinstall.reinstall_formula(context)
+    end
+    raise "Homebrew installation failed for #{owner.fetch('full')}" if Homebrew.failed?
   end
 
   def capture(*args)
@@ -203,7 +256,7 @@ class JpegXlTransaction
     file.file? && file.realpath.to_s.start_with?("#{jpeg}/")
   end
 
-  def preflight(row)
+  def install_context(row)
     formula = resolve(row)
     options = row.fetch("source").last
     context = Homebrew::Reinstall.build_install_context(
@@ -211,18 +264,101 @@ class JpegXlTransaction
     )
     raise "Homebrew would drop build options for #{row.fetch('full')}" unless context.options.as_flags.sort == options
 
-    context.formula_installer.compute_dependencies.to_h do |dep|
-      target = dep.to_formula
-      unless dep.build? && target.tap.to_s == "homebrew/core" && BUILD_TOOLS.include?(target.name) &&
-          !target.pinned? && !target.any_version_installed? && !present?(rack(target.name)) &&
-          !record_target(opt(target.name), target.name) && !record_target(linked(target.name), target.name)
-        raise "Unjournaled Homebrew dependency write required for #{row.fetch('full')}: #{target.full_name}"
-      end
-      version = target.pkg_version.to_s
-      raise "Unsupported build-tool version: #{version}" unless NAME.match?(version)
+    context
+  end
 
-      [target.name, version]
+  def dependency_write(owner, dep, target)
+    short = target.name
+    full = target.full_name
+    version = target.pkg_version.to_s
+    tap = target.tap.to_s
+    error = "Unjournaled Homebrew dependency write required for #{owner.fetch('full')}: #{full}"
+    raise error unless name(full) == short && NAME.match?(version) && !tap.empty? &&
+      target.active_spec_sym == :stable && !target.pinned? && !protected?(short)
+
+    options = Tab.remap_deprecated_options(target.deprecated_options, dep.options)
+    if target.any_version_installed?
+      row, = active_row(full)
+      previous = row.fetch("version")
+      installed = row.fetch("versions")
+      saved_options = row.fetch("source").last
+      raise error unless row.fetch("source").take(2) == [tap, "stable"] &&
+        target.pkg_version >= PkgVersion.parse(previous) &&
+        (version == previous || !installed.include?(version)) &&
+        !installed.include?("#{version}.tmp") && (row.fetch("linked") || target.keg_only?)
+
+      options |= Options.create(saved_options) if row.fetch("linked") || version == previous
+      raise error unless (options & target.options).as_flags.sort == saved_options
+    else
+      raise error unless dep.build? && tap == "homebrew/core" && BUILD_TOOLS.include?(short) &&
+        !present?(rack(short)) && !present?(opt(short)) && !present?(linked(short)) &&
+        (options & target.options).empty?
+
+      saved_options = []
     end
+    { "full" => full, "source" => [tap, "stable", saved_options], "version" => version }
+  end
+
+  def preflight(row)
+    dependency_writes(row, install_context(row).formula_installer)
+  end
+
+  def dependency_writes(row, installer)
+    writes = {}
+    pending = installer.compute_dependencies.dup
+    until pending.empty?
+      dep = pending.shift
+      target = dep.to_formula
+      short = target.name
+      write = dependency_write(row, dep, target)
+      if writes.key?(short)
+        raise "Conflicting Homebrew dependency targets for #{short}" unless writes.fetch(short) == write
+
+        next
+      end
+
+      writes[short] = write
+      # A dependency's bottle receipt can add minimum version requirements of its own.
+      dependency_installer = FormulaInstaller.new(
+        target, options: Options.create(write.fetch("source").last),
+        build_from_source_formulae: [installer.formula.full_name],
+      )
+      pending.concat(dependency_installer.compute_dependencies)
+    end
+    writes
+  end
+
+  def plan_dependencies(rows, owners)
+    writes = {}
+    owners.each do |owner|
+      owner["dependencies"] = preflight(owner)
+      owner.fetch("dependencies").each do |short, write|
+        if (writes.key?(short) && writes.fetch(short) != write) ||
+            rows.any? { |row| row.fetch("name") == short }
+          raise "Conflicting Homebrew dependency write for #{short}"
+        end
+
+        writes[short] = write
+      end
+    end
+
+    tools = {}
+    writes.each do |short, write|
+      if present?(rack(short))
+        row, = active_row(write.fetch("full"))
+        raise "Homebrew dependency source changed for #{short}" unless row.fetch("source") == write.fetch("source")
+
+        rows << row.merge("replacement" => write.fetch("version"))
+      else
+        raise "Homebrew dependency disappeared while planning: #{short}" unless
+          BUILD_TOOLS.include?(short) && write.fetch("source") == ["homebrew/core", "stable", []] &&
+          !present?(opt(short)) && !present?(linked(short))
+
+        tools[short] = write.fetch("version")
+      end
+    end
+    puts "Planned Homebrew dependency writes: #{writes.keys.sort.join(', ')}" unless writes.empty?
+    tools
   end
 
   def dependency_group(full, users)
@@ -248,22 +384,18 @@ class JpegXlTransaction
   def plan(full, users)
     rows = dependency_group(full, users)
     jpeg, *consumers = rows
-    tools = rows.flat_map { |row| preflight(row).to_a }.to_h
     puts "JPEG XL transaction: #{jpeg.fetch('full')}; direct consumers: #{consumers.map { |r| r.fetch('full') }.join(', ')}"
-    puts "Planned optional build tools: #{tools.keys.sort.join(', ')}" unless tools.empty?
-    [rows, tools]
+    [rows, plan_dependencies(rows, rows.dup)]
   end
 
   def repair_plan(full, users)
     jpeg, *consumers = dependency_group(full, users)
     current = original(jpeg)
     broken = consumers.reject { |row| row.fetch("links").all? { |link| link_satisfied?(link, current) } }
-    tools = broken.flat_map { |row| preflight(row).to_a }.to_h
-    unless broken.empty?
-      puts "JPEG XL linkage repair: #{broken.map { |r| r.fetch('full') }.join(', ')}"
-      puts "Planned optional build tools: #{tools.keys.sort.join(', ')}" unless tools.empty?
-    end
-    [[jpeg, *broken], tools]
+    puts "JPEG XL linkage repair: #{broken.map { |r| r.fetch('full') }.join(', ')}" unless broken.empty?
+
+    rows = [jpeg, *broken]
+    [rows, plan_dependencies(rows, broken)]
   end
 
   def manifest(root)
@@ -331,7 +463,7 @@ class JpegXlTransaction
     run_command("/bin/sync")
     @record = {
       "stage" => @stage.basename.to_s, "rows" => rows, "tools" => tools, "touched" => [],
-      "committed" => false, "repair" => repair,
+      "committed" => false, "repair" => repair, "touched_tools" => [],
     }
     checkpoint
   rescue StandardError
@@ -352,6 +484,41 @@ class JpegXlTransaction
     verify_original(row)
     @record.fetch("touched") << row.fetch("name")
     checkpoint
+  end
+
+  def verify_dependency_plan(owner, writes)
+    changed = writes.keys.find { |short| owner.fetch("dependencies").fetch(short, nil) != writes.fetch(short) }
+    raise "Homebrew dependency plan changed during rebuild for #{owner.fetch('full')}: #{changed}" if changed
+  end
+
+  def admit_dependency(owner, dep, target)
+    short = target.name
+    planned = owner.fetch("dependencies")[short]
+    raise "Unjournaled Homebrew dependency write required for #{owner.fetch('full')}: #{short}" unless planned
+
+    verify_dependency_plan(owner, short => dependency_write(owner, dep, target))
+    row = @record.fetch("rows").find { |entry| entry.fetch("name") == short }
+    touched = @record.fetch(row ? "touched" : "touched_tools")
+    raise "Repeated Homebrew dependency write for #{short}" if touched.include?(short)
+
+    if row
+      mark(row)
+    else
+      raise "Unjournaled Homebrew dependency write required for #{short}" unless
+        @record.fetch("tools")[short] == planned.fetch("version") &&
+        [rack(short), opt(short), linked(short)].none? { |path| present?(path) }
+
+      touched << short
+      checkpoint
+    end
+  end
+
+  def verify_dependency(owner, short)
+    expected = owner.fetch("dependencies").fetch(short)
+    row = @record.fetch("rows").find { |entry| entry.fetch("name") == short }
+    actual = row ? verify_replacement(row) : keg_directory(record_target(opt(short), short))
+    raise "Homebrew selected an unexpected dependency version for #{short}" unless
+      actual.basename.to_s == expected.fetch("version") && source_info(receipt(actual)) == expected.fetch("source")
   end
 
   def verify_replacement(row)
@@ -398,6 +565,10 @@ class JpegXlTransaction
     expected = row.fetch("manifest")
     FormulaLock.new(short).with_lock do
       installed = versions(short)
+      if (replacement = row["replacement"])
+        unexpected = installed - row.fetch("versions") - [replacement, "#{replacement}.tmp"]
+        raise "Unexpected dependency kegs during recovery for #{short}: #{unexpected.join(', ')}" unless unexpected.empty?
+      end
       missing = row.fetch("versions") - installed - [row.fetch("version")]
       raise "Inactive Homebrew kegs disappeared during JPEG XL recovery: #{short}" unless missing.empty?
 
@@ -499,6 +670,32 @@ class JpegXlTransaction
       [true, false].include?(@record.fetch("committed")) &&
       [true, false].include?(repair) && (providers == ["jpeg-xl"] || repair) &&
       (!repair || (touched & providers).empty?)
+
+    return unless @record.key?("touched_tools")
+
+    touched_tools = @record.fetch("touched_tools")
+    raise "Invalid #{transaction_name} journal tools" unless touched_tools.is_a?(Array) &&
+      touched_tools.uniq == touched_tools && (touched_tools - tools.keys).empty?
+
+    indexed = rows.to_h { |row| [row.fetch("name"), row] }
+    rows.each do |owner|
+      next unless owner.key?("dependencies")
+
+      owner.fetch("dependencies").each do |short, write|
+        dependency = indexed[short]
+        valid = if dependency
+          !dependency.key?("dependencies") && !providers.include?(short) &&
+            dependency.fetch("replacement") == write.fetch("version") &&
+            dependency.fetch("full") == write.fetch("full") && dependency.fetch("source") == write.fetch("source")
+        else
+          [short, "homebrew/core/#{short}"].include?(write.fetch("full")) &&
+            write.fetch("source") == ["homebrew/core", "stable", []] &&
+            tools.fetch(short, nil) == write.fetch("version")
+        end
+        raise "Invalid Homebrew journal dependency: #{short}" unless valid &&
+          NAME.match?(write.fetch("version"))
+      end
+    end
   end
 
   def recover
@@ -510,7 +707,10 @@ class JpegXlTransaction
       touched = @record.fetch("touched")
       rows = @record.fetch("rows").to_h { |row| [row.fetch("name"), row] }
       touched.reverse_each { |short| restore(rows.fetch(short)) }
-      @record.fetch("tools").to_a.reverse_each { |short, version| restore_tool(short, version) } unless touched.empty?
+      tools = @record.fetch("tools")
+      # Older journals marked only owners, so any of their planned tools may have been installed.
+      touched_tools = @record.fetch("touched_tools") { touched.empty? ? [] : tools.keys }
+      touched_tools.reverse_each { |short| restore_tool(short, tools.fetch(short)) }
       reset_linkage_cache(rows.values_at(*touched))
       # Repair starts from broken linkage. Check the untouched provider and exact restored kegs.
       if @record.fetch("repair", false)
@@ -570,17 +770,15 @@ class JpegXlTransaction
     "JPEG XL"
   end
 
-  def rebuild_consumers(consumers, candidate, tools)
+  def rebuild_consumers(consumers, candidate)
     consumers.each do |row|
       next if row.fetch("links").all? { |link| link_satisfied?(link, candidate) }
 
       Formula.cache.clear
       Formulary.clear_cache
-      raise "#{linkage_group} dependency plan changed during rebuild" unless (preflight(row).to_a - tools.to_a).empty?
+      verify_dependency_plan(row, preflight(row))
 
-      mark(row)
-      brew("reinstall", "--no-ask", "--build-from-source", "--formula", row.fetch("full"),
-           *row.fetch("source").last)
+      brew("reinstall", row)
       verify_replacement(row)
     end
     consumers.each do |row|
@@ -613,17 +811,16 @@ class JpegXlTransaction
   def run(full, users)
     %w[INT TERM HUP].each { |signal| Signal.trap(signal) { @signal ||= signal } }
     rows, tools = plan(full, users)
-    jpeg, *consumers = rows
+    jpeg = rows.first
+    consumers = rows.select { |row| row.key?("links") }
     ordered = dependency_order(consumers)
     verify_linkage
     transact(rows, tools) do
-      mark(jpeg)
-      brew("upgrade", "--no-ask", "--build-from-source", "--formula", "--fetch-HEAD", full,
-           *jpeg.fetch("source").last)
+      brew("upgrade", jpeg)
       candidate = verify_replacement(jpeg)
       raise "Homebrew did not select a new JPEG XL keg" if candidate == original(jpeg)
 
-      rebuild_consumers(ordered, candidate, tools)
+      rebuild_consumers(ordered, candidate)
       reset_linkage_cache(rows)
       smoke(candidate, consumers)
       FormulaLock.new("jpeg-xl").with_lock do
@@ -640,15 +837,16 @@ class JpegXlTransaction
   def repair(full, users)
     %w[INT TERM HUP].each { |signal| Signal.trap(signal) { @signal ||= signal } }
     rows, tools = repair_plan(full, users)
-    jpeg, *consumers = rows
+    jpeg = rows.first
+    consumers = rows.select { |row| row.key?("links") }
     return if consumers.empty?
 
     ordered = dependency_order(consumers)
     transact(rows, tools, repair: true) do
       verify_original(jpeg)
       current = original(jpeg)
-      rebuild_consumers(ordered, current, tools)
-      reset_linkage_cache(consumers)
+      rebuild_consumers(ordered, current)
+      reset_linkage_cache(rows)
       smoke(current, consumers)
       verify_original(jpeg)
     end
@@ -731,13 +929,13 @@ class GgmlLlamaRepair < JpegXlTransaction
     provider_rows, active, broken = pair_group(full, users)
     return if broken.empty?
 
-    tools = broken.flat_map { |row| preflight(row).to_a }.to_h
     puts "#{linkage_group} linkage repair: #{broken.map { |row| row.fetch('full') }.join(', ')}"
     rows = provider_rows + broken
+    tools = plan_dependencies(rows, broken)
     transact(rows, tools, repair: true) do
       provider_rows.each { |row| verify_original(row) }
-      rebuild_consumers(dependency_order(broken), active, tools)
-      reset_linkage_cache(broken)
+      rebuild_consumers(dependency_order(broken), active)
+      reset_linkage_cache(rows)
       provider_rows.each { |row| verify_original(row) }
     end
     puts "#{linkage_group} consumer linkage repaired and verified"
@@ -747,7 +945,11 @@ end
 if $PROGRAM_NAME == __FILE__
   File.umask(0o077)
   mode, state, full, *users = ARGV
-  if %w[pair-plan pair-repair].include?(mode)
+  if %w[jpeg-xl-install ggml-llama-install].include?(mode)
+    klass = mode == "jpeg-xl-install" ? JpegXlTransaction : GgmlLlamaRepair
+    klass.new(state).run_install(full, users.fetch(0))
+    exit
+  elsif %w[pair-plan pair-repair].include?(mode)
     llama, *consumers = users
     pair = GgmlLlamaRepair.new(state)
     if mode == "pair-plan"

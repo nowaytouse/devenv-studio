@@ -48,6 +48,58 @@ class Fixture < JpegXlTransaction
   CONSUMER = "example/tap/consumer"
   OLD = "HEAD-aaaaaaa"
   NEW = "HEAD-bbbbbbb"
+  DEPENDENCIES = {
+    "bison" => ["3.8.2", []],
+    "libpng" => ["2.0", ["--with-fixture"]],
+    "webp" => ["1.0", []],
+    "libtiff" => ["2.0", []],
+  }.freeze
+  Target = Struct.new(:name, :installed) do
+    def full_name
+      name
+    end
+
+    def tap
+      "homebrew/core"
+    end
+
+    def pkg_version
+      PkgVersion.parse(DEPENDENCIES.fetch(name).first)
+    end
+
+    def active_spec_sym
+      :stable
+    end
+
+    def pinned?
+      false
+    end
+
+    def any_version_installed?
+      installed
+    end
+
+    def keg_only?
+      name == "webp"
+    end
+
+    def deprecated_options
+      []
+    end
+
+    def options
+      Options.create(DEPENDENCIES.fetch(name).last)
+    end
+  end
+  Dependency = Struct.new(:to_formula) do
+    def options
+      Options.new
+    end
+
+    def build?
+      to_formula.name == "bison"
+    end
+  end
 
   attr_reader :builds
 
@@ -57,7 +109,7 @@ class Fixture < JpegXlTransaction
     @builds = []
   end
 
-  def install(full, version, library, options: [], stamp: "initial", dependency: false)
+  def install(full, version, library, options: [], stamp: "initial", dependency: false, linked: true)
     short = name(full)
     path = rack(short)/version
     FileUtils.mkdir_p(path/"lib")
@@ -71,7 +123,8 @@ class Fixture < JpegXlTransaction
     elsif short == "consumer"
       (path/"links").write((opt("jpeg-xl")/"lib"/library).to_s)
     end
-    Keg.new(path).link
+    keg = Keg.new(path)
+    linked ? keg.link : keg.optlink
     path
   end
 
@@ -85,19 +138,19 @@ class Fixture < JpegXlTransaction
     %i[repair repair_failed repair_restart repair_still_broken].include?(@scenario)
   end
 
-  def plan(full, users)
-    [[full, *users].map do |formula|
-      row, path = active_row(formula)
-      row.merge("links" => direct_links(path))
-    end, { "bison" => "3.8.2" }]
-  end
-
   def dependency_order(consumers)
     consumers
   end
 
-  def preflight(_row)
-    {}
+  def dependency_fixture(short)
+    Dependency.new(Target.new(short, rack(short).directory?))
+  end
+
+  def preflight(row)
+    return {} unless row.fetch("name") == "jpeg-xl" && %i[failed failed_missing_rack].include?(@scenario)
+
+    dep = dependency_fixture("bison")
+    { "bison" => dependency_write(row, dep, dep.to_formula) }
   end
 
   def direct_links(keg)
@@ -113,16 +166,26 @@ class Fixture < JpegXlTransaction
     end
   end
 
-  def brew(*args)
-    @builds << args.first
-    case args.first
+  def brew(action, row)
+    @builds << action
+    case action
     when "upgrade"
+      if %i[failed failed_missing_rack].include?(@scenario)
+        dep = dependency_fixture("bison")
+        admit_dependency(row, dep, dep.to_formula)
+        if @scenario == :failed
+          install("homebrew/core/bison", "3.8.2", "", dependency: true)
+          verify_dependency(row, "bison")
+        else
+          rack("bison").mkdir
+        end
+      end
+      mark(row)
       Keg.new(rack("jpeg-xl")/OLD).unlink
       abi = @scenario == :same_abi ? "0.13" : "0.14"
       install(JXL, NEW, "libjxl.#{abi}.dylib", stamp: "candidate")
-      install("homebrew/core/bison", "3.8.2", "", dependency: true) if @scenario == :failed
-      rack("bison").mkdir if @scenario == :failed_missing_rack
     when "reinstall"
+      mark(row)
       old = rack("consumer")/"1.0"
       Keg.new(old).unlink
       if @scenario == :failed_missing_rack
@@ -137,7 +200,7 @@ class Fixture < JpegXlTransaction
       raise "synthetic rebuild failure" if %i[failed repair_failed].include?(@scenario)
 
       FileUtils.remove_entry_secure(staged)
-    else raise "Unexpected Brew command: #{args.inspect}"
+    else raise "Unexpected Brew command: #{action.inspect}"
     end
   end
 
@@ -160,7 +223,62 @@ class Fixture < JpegXlTransaction
   end
 end
 
-def with_fixture(scenario)
+class DependencyFixture < Fixture
+  def setup
+    super
+    install("homebrew/core/libpng", "1.0", "", options: ["--with-fixture"], dependency: true)
+    install("homebrew/core/webp", "1.0", "", dependency: true, linked: false)
+    install("homebrew/core/libtiff", "1.0", "", dependency: true) if @scenario == :undeclared_dependency
+  end
+
+  def preflight(row)
+    names = case row.fetch("name")
+    when "jpeg-xl" then %w[libpng webp]
+    when "consumer" then opt("libpng").realpath.basename.to_s == "1.0" ? ["libpng"] : []
+    else []
+    end
+
+    names.to_h do |name|
+      dep = dependency_fixture(name)
+      [name, dependency_write(row, dep, dep.to_formula)]
+    end
+  end
+
+  def brew(action, row)
+    if action == "upgrade"
+      simulate_dependency(row, "libpng")
+      simulate_dependency(row, "libtiff") if @scenario == :undeclared_dependency
+      (opt("webp")/"stamp").write("independent edit") if @scenario == :dependency_drift
+      simulate_dependency(row, "webp")
+    elsif preflight(row).key?("libpng")
+      simulate_dependency(row, "libpng")
+    end
+    super
+  end
+
+  def simulate_dependency(owner, short)
+    dep = dependency_fixture(short)
+    target = dep.to_formula
+    admit_dependency(owner, dep, target)
+    prior = opt(short).realpath
+    keg = Keg.new(prior)
+    linked = keg.linked?
+    keg.unlink
+    version, options = DEPENDENCIES.fetch(short)
+    if prior.basename.to_s == version
+      staged = rack(short)/"#{version}.tmp"
+      prior.rename(staged)
+    end
+    install("homebrew/core/#{short}", version, "", options: options, stamp: "replacement", dependency: true,
+            linked: linked)
+    raise "synthetic dependency interruption" if @scenario == :dependency_interruption && staged
+
+    FileUtils.remove_entry_secure(staged) if staged
+    verify_dependency(owner, short)
+  end
+end
+
+def with_fixture(scenario, fixture_class: Fixture)
   Dir.mktmpdir("studio-jxl-fixture") do |root|
     prefix = Pathname(root).realpath
     Object.const_set(:HOMEBREW_PREFIX, prefix)
@@ -168,7 +286,7 @@ def with_fixture(scenario)
     [HOMEBREW_CELLAR, prefix/"opt", prefix/"var/homebrew/linked"].each { |path| FileUtils.mkdir_p(path) }
     state = prefix/"state"
     state.mkdir(0o700)
-    fixture = Fixture.new(state, scenario)
+    fixture = fixture_class.new(state, scenario)
     fixture.setup
     yield fixture, state
   ensure
@@ -209,11 +327,73 @@ end
   end
 end
 
+with_fixture(:success, fixture_class: DependencyFixture) do |fixture, state|
+  rows, tools = fixture.plan(Fixture::JXL, [Fixture::CONSUMER])
+  check(rows.map { |row| row.fetch("name") } == %w[jpeg-xl consumer libpng webp], "dependency snapshots are missing")
+  check(rows.first.fetch("dependencies").keys == %w[libpng webp], "provider dependency plan is incomplete")
+  check(rows[1].fetch("dependencies") == rows.first.fetch("dependencies").slice("libpng"),
+        "provider and consumer should share a single dependency snapshot")
+  check(tools.empty? && state.children.empty?, "installed dependency planning wrote state")
+
+  fixture.run(Fixture::JXL, [Fixture::CONSUMER])
+  check(fixture.versions("jpeg-xl") == [Fixture::NEW], "provider upgrade did not commit")
+  check(fixture.versions("libpng") == %w[1.0 2.0], "dependency upgrade discarded its previous keg")
+  check(fixture.opt("libpng").realpath == fixture.rack("libpng")/"2.0", "new dependency keg was not activated")
+  check(fixture.linked("libpng").realpath == fixture.opt("libpng").realpath, "dependency lost its linked status")
+  check(fixture.versions("webp") == ["1.0"], "same-version rebuild left a temporary keg")
+  check((fixture.opt("webp")/"stamp").read == "replacement", "same-version dependency was not rebuilt")
+  check(!fixture.present?(fixture.linked("webp")), "previously unlinked dependency was linked")
+  check(fixture.builds == %w[upgrade reinstall], "dependency upgrades bypassed the ABI consumer rebuild")
+  check(!fixture.present?(state/"jpeg-xl-active.json"), "committed dependency upgrade left a journal")
+end
+
+[:dependency_interruption, :undeclared_dependency, :dependency_drift].each do |scenario|
+  with_fixture(scenario, fixture_class: DependencyFixture) do |fixture, state|
+    png = fixture.opt("libpng").realpath
+    webp = fixture.opt("webp").realpath
+    before_png = fixture.manifest(png)
+    before_webp = fixture.manifest(webp)
+    if scenario == :undeclared_dependency
+      tiff = fixture.opt("libtiff").realpath
+      before_tiff = fixture.manifest(tiff)
+    end
+    error = nil
+    begin
+      fixture.run(Fixture::JXL, [Fixture::CONSUMER])
+    rescue RuntimeError => problem
+      error = problem.message
+    end
+    expected = {
+      dependency_interruption: "synthetic dependency interruption",
+      undeclared_dependency:    "libtiff",
+      dependency_drift:        "webp",
+    }.fetch(scenario)
+    check(error&.include?(expected), error || "unexpected dependency operation succeeded")
+    check(fixture.versions("jpeg-xl") == [Fixture::OLD], "dependency failure changed the provider")
+    check(fixture.versions("libpng") == ["1.0"] && fixture.manifest(png) == before_png,
+          "previous dependency upgrade was not rolled back")
+    check(fixture.opt("libpng").realpath == png && fixture.linked("libpng").realpath == png,
+          "dependency rollback changed the original link targets")
+    check(fixture.versions("webp") == ["1.0"], "dependency rollback left a temporary keg")
+    check(fixture.opt("webp").realpath == webp && !fixture.present?(fixture.linked("webp")),
+          "dependency rollback changed unlinked installation")
+    if scenario == :dependency_drift
+      check((webp/"stamp").read == "independent edit", "dependency recovery overwrote independent change")
+    else
+      check(fixture.manifest(webp) == before_webp, "failed dependency change did not restore the original keg")
+    end
+    if scenario == :undeclared_dependency
+      check(fixture.versions("libtiff") == ["1.0"] && fixture.manifest(tiff) == before_tiff,
+            "unplanned dependency reached the package mutation")
+    end
+    check(!fixture.present?(state/"jpeg-xl-active.json"), "verified dependency rollback left a journal")
+  end
+end
+
 with_fixture(:success) do |fixture, state|
   rows, tools = fixture.plan(Fixture::JXL, [Fixture::CONSUMER])
   fixture.prepare(rows, tools)
-  fixture.mark(rows.first)
-  fixture.brew("upgrade")
+  fixture.brew("upgrade", rows.first)
   Fixture.new(state).recover
   check(fixture.versions("jpeg-xl") == [Fixture::OLD], "restart recovery did not restore JPEG XL")
   check(!fixture.present?(state/"jpeg-xl-active.json"), "restart recovery left a journal")
@@ -222,8 +402,7 @@ end
 with_fixture(:success) do |fixture, state|
   rows, tools = fixture.plan(Fixture::JXL, [Fixture::CONSUMER])
   fixture.prepare(rows, tools)
-  fixture.mark(rows.first)
-  fixture.brew("upgrade")
+  fixture.brew("upgrade", rows.first)
   journal = state/"jpeg-xl-active.json"
   record = JSON.parse(journal.read)
   record.fetch("rows").first["manifest"] = {}
@@ -236,6 +415,35 @@ with_fixture(:success) do |fixture, state|
   end
   check(fixture.versions("jpeg-xl") == [Fixture::OLD, Fixture::NEW], "malformed journal changed kegs")
   check(journal.file?, "malformed journal was deleted")
+end
+
+with_fixture(:success) do |fixture, state|
+  rows, tools = fixture.plan(Fixture::JXL, [Fixture::CONSUMER])
+  fixture.prepare(rows, tools)
+  fixture.brew("upgrade", rows.first)
+  prior = fixture.original(rows.first)
+  prior.rename(state/"interrupted-original")
+  snapshot = fixture.saved(rows.first)/"stamp"
+  original = snapshot.read
+  snapshot.write("damaged backup")
+  journal = state/"jpeg-xl-active.json"
+  journal_before = journal.read
+
+  begin
+    Fixture.new(state).recover
+    raise "Damaged rollback backup was accepted"
+  rescue RuntimeError => error
+    check(error.message.include?("rollback backup drifted"), error.message)
+  end
+  check(journal.read == journal_before, "failed rollback rewrote or discarded its journal")
+  check(fixture.opt("jpeg-xl").realpath == fixture.rack("jpeg-xl")/Fixture::NEW, "failed rollback changed active keg")
+  check(snapshot.read == "damaged backup", "failed rollback discarded the backup evidence")
+
+  snapshot.write(original)
+  Fixture.new(state).recover
+  check(fixture.versions("jpeg-xl") == [Fixture::OLD], "recovery retry did not restore JPEG XL")
+  check(fixture.manifest(prior) == fixture.manifest(state/"interrupted-original"), "retry did not restore backup bytes")
+  check(!fixture.present?(journal), "verified retry left a journal")
 end
 
 with_fixture(:zero_status_broken) do |fixture, _state|
@@ -268,8 +476,7 @@ end
     if scenario == :repair_restart
       rows, tools = fixture.repair_plan(Fixture::JXL, [Fixture::CONSUMER])
       fixture.prepare(rows, tools, repair: true)
-      fixture.mark(rows.last)
-      fixture.brew("reinstall")
+      fixture.brew("reinstall", rows.last)
       Fixture.new(state, :repair_restart).recover
     else
       begin
@@ -290,8 +497,7 @@ end
 with_fixture(:repair_restart) do |fixture, state|
   rows, tools = fixture.repair_plan(Fixture::JXL, [Fixture::CONSUMER])
   fixture.prepare(rows, tools, repair: true)
-  fixture.mark(rows.last)
-  fixture.brew("reinstall")
+  fixture.brew("reinstall", rows.last)
   (fixture.opt("jpeg-xl")/"stamp").write("independent provider change")
   begin
     Fixture.new(state, :repair_restart).recover
@@ -341,9 +547,10 @@ class PairFixture < GgmlLlamaRepair
     path
   end
 
-  def brew(*args)
-    raise "Unexpected rebuild request" unless args == %w[reinstall --no-ask --build-from-source --formula whisper.cpp]
+  def brew(action, row)
+    raise "Unexpected rebuild request" unless action == "reinstall" && row.fetch("full") == "whisper.cpp"
 
+    mark(row)
     install("whisper.cpp", links: [opt("ggml")/"lib/libggml.1.dylib", opt("llama.cpp")/"lib/libllama.1.dylib"])
     raise "Synthetic pair failure" if @fail
   end
