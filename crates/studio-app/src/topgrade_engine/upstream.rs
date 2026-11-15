@@ -185,18 +185,6 @@ fn check(checkout: &Path, revision: &str) -> Result<Report> {
     })
 }
 
-pub(super) fn verify_current(checkout: &Path, revision: &str) -> Result<()> {
-    let report = check(checkout, revision)?;
-    ensure!(
-        report.status == Status::Current,
-        "Reviewed Topgrade release {} is not the current verified upstream pin (latest {}, {:?})",
-        report.pinned.tag,
-        report.latest.tag,
-        report.status
-    );
-    Ok(())
-}
-
 fn status_directory(home: &Path) -> Result<PathBuf> {
     let directory = home.join(STATE_DIR);
     let parent = directory

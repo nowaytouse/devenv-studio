@@ -2,7 +2,7 @@
 
 This Apple Silicon macOS profile configures the managed Rust Topgrade tasks. The manifest covers the configuration, compatibility helpers, and reviewed npm patch assets. LLVM 23.1.4 stays pinned, and the historical LLVM HEAD remains available.
 
-DevEnv Studio builds a reviewed component tree, installs the matching profile with its Rust installer, and activates the engine separately. The built-in Helm and GitHub Skills steps use their native validators. The older standalone helpers remain available for legacy entry points and recovery.
+DevEnv Studio builds the tracked Studio HEAD, verifies the matching profile, and atomically replaces the executable at `~/.local/bin/topgrade`. The built-in Helm and GitHub Skills steps use their native validators. The older standalone helpers remain available for legacy entry points and recovery.
 
 The Homebrew formula step refreshes catalogs before checking for upgrades. When a tap has local changes, the step preserves that checkout and fast-forwards clean tracked tap checkouts, including `homebrew/core`. The log names deferred taps and reports refresh failures. A tap with no tracking branch whose sole remote points to itself is reported as local-only. A failed core refresh stops formula upgrades. The step checks the requested formulae again after upgrades. Deferred catalogs or formulae still reported as outdated produce `PARTIAL` with a nonzero exit status. Intentional pin and separately managed formula exclusions remain visible.
 
@@ -12,25 +12,17 @@ HEAD-sync also checks for consumers still linked to an old JPEG XL ABI after a b
 
 ## Review and install
 
-Use the Studio maintenance CLI against a clean reviewed checkout:
+Use the Studio maintenance CLI against the existing tracked checkout:
 
 ```sh
-devenv-studio topgrade-engine plan /absolute/studio-checkout FULL_STUDIO_SHA
-devenv-studio topgrade-engine prepare /absolute/studio-checkout FULL_STUDIO_SHA
-devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
+devenv-studio topgrade-engine plan /absolute/studio-checkout
+devenv-studio topgrade-engine update /absolute/studio-checkout
+devenv-studio topgrade-engine verify-current /absolute/studio-checkout
 ```
 
-`plan` is read-only. `install` accepts fixed destinations and verified source bytes. Initial adoption of an existing file requires its recorded preimage hash. Subsequent upgrades require the previously installed bytes. A local edit, unknown existing file, symlink, special file, corrupt source or pending transaction stops deployment.
+The updater fetches the branch already configured in Git and accepts only a clean checkout and a fast-forward. It validates the candidate before replacing the one installed executable. The engine receipt is stored on that executable. The installed helper at `~/.local/bin/topgrade-rustup-headsync` delegates `plan` and `update` to `~/.local/bin/devenv-studio` using the supplied absolute checkout path.
 
-All changed files are backed up before the first replacement. Data assets install before executable helpers, and configuration installs last. Each individual replacement is atomic. A fsynced journal and lock protect deployment, and caught errors attempt rollback. The installation is recoverable across interruption; it is not one atomic rename across all files.
-
-The activation record names the profile transaction. To restore the previous launcher and profile:
-
-```sh
-devenv-studio topgrade-engine rollback /absolute/studio-checkout FULL_STUDIO_SHA
-```
-
-Rollback checks destinations and backup hashes before changing anything. It refuses to overwrite later edits or a newer profile. Newly created files are removed only when they still match the transaction. Original modes and timestamps are restored. Private journals and backups live under `~/.local/state/topgrade-macos-profile/transactions/`. The legacy installer remains compatible with v1 profile transactions for separate recovery.
+Profile writes still use their existing lock and journal. Initial adoption checks an existing file against the known preimage. Later installs check the last recorded bytes and stop on local edits or a pending transaction. Existing profile journals and backups remain in `~/.local/state/topgrade-macos-profile/transactions/`.
 
 The standalone legacy fixtures use Python 3.15. The Rust SQLite integration still verifies the Homebrew Python 3.15 extension against its target interpreter. Other tools, such as Conda, retain their own runtimes.
 

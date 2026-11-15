@@ -48,8 +48,6 @@ pub struct Check {
     pub detail: String,
     pub steps: Vec<Step>,
     pub engine: Option<EngineIdentity>,
-    pub rollback: Option<EngineIdentity>,
-    pub rollback_detail: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +95,6 @@ pub struct Report {
     pub detail: String,
     pub engine: Option<EngineIdentity>,
     pub engine_tree: Option<String>,
-    pub rollback: Option<EngineIdentity>,
 }
 
 pub fn check(cancel: Arc<AtomicBool>) -> Result<Check> {
@@ -111,8 +108,6 @@ pub fn check(cancel: Arc<AtomicBool>) -> Result<Check> {
             detail: "Topgrade maintenance is available on macOS only.".into(),
             steps: Vec::new(),
             engine: None,
-            rollback: None,
-            rollback_detail: None,
         })
     }
 }
@@ -178,14 +173,14 @@ pub fn sha256_file(path: &Path) -> Result<String> {
     }
 }
 
-/// Inspect a managed release without changing the launcher or installed profile.
-pub fn verified_engine_release(home: &Path, binary: &Path) -> Result<EngineIdentity> {
+/// Verify the active executable and its installed profile.
+pub fn verified_engine(home: &Path, binary: &Path) -> Result<EngineIdentity> {
     #[cfg(target_os = "macos")]
-    return native::verified_engine_release(home, binary);
+    return native::verified_engine(home, binary);
     #[cfg(not(target_os = "macos"))]
     {
         let _ = (home, binary);
-        anyhow::bail!("Managed Topgrade releases are available on macOS only")
+        anyhow::bail!("Managed Topgrade is available on macOS only")
     }
 }
 

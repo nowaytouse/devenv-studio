@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::{self, DirBuilder, File, OpenOptions};
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::os::unix::process::{CommandExt as _, ExitStatusExt};
@@ -18,6 +18,7 @@ use nix::libc::{self, F_GETFD, F_SETFD, FD_CLOEXEC, O_NOFOLLOW, O_NONBLOCK};
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::{Pid, User, geteuid, getuid};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::command::CommandExt as _;
 
@@ -45,7 +46,7 @@ mod xcode;
 const SCHEMA: u32 = 1;
 const STATE: &str = "Library/Application Support/LTSC Studio";
 const MARKER: &str = "maintenance-active.json";
-const RELEASES: &str = ".local/share/topgrade-rustup-head/releases";
+const ENGINE_BIN: &str = ".local/bin/topgrade";
 const ACTIVATION_PENDING: &str = ".local/share/topgrade-rustup-head/studio-activation.pending.json";
 const TOOLS_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
 const REQUIRED_ASSETS: &[&str] = &[
@@ -182,6 +183,7 @@ struct Receipt {
     component_tree: String,
     binary_sha256: String,
     profile_sha256: String,
+    profile_version: u32,
     assets: BTreeMap<String, String>,
 }
 
@@ -541,40 +543,40 @@ fn verify_assets(home: &Path, receipt: &Receipt) -> Result<()> {
     Ok(())
 }
 
-fn verify_release(home: &Path, executable: &Path, reviewed_digest: &str) -> Result<Receipt> {
-    let bin = executable
-        .parent()
-        .ok_or_else(|| color_eyre::eyre::eyre!("Missing engine bin directory"))?;
-    let release = bin
-        .parent()
-        .ok_or_else(|| color_eyre::eyre::eyre!("Missing engine release directory"))?;
+fn verify_engine(home: &Path, executable: &Path, reviewed_digest: &str) -> Result<Receipt> {
     ensure!(
-        release.parent() == Some(home.join(RELEASES).as_path()) && executable.ends_with("bin/topgrade"),
-        "Engine is outside its reviewed managed release"
+        executable == home.join(ENGINE_BIN),
+        "Engine is outside the managed installation"
     );
-    let mut file = open_file(&release.join("studio-engine.json"), false, MAX_JSON)?;
-    let bytes = read_json_bytes(&mut file)?;
-    file.rewind()?;
+    let file = open_file(executable, false, MAX_ASSET)?;
+    let mut bytes = vec![0_u8; MAX_JSON as usize];
+    // Read the receipt from the same opened executable we verify below.
+    let size = unsafe {
+        libc::fgetxattr(
+            file.as_raw_fd(),
+            c"org.devenv-studio.topgrade-engine".as_ptr(),
+            bytes.as_mut_ptr().cast(),
+            bytes.len(),
+            0,
+            0,
+        )
+    };
+    let size = usize::try_from(size).map_err(|_| io::Error::last_os_error())?;
+    let bytes = &bytes[..size];
     ensure!(
-        sha256(file.try_clone()?)? == reviewed_digest,
+        format!("{:x}", Sha256::digest(bytes)) == reviewed_digest,
         "Reviewed engine receipt has changed"
     );
-    file.rewind()?;
+    let receipt: Receipt = serde_json::from_slice(bytes)?;
     ensure!(
-        bytes == read_json_bytes(&mut file)?,
-        "Engine receipt changed while reading"
-    );
-    let receipt: Receipt = serde_json::from_slice(&bytes)?;
-    ensure!(
-        receipt.schema_version == SCHEMA && is_hex(&receipt.studio_commit, 40) && is_hex(&receipt.component_tree, 40),
+        receipt.schema_version == SCHEMA
+            && receipt.profile_version == SCHEMA
+            && is_hex(&receipt.studio_commit, 40)
+            && is_hex(&receipt.component_tree, 40)
+            && is_hex(&receipt.profile_sha256, 64),
         "Invalid engine receipt provenance"
     );
-    ensure!(
-        executable == home.join(RELEASES).join(&receipt.component_tree).join("bin/topgrade"),
-        "Engine is outside its reviewed managed release"
-    );
-    verify_file(executable, &receipt.binary_sha256)?;
-    verify_file(&release.join("profile-manifest.json"), &receipt.profile_sha256)?;
+    ensure!(sha256(file)? == receipt.binary_sha256, "Managed engine bytes changed");
     verify_assets(home, &receipt)?;
     Ok(receipt)
 }
@@ -799,7 +801,7 @@ fn execute(dir: &Path, request: &Request, events: &mut Events<'_>) -> Result<Out
     let lock = lock(&state)?;
     check_admission(&home, &state)?;
     let executable = env::current_exe()?.canonicalize()?;
-    let receipt = verify_release(&home, &executable, &request.review_digest)?;
+    let receipt = verify_engine(&home, &executable, &request.review_digest)?;
     for (index, &step) in request.steps.iter().enumerate() {
         if exists(&dir.join("cancel"))? {
             return Ok(Outcome::Cancelled);

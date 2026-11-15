@@ -1,3 +1,12 @@
 #!/bin/sh
-printf "%s\n" "Topgrade is managed by DevEnv Studio. Use devenv-studio topgrade-engine to prepare, install or roll back the project fork." >&2
-exit 2
+set -eu
+
+if [ "$#" -ne 2 ] || { [ "$1" != update ] && [ "$1" != plan ]; }; then
+    printf '%s\n' 'Usage: topgrade-rustup-headsync <update|plan> <absolute Studio checkout>' >&2
+    exit 2
+fi
+case "$2" in
+    /*) ;;
+    *) printf '%s\n' 'The Studio checkout must be an absolute path.' >&2; exit 2 ;;
+esac
+exec "${HOME}/.local/bin/devenv-studio" topgrade-engine "$@"

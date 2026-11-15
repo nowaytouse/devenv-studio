@@ -95,9 +95,9 @@
     {
       "source": "bin/topgrade-rustup-headsync",
       "destination": ".local/bin/topgrade-rustup-headsync",
-      "sha256": "400cee00234e0b99edd84a508271e8628bec819d4b11880991efb1e85ae70ea5",
+      "sha256": "264be488184e992257d05995551e1e0114ca0334b86e84ae4ae86716e41c6a5f",
       "mode": 448,
-      "adoptSha256": "80187478567b1625e1be033feee1c9278118e3b2c8f5afad785ff52fa0b24bec"
+      "adoptSha256": "400cee00234e0b99edd84a508271e8628bec819d4b11880991efb1e85ae70ea5"
     },
     {
       "source": "bin/topgrade-select-xcode-beta",

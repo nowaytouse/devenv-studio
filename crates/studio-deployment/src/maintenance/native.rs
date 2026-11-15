@@ -7,10 +7,14 @@ use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::{c_char, c_int, c_void},
     fs::{self, DirBuilder, File, Metadata, OpenOptions},
     io::{Read, Write},
-    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
-    path::{Component, Path, PathBuf},
+    os::{
+        fd::AsRawFd,
+        unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+    },
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
@@ -275,10 +279,10 @@ pub(super) fn acquire_engine_activation_lock(home: &Path) -> Result<File> {
     let base = home.join(".local/share/topgrade-rustup-head");
     let uid = real_metadata(home)?.uid();
     let directory =
-        real_metadata(&base).context("Inspect the managed Topgrade release directory")?;
+        real_metadata(&base).context("Inspect the Topgrade activation state directory")?;
     ensure!(
         directory.is_dir() && directory.uid() == uid && directory.mode() & 0o022 == 0,
-        "Topgrade release directory must be user-owned and protected from other writers"
+        "Topgrade activation state directory must be user-owned and protected from other writers"
     );
     let path = base.join("lock");
     let valid = |metadata: &Metadata| {
@@ -320,34 +324,15 @@ struct Receipt {
     component_tree: String,
     binary_sha256: String,
     profile_sha256: String,
+    profile_version: u32,
     assets: BTreeMap<String, String>,
 }
 
-#[derive(Deserialize)]
-struct Manifest {
-    version: u32,
-    files: Vec<ManifestFile>,
-}
-
-#[derive(Deserialize)]
-struct ManifestFile {
-    destination: String,
-    sha256: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Activation {
-    schema_version: u32,
-    previous: PathBuf,
-    target: PathBuf,
-    profile_transaction: Option<String>,
-}
-
-struct Release {
+struct VerifiedEngine {
     identity: EngineIdentity,
     digest: String,
     assets: BTreeMap<String, String>,
+    metadata: Metadata,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -384,38 +369,6 @@ fn require_running(cancel: &AtomicBool) -> Result<()> {
     Ok(())
 }
 
-fn release_tree<'a>(home: &Path, binary: &'a Path) -> Result<&'a str> {
-    let releases = home.join(".local/share/topgrade-rustup-head/releases");
-    let relative = binary
-        .strip_prefix(releases)
-        .context("Topgrade engine is outside its managed releases")?;
-    let parts = relative.components().collect::<Vec<_>>();
-    let [
-        Component::Normal(tree),
-        Component::Normal(bin),
-        Component::Normal(name),
-    ] = parts.as_slice()
-    else {
-        anyhow::bail!("Unexpected managed Topgrade engine layout");
-    };
-    let tree = tree.to_str().context("Invalid Topgrade component tree")?;
-    ensure!(
-        *bin == "bin" && *name == "topgrade" && valid_hex(tree, 40),
-        "Unexpected managed Topgrade engine layout"
-    );
-    Ok(tree)
-}
-
-fn owned_file(path: &Path, uid: u32) -> Result<Metadata> {
-    let metadata = real_metadata(path)?;
-    ensure!(
-        metadata.is_file() && metadata.uid() == uid && metadata.mode() & 0o022 == 0,
-        "Managed Topgrade file is unsafe: {}",
-        path.display()
-    );
-    Ok(metadata)
-}
-
 fn valid_version(version: &str) -> bool {
     version.len() <= 96
         && version.as_bytes().first().is_some_and(u8::is_ascii_digit)
@@ -424,21 +377,61 @@ fn valid_version(version: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || b".+-".contains(&byte))
 }
 
-fn inspect_release(home: &Path, binary: &Path, cancel: &AtomicBool) -> Result<Release> {
-    let tree = release_tree(home, binary)?;
-    let release = home
-        .join(".local/share/topgrade-rustup-head/releases")
-        .join(tree);
+unsafe extern "C" {
+    fn fgetxattr(
+        fd: c_int,
+        name: *const c_char,
+        value: *mut c_void,
+        size: usize,
+        position: u32,
+        options: c_int,
+    ) -> isize;
+}
+
+fn engine_receipt(file: &File) -> Result<Vec<u8>> {
+    let mut bytes = vec![0; JSON_LIMIT as usize];
+    // The descriptor remains open and the buffer is writable for its entire length.
+    let len = unsafe {
+        fgetxattr(
+            file.as_raw_fd(),
+            c"org.devenv-studio.topgrade-engine".as_ptr(),
+            bytes.as_mut_ptr().cast(),
+            bytes.len(),
+            0,
+            0,
+        )
+    };
+    if len < 0 {
+        return Err(std::io::Error::last_os_error())
+            .context("Read the installed Topgrade engine receipt");
+    }
+    bytes.truncate(len as usize);
+    Ok(bytes)
+}
+
+fn inspect_engine(home: &Path, binary: &Path, cancel: &AtomicBool) -> Result<VerifiedEngine> {
+    ensure!(
+        binary == home.join(".local/bin/topgrade"),
+        "Expected the default Topgrade executable"
+    );
+    let directory = real_metadata(&home.join(".local/bin"))?;
     let uid = real_metadata(home)?.uid();
-    let receipt_path = release.join("studio-engine.json");
-    owned_file(&receipt_path, uid)?;
-    let bytes = read_regular(&receipt_path, JSON_LIMIT)
-        .context("Installed Topgrade does not have a readable Studio engine receipt")?;
+    ensure!(
+        directory.is_dir() && directory.uid() == uid && directory.mode() & 0o022 == 0,
+        "Invalid Topgrade executable directory"
+    );
+    let (file, executable) = open_regular(binary, FILE_LIMIT)?;
+    ensure!(
+        executable.uid() == uid && executable.mode() & 0o022 == 0 && executable.mode() & 0o111 != 0,
+        "Unsafe Topgrade executable"
+    );
+    let bytes = engine_receipt(&file)?;
     let receipt: Receipt = serde_json::from_slice(&bytes)
         .map_err(|_| anyhow::anyhow!("Invalid Studio engine receipt schema"))?;
     ensure!(
         receipt.schema_version == 1
-            && receipt.component_tree == tree
+            && receipt.profile_version == 1
+            && valid_hex(&receipt.component_tree, 40)
             && valid_hex(&receipt.studio_commit, 40)
             && valid_hex(&receipt.binary_sha256, 64)
             && valid_hex(&receipt.profile_sha256, 64)
@@ -449,33 +442,14 @@ fn inspect_release(home: &Path, binary: &Path, cancel: &AtomicBool) -> Result<Re
                 .is_some_and(|hash| valid_hex(hash, 64))),
         "Studio engine receipt has an unexpected provenance or asset set"
     );
-    let executable = owned_file(binary, uid)?;
+    let output = hash_command()
+        .stdin(file)
+        .output()
+        .context("Hash the verified Topgrade executable")?;
     ensure!(
-        executable.mode() & 0o111 != 0 && sha256_file(binary)? == receipt.binary_sha256,
+        hash_output(output)? == receipt.binary_sha256
+            && unchanged(&executable, &real_metadata(binary)?),
         "Managed Topgrade binary has drifted"
-    );
-    let manifest_path = release.join("profile-manifest.json");
-    owned_file(&manifest_path, uid)?;
-    let manifest_bytes = read_regular(&manifest_path, JSON_LIMIT)?;
-    let packaged_manifest = release.join("profile/manifest.json");
-    owned_file(&packaged_manifest, uid)?;
-    ensure!(
-        sha256_bytes(&manifest_bytes)? == receipt.profile_sha256
-            && sha256_file(&packaged_manifest)? == receipt.profile_sha256,
-        "Managed Topgrade profile manifest has drifted"
-    );
-    let manifest: Manifest =
-        serde_json::from_slice(&manifest_bytes).context("Invalid managed profile manifest")?;
-    ensure!(
-        manifest.version == 1
-            && receipt.assets.iter().all(|(destination, hash)| {
-                let mut entries = manifest
-                    .files
-                    .iter()
-                    .filter(|file| &file.destination == destination);
-                entries.next().is_some_and(|file| &file.sha256 == hash) && entries.next().is_none()
-            }),
-        "Managed Topgrade receipt disagrees with the profile manifest"
     );
     let output = run_configured(
         &Invocation {
@@ -504,7 +478,7 @@ fn inspect_release(home: &Path, binary: &Path, cancel: &AtomicBool) -> Result<Re
         .strip_prefix("topgrade ")
         .filter(|version| valid_version(version))
         .context("Unexpected Topgrade version output")?;
-    Ok(Release {
+    Ok(VerifiedEngine {
         identity: EngineIdentity {
             binary: binary.to_owned(),
             studio_commit: receipt.studio_commit,
@@ -512,77 +486,25 @@ fn inspect_release(home: &Path, binary: &Path, cancel: &AtomicBool) -> Result<Re
             binary_sha256: receipt.binary_sha256,
             profile_sha256: receipt.profile_sha256,
             upstream_version: version.into(),
-            profile_version: manifest.version,
+            profile_version: receipt.profile_version,
         },
         digest: sha256_bytes(&bytes)?,
         assets: receipt.assets,
+        metadata: executable,
     })
 }
 
-pub(super) fn verified_engine_release(home: &Path, binary: &Path) -> Result<EngineIdentity> {
-    Ok(inspect_release(home, binary, &AtomicBool::new(false))?.identity)
+pub(super) fn verified_engine(home: &Path, binary: &Path) -> Result<EngineIdentity> {
+    let cancel = AtomicBool::new(false);
+    let engine = inspect_engine(home, binary, &cancel)?;
+    Ok(profile_proof(home.to_owned(), &engine, &cancel)?.engine)
 }
 
-fn active_release(home: &Path, cancel: &AtomicBool) -> Result<Release> {
-    let link = home.join(".local/bin/topgrade");
-    ensure!(
-        fs::symlink_metadata(&link)
-            .context("Managed Topgrade launcher is missing")?
-            .is_symlink(),
-        "Managed Topgrade launcher must point to a Studio engine release"
-    );
-    ensure!(
-        real_metadata(&home.join(".local/bin"))?.is_dir(),
-        "Invalid Topgrade launcher directory"
-    );
-    let binary = link
-        .canonicalize()
-        .context("Resolve the managed Topgrade engine")?;
-    let release = inspect_release(home, &binary, cancel)?;
-    ensure!(
-        link.canonicalize()? == binary,
-        "Managed Topgrade launcher changed during verification"
-    );
-    Ok(release)
+fn active_engine(home: &Path, cancel: &AtomicBool) -> Result<VerifiedEngine> {
+    inspect_engine(home, &home.join(".local/bin/topgrade"), cancel)
 }
 
-fn rollback_candidate(
-    home: &Path,
-    current: &EngineIdentity,
-    cancel: &AtomicBool,
-) -> Result<Option<EngineIdentity>> {
-    let path = home
-        .join(".local/share/topgrade-rustup-head")
-        .join(format!("studio-activation-{}.json", current.component_tree));
-    if !present(&path)? {
-        return Ok(None);
-    }
-    owned_file(&path, real_metadata(home)?.uid())?;
-    let activation: Activation = serde_json::from_slice(&read_regular(&path, JSON_LIMIT)?)
-        .context("Invalid Topgrade activation record")?;
-    ensure!(
-        activation.schema_version == 1
-            && activation.target == current.binary
-            && activation.previous != current.binary,
-        "Topgrade activation record does not match the active release"
-    );
-    let tree = release_tree(home, &activation.previous)?;
-    let releases = home.join(".local/share/topgrade-rustup-head/releases");
-    if !present(&releases.join(tree))? {
-        return Ok(None);
-    }
-    let previous = inspect_release(home, &activation.previous, cancel)?.identity;
-    ensure!(
-        match activation.profile_transaction.as_deref() {
-            Some(tx) => valid_hex(tx, 32),
-            None => previous.profile_sha256 == current.profile_sha256,
-        },
-        "Topgrade activation has no matching profile rollback"
-    );
-    Ok(Some(previous))
-}
-
-fn profile_proof(home: PathBuf, release: &Release, cancel: &AtomicBool) -> Result<Proof> {
+fn profile_proof(home: PathBuf, engine: &VerifiedEngine, cancel: &AtomicBool) -> Result<Proof> {
     no_pending(&home)?;
     for name in ASSETS {
         require_running(cancel)?;
@@ -592,19 +514,19 @@ fn profile_proof(home: PathBuf, release: &Release, cancel: &AtomicBool) -> Resul
         ensure!(
             metadata.uid() == real_metadata(&home)?.uid()
                 && metadata.mode() & 0o022 == 0
-                && sha256_file(&path)? == release.assets[name],
+                && sha256_file(&path)? == engine.assets[name],
             "Managed Topgrade asset has drifted: {name}"
         );
     }
     ensure!(
-        home.join(".local/bin/topgrade").canonicalize()? == release.identity.binary,
-        "Managed Topgrade launcher changed during verification"
+        unchanged(&engine.metadata, &real_metadata(&engine.identity.binary)?),
+        "Managed Topgrade executable changed during verification"
     );
     no_pending(&home)?;
     Ok(Proof {
         home,
-        engine: release.identity.clone(),
-        digest: release.digest.clone(),
+        engine: engine.identity.clone(),
+        digest: engine.digest.clone(),
         tools: BTreeMap::new(),
         llvm: None,
     })
@@ -613,8 +535,8 @@ fn profile_proof(home: PathBuf, release: &Release, cancel: &AtomicBool) -> Resul
 fn load_proof(cancel: &AtomicBool) -> Result<Proof> {
     require_running(cancel)?;
     let home = account_home()?;
-    let release = active_release(&home, cancel)?;
-    profile_proof(home, &release, cancel)
+    let engine = active_engine(&home, cancel)?;
+    profile_proof(home, &engine, cancel)
 }
 
 fn tool(name: &str) -> Result<Tool> {
@@ -759,18 +681,11 @@ fn inventory(proof: &Proof) -> Result<Vec<Step>> {
 pub(super) fn check(cancel: &AtomicBool) -> Result<Check> {
     require_running(cancel)?;
     let mut engine = None;
-    let mut rollback = None;
-    let mut rollback_detail = None;
     let checked = (|| -> Result<_> {
         let home = account_home()?;
-        let release = active_release(&home, cancel)?;
-        engine = Some(release.identity.clone());
-        let proof = profile_proof(home, &release, cancel)?;
-        match rollback_candidate(&proof.home, &proof.engine, cancel) {
-            Ok(Some(previous)) => rollback = Some(previous),
-            Ok(None) => rollback_detail = Some("No installed rollback engine is available.".into()),
-            Err(error) => rollback_detail = Some(format!("{error:#}")),
-        }
+        let active = active_engine(&home, cancel)?;
+        engine = Some(active.identity.clone());
+        let proof = profile_proof(home, &active, cancel)?;
         inventory(&proof)
     })();
     let mut steps = match checked {
@@ -782,8 +697,6 @@ pub(super) fn check(cancel: &AtomicBool) -> Result<Check> {
                 detail: format!("{error:#}"),
                 steps: Vec::new(),
                 engine,
-                rollback,
-                rollback_detail,
             });
         }
     };
@@ -801,8 +714,6 @@ pub(super) fn check(cancel: &AtomicBool) -> Result<Check> {
         detail: "Managed Topgrade engine, profile and step inventory verified.".into(),
         steps,
         engine,
-        rollback,
-        rollback_detail,
     })
 }
 

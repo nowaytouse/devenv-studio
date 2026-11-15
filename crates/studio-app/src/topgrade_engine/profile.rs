@@ -642,7 +642,7 @@ fn apply(source: &Path, home: &Path) -> Result<Value> {
         write_json(&path, &journal)
     })();
     if let Err(error) = outcome {
-        return match rollback(home, &state, &id, None, || Ok(())) {
+        return match rollback(home, &state, &id) {
             Ok(_) => Err(error.context("Profile apply failed and its changes were rolled back")),
             Err(recovery) => {
                 Err(error.context(format!("Profile recovery {id} failed: {recovery:#}")))
@@ -678,39 +678,7 @@ pub(super) fn verify_installed(source: &Path, home: &Path) -> Result<usize> {
     Ok(verified_plan(source, home)?.unchanged)
 }
 
-pub(super) fn rollback_activation(
-    current: &Path,
-    previous: &Path,
-    home: &Path,
-    state: &Path,
-    id: Option<&str>,
-    before_restore: impl FnOnce() -> Result<()>,
-) -> Result<()> {
-    let current = verified_plan(current, home)?;
-    if let Some(id) = id {
-        let previous_plan = plan(previous, home)?;
-        rollback(
-            home,
-            state,
-            id,
-            Some((&current, &previous_plan)),
-            before_restore,
-        )?;
-        verified_plan(previous, home)?;
-    } else {
-        verified_plan(previous, home)?;
-        before_restore()?;
-    }
-    Ok(())
-}
-
-fn rollback(
-    home: &Path,
-    state: &Path,
-    id: &str,
-    expected: Option<(&Plan, &Plan)>,
-    before_restore: impl FnOnce() -> Result<()>,
-) -> Result<Value> {
+fn rollback(home: &Path, state: &Path, id: &str) -> Result<Value> {
     ensure!(hex(id, 32), "Invalid profile transaction ID");
     let path = safe_path(state, &format!("transactions/{id}/journal.json"))?;
     let folder = path.parent().context("Missing transaction directory")?;
@@ -719,51 +687,13 @@ fn rollback(
         journal.version == 1 && journal.files.len() <= MAX_ASSETS,
         "Invalid profile journal"
     );
-    if expected.is_none() && journal.status == Status::RolledBack {
+    if journal.status == Status::RolledBack {
         return Ok(json!({"status": "already-rolled-back", "transaction": id}));
     }
     if let Some(record) = &journal.previous {
         checked_record(record)?;
     }
     let active = installed(home)?;
-    if let Some((current, previous)) = expected {
-        ensure!(
-            journal.status == Status::Complete
-                && active == current.previous
-                && active
-                    .as_ref()
-                    .is_some_and(|record| record.transaction == id)
-                && receipt_matches(journal.previous.as_ref(), previous),
-            "Profile transaction does not bind the active and previous installed profiles"
-        );
-        let mut backups = BTreeMap::new();
-        for row in &journal.files {
-            let asset = &row.asset;
-            ensure!(
-                current
-                    .desired
-                    .get(&asset.destination)
-                    .is_some_and(|(hash, mode)| { hash == &asset.sha256 && *mode == asset.mode })
-                    && backups.insert(&asset.destination, row).is_none(),
-                "Profile transaction contains a different or duplicate asset"
-            );
-        }
-        for (destination, (hash, mode)) in &previous.desired {
-            if let Some(row) = backups.get(destination) {
-                ensure!(
-                    row.before_sha256.as_ref() == Some(hash) && row.before_mode == Some(*mode),
-                    "Profile backup does not match the previous manifest: {destination}"
-                );
-            }
-        }
-        for change in &previous.changes {
-            ensure!(
-                backups.contains_key(&change.asset.destination),
-                "Missing rollback backup for previous profile asset: {}",
-                change.asset.destination
-            );
-        }
-    }
     ensure!(
         active == journal.previous
             || active
@@ -821,7 +751,6 @@ fn rollback(
         );
         restores.push((target, current, before));
     }
-    before_restore()?;
     for (target, current, before) in restores.into_iter().rev() {
         if current == before {
             continue;
@@ -870,7 +799,7 @@ pub(super) fn execute(source: &Path, home: &Path, args: &[&str]) -> Result<Value
         ["--apply"] => apply(source, home),
         ["--rollback", id] => {
             let (state, _lock) = lock(home)?;
-            rollback(home, &state, id, None, || Ok(()))
+            rollback(home, &state, id)
         }
         [] | ["--verify"] => {
             let plan = plan(source, home)?;

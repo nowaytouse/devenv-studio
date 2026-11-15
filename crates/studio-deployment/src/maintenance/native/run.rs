@@ -1,7 +1,7 @@
 use super::{
     PATH, account_home, acquire_engine_activation_lock, data_dir, ensure_data, ensure_dir,
-    open_regular, present, read_regular, real_metadata, release_tree, require_running,
-    review_proof, rollback_candidate, same_file, valid_version,
+    open_regular, present, read_regular, real_metadata, require_running, review_proof, same_file,
+    valid_version,
 };
 use crate::{
     DeploymentEvent,
@@ -46,6 +46,7 @@ struct Record {
     elapsed_ms: Option<u64>,
     engine_source: Option<String>,
     engine: Option<EngineIdentity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     rollback: Option<EngineIdentity>,
 }
 
@@ -72,11 +73,7 @@ impl IncompleteReason {
 }
 
 impl Record {
-    fn started(
-        request: &Request,
-        engine: EngineIdentity,
-        rollback: Option<EngineIdentity>,
-    ) -> Self {
+    fn started(request: &Request, engine: EngineIdentity) -> Self {
         Self {
             schema_version: 2,
             run_id: request.run_id.clone(),
@@ -88,7 +85,7 @@ impl Record {
             elapsed_ms: Some(0),
             engine_source: Some(ENGINE_SOURCE.into()),
             engine: Some(engine),
-            rollback,
+            rollback: None,
         }
     }
 
@@ -121,7 +118,6 @@ impl Record {
             },
             engine: self.engine,
             engine_tree: self.engine_tree,
-            rollback: self.rollback,
         }
     }
 }
@@ -443,10 +439,6 @@ pub(in crate::maintenance) fn run(
         proof == review.proof,
         "Topgrade engine, profile, tools or LLVM candidate changed after review; review again"
     );
-    // A prior release is optional; a damaged rollback candidate cannot change this run's scope.
-    let rollback = rollback_candidate(&proof.home, &proof.engine, cancel)
-        .ok()
-        .flatten();
     require_running(cancel)?;
     let (run_id, path) = new_run(&proof.home)?;
     let request = Request {
@@ -468,7 +460,7 @@ pub(in crate::maintenance) fn run(
         .env("HOME", &proof.home)
         .env("PATH", PATH)
         .env("HOMEBREW_NO_AUTO_UPDATE", "1");
-    let record = Record::started(&request, proof.engine, rollback);
+    let record = Record::started(&request, proof.engine);
     publish_record(&path, &record).context("Persist engine provenance before starting Topgrade")?;
     let started = Instant::now();
     let exit = Supervisor {
@@ -487,7 +479,13 @@ pub(in crate::maintenance) fn run(
 }
 
 fn valid_identity(home: &Path, engine: &EngineIdentity) -> bool {
-    release_tree(home, &engine.binary).is_ok_and(|tree| tree == engine.component_tree)
+    // Historical results may record the former release path even after its files are gone.
+    let historical_path = home
+        .join(".local/share/topgrade-rustup-head/releases")
+        .join(&engine.component_tree)
+        .join("bin/topgrade");
+    (engine.binary == home.join(".local/bin/topgrade") || engine.binary == historical_path)
+        && valid_hex(&engine.component_tree, 40)
         && valid_hex(&engine.studio_commit, 40)
         && valid_hex(&engine.binary_sha256, 64)
         && valid_hex(&engine.profile_sha256, 64)
@@ -707,10 +705,7 @@ mod tests {
     fn identity(home: &Path, byte: &str) -> EngineIdentity {
         let tree = byte.repeat(40);
         EngineIdentity {
-            binary: home
-                .join(".local/share/topgrade-rustup-head/releases")
-                .join(&tree)
-                .join("bin/topgrade"),
+            binary: home.join(".local/bin/topgrade"),
             studio_commit: byte.repeat(40),
             component_tree: tree,
             binary_sha256: byte.repeat(64),
@@ -720,10 +715,9 @@ mod tests {
         }
     }
 
-    fn release(home: &Path, byte: &str) -> EngineIdentity {
-        use super::super::{ASSETS, sha256_file, verified_engine_release};
+    fn installed_engine(home: &Path, byte: &str) -> EngineIdentity {
+        use super::super::{ASSETS, sha256_file, verified_engine};
         let fixture = identity(home, byte);
-        let dir = fixture.binary.parent().unwrap().parent().unwrap();
         fs::create_dir_all(fixture.binary.parent().unwrap()).unwrap();
         fs::write(
             &fixture.binary,
@@ -731,35 +725,35 @@ mod tests {
         )
         .unwrap();
         fs::set_permissions(&fixture.binary, fs::Permissions::from_mode(0o755)).unwrap();
-        let manifest = dir.join("profile-manifest.json");
-        let assets = ASSETS.map(|name| (name, "e".repeat(64)));
-        fs::write(
-            &manifest,
-            serde_json::to_vec(&serde_json::json!({
-                "version": 1,
-                "files": assets.iter().map(|(destination, sha256)| {
-                    serde_json::json!({"destination": destination, "sha256": sha256})
-                }).collect::<Vec<_>>(),
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-        fs::create_dir(dir.join("profile")).unwrap();
-        fs::copy(&manifest, dir.join("profile/manifest.json")).unwrap();
-        fs::write(
-            dir.join("studio-engine.json"),
-            serde_json::to_vec(&serde_json::json!({
-                "schema_version": 1,
-                "studio_commit": fixture.studio_commit,
-                "component_tree": fixture.component_tree,
-                "binary_sha256": sha256_file(&fixture.binary).unwrap(),
-                "profile_sha256": sha256_file(&manifest).unwrap(),
-                "assets": assets.into_iter().collect::<std::collections::BTreeMap<_, _>>(),
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-        verified_engine_release(home, &fixture.binary).unwrap()
+        let mut assets = std::collections::BTreeMap::new();
+        for name in ASSETS {
+            let path = home.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, name).unwrap();
+            assets.insert(name, sha256_file(&path).unwrap());
+        }
+        let receipt = serde_json::json!({
+            "schema_version": 1,
+            "studio_commit": fixture.studio_commit,
+            "component_tree": fixture.component_tree,
+            "binary_sha256": sha256_file(&fixture.binary).unwrap(),
+            "profile_sha256": fixture.profile_sha256,
+            "profile_version": 1,
+            "assets": assets,
+        });
+        assert!(
+            Command::new("/usr/bin/xattr")
+                .args([
+                    "-w",
+                    "org.devenv-studio.topgrade-engine",
+                    &receipt.to_string()
+                ])
+                .arg(&fixture.binary)
+                .status()
+                .unwrap()
+                .success()
+        );
+        verified_engine(home, &fixture.binary).unwrap()
     }
 
     fn events() -> String {
@@ -808,9 +802,8 @@ mod tests {
             let trace =
                 read_events(&fixture.root).and_then(|bytes| parse_events(&bytes, &request, true));
             let current = identity(&fixture.root, "b");
-            let previous = identity(&fixture.root, "c");
             let record = outcome(
-                Record::started(&request, current.clone(), Some(previous.clone())),
+                Record::started(&request, current.clone()),
                 42,
                 result,
                 trace,
@@ -844,7 +837,6 @@ mod tests {
                     read_run(&fixture.root, fixture.root.clone(), &request.run_id).unwrap();
                 assert_eq!(report.status, RunStatus::Verified);
                 assert_eq!(report.engine, Some(current));
-                assert_eq!(report.rollback, Some(previous));
             }
         }
     }
@@ -859,7 +851,7 @@ mod tests {
         )
         .unwrap();
         let current = identity(&fixture.root, "b");
-        let initial = Record::started(&request, current.clone(), None);
+        let initial = Record::started(&request, current.clone());
         let mut legacy = serde_json::to_value(&initial).unwrap();
         legacy["schema_version"] = 1.into();
         for key in ["engine_source", "engine", "rollback"] {
@@ -875,6 +867,22 @@ mod tests {
         assert_eq!(old.status, RunStatus::Incomplete);
         assert_eq!(old.engine_tree, Some(current.component_tree.clone()));
         assert!(old.engine.is_none());
+
+        let archived_identity = |byte| {
+            let mut engine = identity(&fixture.root, byte);
+            engine.binary = fixture
+                .root
+                .join(".local/share/topgrade-rustup-head/releases")
+                .join(&engine.component_tree)
+                .join("bin/topgrade");
+            engine
+        };
+        let archived_current = archived_identity("b");
+        let mut previous_format = Record::started(&request, archived_current.clone());
+        previous_format.rollback = Some(archived_identity("c"));
+        publish_record(&fixture.root, &previous_format).unwrap();
+        assert_eq!(read().engine, Some(archived_current));
+
         publish_record(&fixture.root, &initial).unwrap();
         let interrupted = read();
         assert_eq!(interrupted.status, RunStatus::Incomplete);
@@ -882,42 +890,28 @@ mod tests {
     }
 
     #[test]
-    fn same_version_releases_are_distinct_and_tampered_rollback_is_rejected() {
+    fn same_version_updates_are_distinct_and_tampering_is_rejected() {
+        use super::super::{ASSETS, verified_engine};
         let fixture = Fixture::new();
-        let current = release(&fixture.root, "a");
-        let previous = release(&fixture.root, "b");
-        assert_eq!(current.upstream_version, previous.upstream_version);
-        assert_ne!(current.binary_sha256, previous.binary_sha256);
-        let journal = fixture
-            .root
-            .join(".local/share/topgrade-rustup-head")
-            .join(format!("studio-activation-{}.json", current.component_tree));
-        fs::write(
-            journal,
-            serde_json::to_vec(&serde_json::json!({
-                "schema_version": 1,
-                "target": current.binary,
-                "previous": previous.binary,
-                "profile_transaction": null,
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-        let cancel = AtomicBool::new(false);
-        assert_eq!(
-            rollback_candidate(&fixture.root, &current, &cancel).unwrap(),
-            Some(previous.clone())
-        );
-        let previous_release = previous.binary.parent().unwrap().parent().unwrap();
-        let archive = fixture.root.join("archived-release");
-        fs::rename(previous_release, &archive).unwrap();
-        assert_eq!(
-            rollback_candidate(&fixture.root, &current, &cancel).unwrap(),
-            None
-        );
-        fs::rename(archive, previous_release).unwrap();
-        fs::write(&previous.binary, "changed").unwrap();
-        assert!(rollback_candidate(&fixture.root, &current, &cancel).is_err());
+        let current = installed_engine(&fixture.root, "a");
+        let update = installed_engine(&fixture.root, "b");
+        assert_eq!(current.binary, update.binary);
+        assert_eq!(current.upstream_version, update.upstream_version);
+        assert_ne!(current.component_tree, update.component_tree);
+        assert_ne!(current.binary_sha256, update.binary_sha256);
+
+        fs::write(fixture.root.join(ASSETS[0]), "changed profile").unwrap();
+        assert!(verified_engine(&fixture.root, &update.binary).is_err());
+        fs::write(fixture.root.join(ASSETS[0]), ASSETS[0]).unwrap();
+
+        let unrelated = fixture.root.join("unrelated");
+        fs::rename(&update.binary, &unrelated).unwrap();
+        std::os::unix::fs::symlink(&unrelated, &update.binary).unwrap();
+        assert!(verified_engine(&fixture.root, &update.binary).is_err());
+        fs::remove_file(&update.binary).unwrap();
+        fs::rename(&unrelated, &update.binary).unwrap();
+        fs::write(&update.binary, "changed executable").unwrap();
+        assert!(verified_engine(&fixture.root, &update.binary).is_err());
     }
 
     #[test]
@@ -990,7 +984,7 @@ exit 1"#]).current_dir(&fixture.root);
             read_events(&fixture.root).and_then(|bytes| parse_events(&bytes, &request, true));
         assert_eq!(
             outcome(
-                Record::started(&request, identity(&fixture.root, "b"), None),
+                Record::started(&request, identity(&fixture.root, "b")),
                 42,
                 result,
                 trace,

@@ -83,21 +83,21 @@ Homebrew 公式步骤先刷新目录，再扫描并升级过期公式。所有 t
 
 ## 本机构建与切换
 
-源代码来自保留完整历史的 Topgrade 组件，使用独立 Cargo 配置及原许可证。维护者从干净、审核过的 Studio checkout 操作：
+更新器读取 Studio checkout 已配置的跟踪分支。工作区干净且能快进时，使用 Rust nightly 校验并构建实际跟踪的 HEAD。通过验证的候选文件与默认入口位于同一文件系统，最后一次重命名会将候选启用为 `~/.local/bin/topgrade` 普通文件。构建产物和验证目录只用于本次更新，引擎身份和摘要保存在当前文件的扩展属性中。
 
 ```sh
-devenv-studio topgrade-engine plan /absolute/studio-checkout FULL_STUDIO_SHA
-devenv-studio topgrade-engine prepare /absolute/studio-checkout FULL_STUDIO_SHA
-devenv-studio topgrade-engine install /absolute/studio-checkout FULL_STUDIO_SHA
+devenv-studio topgrade-engine plan /absolute/studio-checkout
+devenv-studio topgrade-engine update /absolute/studio-checkout
+devenv-studio topgrade-engine verify-current /absolute/studio-checkout
 ```
 
-`prepare` 构建并核验固定的组件树，保存候选引擎及摘要。 `install` 使用 Studio 的 Rust 安装器验证资产、应用并回读 profile，然后原子更新 `~/.local/bin/topgrade` 指向的项目引擎。安装器兼容原有 v1 收据和事务日志。相同组件树复用引擎。软件更新使用已部署的项目 fork。旧的 `topgrade-rustup-headsync` 仅提示 Studio 的维护入口，所有模式都停止执行。
+已部署的 `~/.local/bin/topgrade-rustup-headsync update /absolute/studio-checkout` 调用同一个更新入口。它需要 `~/.local/bin/devenv-studio` 可执行。profile 仍按已记录的前镜像和原子文件替换流程部署。更新器识别现有的默认符号链接和普通文件，保留配置与现有事务记录。
 
 ### 跟进 Topgrade 官方版本
 
 `topgrade-engine check-upstream /absolute/studio-checkout` 从该 checkout 当前提交读取 `topgrade-upstream.json`，通过 HTTPS 查询 Topgrade 官方 Git 标签，按版本号比较稳定版。输出记录 Studio 提交、已审核的标签对象和提交、当前最高稳定标签及检查时间。新版本显示 `new_release`。已审核标签被移动或消失时显示 `pin_changed` 或 `pin_missing`。普通版本检查只读 Git 引用，无需 GitHub 凭据。
 
-发现新版本后，在隔离工作树导入并审核组件源码、Cargo 锁文件及本机 profile，然后在同一 Studio 提交更新上游 pin。运行 `devenv-studio topgrade-engine prepare-upstream /absolute/studio-checkout FULL_STUDIO_SHA` 重新核对官方标签，再从该干净提交构建候选。标签对象、完整提交和组件版本均须一致。候选构建成功后仍须显式执行上面的 `install`，原有回退流程可继续使用。
+发现官方新版本后，在隔离工作树导入并审核组件源码、Cargo 锁文件及本机 profile，然后在同一 Studio 提交更新上游 pin。合入 Studio 跟踪分支后，常规滚动更新器会从新的项目 HEAD 构建。
 
 需要每日自动检查时，可自行启用只读 LaunchAgent。请从你信任且长期保留的 Studio 二进制生成文件，将示例中的两条绝对路径换成本机实际位置：
 
@@ -121,7 +121,7 @@ JPEG XL 待升级时，HEAD-sync 先单独处理这组配方。它从 Homebrew �
 
 Mac App Store 已报告安装成功后，若精确核验暂时找不到本轮刚更新的应用 ID，最多等待 15 秒并复查。网络、授权、其他应用 ID 或无法验证的结果继续返回失败。
 
-检查显示上一版时，可复制绑定两版组件树的终端回退命令。请关闭其他维护任务后运行。回退重新核对当前与上一版引擎、profile 和事务，若身份或配置发生漂移则停止。回退完成后重新检查更新中心，或用 `devenv-studio topgrade-engine verify-current FULL_COMPONENT_TREE` 核对启动器及全部受管资产。相同 checkout 和 SHA 的 `topgrade-engine rollback` 仍可用于维护入口。若过程报告 pending 激活，请保留文件、启动器和 profile 事务，核对实际生效版本后再恢复。私人记录在 `~/.local/share/topgrade-rustup-head` 和 `~/.local/state/topgrade-macos-profile`。
+更新中心读取当前引擎身份和配置状态。终端可通过 `topgrade-engine verify-current /absolute/studio-checkout` 核对当前引擎及受管文件。若存在未完成的旧激活事务，先核对其记录与本机状态。历史日志和 profile 事务仍保留在原路径。
 
 ## 设备验收
 

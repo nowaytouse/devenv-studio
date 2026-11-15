@@ -1,4 +1,4 @@
-//! Local, revision-pinned maintenance of the independent Topgrade engine.
+//! Build the tracked Studio Topgrade component and atomically replace its only installation.
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod profile;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -12,17 +12,19 @@ mod mac {
     use std::{
         collections::BTreeMap,
         fs,
-        os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, symlink},
+        io::{self, ErrorKind},
+        os::fd::AsRawFd,
+        os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
         path::{Path, PathBuf},
         process::{Command, Output},
-        time::{SystemTime, UNIX_EPOCH},
+        sync::atomic::{AtomicBool, Ordering},
     };
     use studio_deployment::maintenance::{
         account_home, acquire_engine_activation_lock, acquire_mutation_lock, sha256_file,
-        verified_engine_release,
     };
 
     const PROFILE: &str = "profiles/macos";
+    const RECEIPT_XATTR: &std::ffi::CStr = c"org.devenv-studio.topgrade-engine";
     const ASSETS: [&str; 5] = [
         ".config/topgrade.toml",
         ".config/topgrade.d/90-brew-headsync.toml",
@@ -30,9 +32,11 @@ mod mac {
         ".config/topgrade.d/90-xcode-beta-select.toml",
         ".config/topgrade.d/95-skills-unattended.toml",
     ];
+    static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 
     #[derive(Deserialize)]
     struct Manifest {
+        version: u32,
         files: Vec<Asset>,
     }
 
@@ -42,7 +46,7 @@ mod mac {
         sha256: String,
     }
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
     #[serde(deny_unknown_fields)]
     struct Receipt {
         schema_version: u32,
@@ -50,26 +54,14 @@ mod mac {
         component_tree: String,
         binary_sha256: String,
         profile_sha256: String,
+        profile_version: u32,
         assets: BTreeMap<String, String>,
     }
 
-    #[derive(Serialize, Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct Activation {
-        schema_version: u32,
-        previous: PathBuf,
-        target: PathBuf,
-        profile_transaction: Option<String>,
-    }
-
-    struct Stage(PathBuf);
-
-    impl Drop for Stage {
-        fn drop(&mut self) {
-            if let Err(error) = fs::remove_dir_all(&self.0) {
-                eprintln!("Temporary stage retained at {}: {error}", self.0.display());
-            }
-        }
+    struct Prepared {
+        binary: PathBuf,
+        receipt: Receipt,
+        profile: Option<PathBuf>,
     }
 
     fn hexadecimal(value: &str, size: usize) -> bool {
@@ -77,6 +69,32 @@ mod mac {
             && value
                 .bytes()
                 .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    }
+
+    extern "C" fn signal(_: libc::c_int) {
+        INTERRUPTED.store(true, Ordering::Relaxed);
+    }
+
+    fn interrupted() -> Result<()> {
+        ensure!(
+            !INTERRUPTED.load(Ordering::Relaxed),
+            "Topgrade update interrupted"
+        );
+        Ok(())
+    }
+
+    fn handle_signals() -> Result<()> {
+        // SAFETY: The handler only stores to a lock-free atomic flag.
+        unsafe {
+            for number in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
+                let old = libc::signal(number, signal as *const () as libc::sighandler_t);
+                ensure!(
+                    old != libc::SIG_ERR,
+                    "Could not watch for updater termination"
+                );
+            }
+        }
+        Ok(())
     }
 
     fn output(command: &mut Command, action: &str) -> Result<Output> {
@@ -91,6 +109,7 @@ mod mac {
     }
 
     fn status(command: &mut Command, action: &str) -> Result<()> {
+        interrupted()?;
         ensure!(
             command
                 .status()
@@ -98,61 +117,344 @@ mod mac {
                 .success(),
             "{action} failed"
         );
-        Ok(())
+        interrupted()
+    }
+
+    fn git_command(checkout: &Path) -> Command {
+        let mut command = Command::new("/usr/bin/git");
+        command.current_dir(checkout).arg("--no-replace-objects");
+        command
     }
 
     pub(super) fn git(checkout: &Path, args: &[&str]) -> Result<String> {
         let result = output(
-            Command::new("/usr/bin/git")
-                .current_dir(checkout)
-                .arg("--no-replace-objects")
-                .args(args),
-            "Inspect reviewed Studio revision",
+            git_command(checkout).args(args),
+            "Inspect Studio tracking branch",
         )?;
         Ok(String::from_utf8(result.stdout)?.trim().to_owned())
     }
 
-    fn new_stage(parent: &Path) -> Result<Stage> {
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let path = parent.join(format!(".studio-stage-{}-{nonce}", std::process::id()));
-        fs::DirBuilder::new().mode(0o700).create(&path)?;
-        Ok(Stage(path))
-    }
-
-    fn regular(path: &Path) -> Result<()> {
+    fn clean(checkout: &Path) -> Result<()> {
         ensure!(
-            path.symlink_metadata()?.is_file() && path.canonicalize()? == path,
-            "Expected a regular file without symlinks: {}",
-            path.display()
+            git(
+                checkout,
+                &["status", "--porcelain=v1", "--untracked-files=all"]
+            )?
+            .is_empty(),
+            "The Studio checkout has local changes; preserve them before updating"
         );
+        let state = git(
+            checkout,
+            &[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "MERGE_HEAD",
+                "--git-path",
+                "CHERRY_PICK_HEAD",
+                "--git-path",
+                "REVERT_HEAD",
+                "--git-path",
+                "rebase-merge",
+                "--git-path",
+                "rebase-apply",
+                "--git-path",
+                "sequencer",
+            ],
+        )?;
+        for path in state.lines() {
+            ensure!(
+                entry(Path::new(path))?.is_none(),
+                "The Studio checkout has an unfinished Git operation"
+            );
+        }
         Ok(())
     }
 
-    fn optional(path: &Path) -> Result<bool> {
+    fn tracked(checkout: &Path, refresh: bool) -> Result<(String, String)> {
+        ensure!(
+            checkout.is_absolute()
+                && checkout.canonicalize()? == checkout
+                && checkout.to_str()
+                    == Some(git(checkout, &["rev-parse", "--show-toplevel"])?.as_str()),
+            "Expected a canonical absolute Studio checkout"
+        );
+        clean(checkout)?;
+        let branch = git(checkout, &["symbolic-ref", "--quiet", "HEAD"])?;
+        let remote = git(
+            checkout,
+            &["for-each-ref", "--format=%(upstream:remotename)", &branch],
+        )?;
+        ensure!(
+            !remote.is_empty() && !remote.starts_with('-'),
+            "The Studio branch has no tracking remote"
+        );
+        let upstream = git(
+            checkout,
+            &["rev-parse", "--symbolic-full-name", "@{upstream}"],
+        )?;
+        let remote_ref = git(
+            checkout,
+            &["for-each-ref", "--format=%(upstream:remoteref)", &branch],
+        )?;
+        ensure!(
+            remote_ref.starts_with("refs/heads/"),
+            "Expected a tracked Studio branch"
+        );
+        let head = git(checkout, &["rev-parse", "HEAD^{commit}"])?;
+        if refresh {
+            status(
+                git_command(checkout).args([
+                    "fetch",
+                    "--no-tags",
+                    "--no-recurse-submodules",
+                    &remote,
+                    &remote_ref,
+                ]),
+                "Fetch the configured Studio tracking remote",
+            )?;
+            clean(checkout)?;
+            ensure!(
+                git(checkout, &["symbolic-ref", "--quiet", "HEAD"])? == branch
+                    && git(
+                        checkout,
+                        &["rev-parse", "--symbolic-full-name", "@{upstream}"]
+                    )? == upstream
+                    && git(checkout, &["rev-parse", "HEAD^{commit}"])? == head,
+                "The checkout or tracking branch changed during fetch"
+            );
+        }
+        let revision = git(
+            checkout,
+            &["rev-parse", "--verify", &format!("{upstream}^{{commit}}")],
+        )?;
+        ensure!(hexadecimal(&revision, 40), "Invalid tracked Studio commit");
+        if refresh {
+            ensure!(
+                git(checkout, &["rev-parse", "FETCH_HEAD^{commit}"])? == revision,
+                "Configured tracking ref does not match the fetched Studio branch"
+            );
+        }
+        output(
+            git_command(checkout).args(["merge-base", "--is-ancestor", &head, &revision]),
+            "Require the tracked Studio revision to be a fast-forward",
+        )?;
+        if refresh && head != revision {
+            status(
+                git_command(checkout).args(["merge", "--ff-only", "--no-autostash", &revision]),
+                "Fast-forward the clean Studio checkout",
+            )?;
+            clean(checkout)?;
+            ensure!(
+                git(checkout, &["rev-parse", "HEAD"])? == revision,
+                "Studio HEAD changed during update"
+            );
+        }
+        let tree = git(
+            checkout,
+            &["rev-parse", &format!("{revision}:components/topgrade")],
+        )?;
+        ensure!(hexadecimal(&tree, 40), "Invalid Topgrade component tree");
+        Ok((revision, tree))
+    }
+
+    fn entry(path: &Path) -> Result<Option<fs::Metadata>> {
         match path.symlink_metadata() {
-            Ok(_) => Ok(true),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Ok(meta) => Ok(Some(meta)),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error.into()),
         }
     }
 
-    fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
-        use std::io::Write;
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
+    fn checked_launcher(home: &Path) -> Result<PathBuf> {
+        let uid = home.metadata()?.uid();
+        let mut directory = home.to_path_buf();
+        for name in [".local", "bin"] {
+            directory.push(name);
+            match fs::DirBuilder::new().mode(0o700).create(&directory) {
+                Ok(()) => (),
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => (),
+                Err(error) => return Err(error.into()),
+            }
+            let metadata = directory.symlink_metadata()?;
+            ensure!(
+                metadata.is_dir()
+                    && metadata.uid() == uid
+                    && metadata.mode() & 0o022 == 0
+                    && directory.canonicalize()? == directory,
+                "Expected a real user-owned launcher directory: {}",
+                directory.display()
+            );
+        }
+        Ok(directory.join("topgrade"))
+    }
+
+    fn binary_file(path: &Path, uid: u32) -> Result<fs::File> {
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
             .open(path)?;
-        serde_json::to_writer_pretty(&mut file, value)?;
-        file.write_all(b"\n")?;
-        file.sync_all()?;
-        fs::File::open(path.parent().context("Missing journal parent")?)?.sync_all()?;
+        let meta = file.metadata()?;
+        ensure!(
+            meta.is_file()
+                && meta.uid() == uid
+                && meta.nlink() == 1
+                && meta.mode() & 0o111 != 0
+                && meta.mode() & 0o022 == 0,
+            "Unsafe Topgrade executable: {}",
+            path.display()
+        );
+        Ok(file)
+    }
+
+    fn read_receipt(file: &fs::File) -> Result<Option<Receipt>> {
+        let mut bytes = vec![0u8; 64 * 1024];
+        // SAFETY: The open descriptor and the writable buffer stay live for the syscall.
+        let size = unsafe {
+            libc::fgetxattr(
+                file.as_raw_fd(),
+                RECEIPT_XATTR.as_ptr(),
+                bytes.as_mut_ptr().cast(),
+                bytes.len(),
+                0,
+                0,
+            )
+        };
+        if size < 0 {
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::ENOATTR) {
+                return Ok(None);
+            }
+            return Err(error).context("Read Topgrade executable receipt");
+        }
+        bytes.truncate(usize::try_from(size)?);
+        Ok(Some(
+            serde_json::from_slice(&bytes).context("Invalid Topgrade executable receipt")?,
+        ))
+    }
+
+    fn write_receipt(file: &fs::File, receipt: &Receipt) -> Result<()> {
+        let bytes = serde_json::to_vec(receipt)?;
+        // SAFETY: The open descriptor and the immutable byte buffer stay live for the syscall.
+        let result = unsafe {
+            libc::fsetxattr(
+                file.as_raw_fd(),
+                RECEIPT_XATTR.as_ptr(),
+                bytes.as_ptr().cast(),
+                bytes.len(),
+                0,
+                libc::XATTR_CREATE,
+            )
+        };
+        if result != 0 {
+            return Err(io::Error::last_os_error())
+                .context("Write staged Topgrade executable receipt");
+        }
+        ensure!(
+            read_receipt(file)?.as_ref() == Some(receipt),
+            "Staged Topgrade receipt failed readback"
+        );
         Ok(())
     }
 
-    fn verify_profile(checkout: &Path, tree: &str, release: &Path) -> Result<()> {
-        let path = release.join("profile/manifest.json");
-        regular(&path)?;
+    fn receipt(binary: &Path, revision: &str, tree: &str, manifest: &Path) -> Result<Receipt> {
+        let data: Manifest = serde_json::from_slice(&fs::read(manifest)?)?;
+        ensure!(
+            data.version == 1,
+            "Invalid Topgrade profile manifest version"
+        );
+        let assets = ASSETS
+            .iter()
+            .map(|asset| {
+                let mut matches = data.files.iter().filter(|row| row.destination == *asset);
+                let row = matches
+                    .next()
+                    .with_context(|| format!("Missing profile asset {asset}"))?;
+                ensure!(
+                    matches.next().is_none() && hexadecimal(&row.sha256, 64),
+                    "Invalid profile asset {asset}"
+                );
+                Ok(((*asset).to_owned(), row.sha256.clone()))
+            })
+            .collect::<Result<_>>()?;
+        Ok(Receipt {
+            schema_version: 1,
+            studio_commit: revision.to_owned(),
+            component_tree: tree.to_owned(),
+            binary_sha256: sha256_file(binary)?,
+            profile_sha256: sha256_file(manifest)?,
+            profile_version: data.version,
+            assets,
+        })
+    }
+
+    fn prepare(
+        checkout: &Path,
+        revision: &str,
+        tree: &str,
+        stage: &Path,
+        home: &Path,
+    ) -> Result<Prepared> {
+        let source = stage.join("source");
+        fs::create_dir(&source)?;
+        let archive = stage.join("source.tar");
+        status(
+            git_command(checkout)
+                .args(["archive", "--format=tar", "--output"])
+                .arg(&archive)
+                .args([
+                    revision,
+                    "components/topgrade",
+                    "scripts/test_jpeg_xl_transaction.rb",
+                ]),
+            "Export tested objects from the exact Studio commit",
+        )?;
+        status(
+            Command::new("/usr/bin/tar")
+                .arg("-xf")
+                .arg(&archive)
+                .arg("-C")
+                .arg(&source),
+            "Extract the tracked Studio source",
+        )?;
+        status(
+            Command::new("/opt/homebrew/bin/brew")
+                .current_dir(&source)
+                .args(["ruby", "scripts/test_jpeg_xl_transaction.rb"])
+                .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+                .env("HOMEBREW_NO_INSTALL_FROM_API", "1"),
+            "Test the Homebrew dependency transaction",
+        )?;
+        let component = source.join("components/topgrade");
+        let target = stage.join("target");
+        let run_cargo = |args: &[&str], action| -> Result<()> {
+            status(
+                Command::new(home.join(".cargo/bin/cargo"))
+                    .current_dir(&component)
+                    .arg("+nightly")
+                    .args(args)
+                    .args(["--locked", "--target-dir"])
+                    .arg(&target)
+                    .env("CARGO_BUILD_BUILD_DIR", &target)
+                    .env("HOMEBREW_NO_AUTO_UPDATE", "1"),
+                action,
+            )
+        };
+        run_cargo(&["test"], "Test the tracked Topgrade component")?;
+        run_cargo(
+            &["build", "--release", "--bin", "topgrade"],
+            "Build Topgrade with Rustup Nightly",
+        )?;
+        let compiled = target.join("release/topgrade");
+        let binary = stage.join("topgrade");
+        // Cargo can hard-link its output into the artifact directory.
+        fs::copy(&compiled, &binary)?;
+        ensure!(
+            sha256_file(&compiled)? == sha256_file(&binary)?,
+            "Staged Topgrade executable differs from the compiler output"
+        );
+        let profile = component.join(PROFILE);
+        let manifest = profile.join("manifest.json");
         let blob = git(
             checkout,
             &["rev-parse", &format!("{tree}:{PROFILE}/manifest.json")],
@@ -163,512 +465,237 @@ mod mac {
                 &[
                     "hash-object",
                     "--no-filters",
-                    path.to_str().context("Profile path is not UTF-8")?
+                    manifest.to_str().context("Invalid profile path")?
                 ]
             )? == blob,
-            "Prepared profile manifest differs from the pinned component"
+            "Staged profile manifest differs from the tracked component"
         );
         ensure!(
-            sha256_file(&release.join("profile").join("manifest.json"))?
-                == sha256_file(&release.join("profile-manifest.json"))?,
-            "Prepared profile manifest differs from the engine receipt"
+            tracked(checkout, false)? == (revision.to_owned(), tree.to_owned()),
+            "Studio tracking state changed during the Topgrade build"
         );
-        Ok(())
+        Ok(Prepared {
+            receipt: receipt(&binary, revision, tree, &manifest)?,
+            binary,
+            profile: Some(profile),
+        })
     }
 
-    fn asset_map(manifest: &Path) -> Result<BTreeMap<String, String>> {
-        regular(manifest)?;
-        let manifest: Manifest = serde_json::from_slice(&fs::read(manifest)?)?;
-        ASSETS
-            .iter()
-            .map(|asset| {
-                let mut matches = manifest
-                    .files
-                    .iter()
-                    .filter(|row| row.destination == *asset);
-                let row = matches
-                    .next()
-                    .with_context(|| format!("Missing profile asset {asset}"))?;
-                ensure!(
-                    matches.next().is_none() && hexadecimal(&row.sha256, 64),
-                    "Invalid profile asset {asset}"
-                );
-                Ok(((*asset).to_owned(), row.sha256.clone()))
-            })
-            .collect()
+    fn same_entry(old: Option<&fs::Metadata>, now: Option<&fs::Metadata>) -> bool {
+        match (old, now) {
+            (Some(a), Some(b)) => {
+                a.dev() == b.dev()
+                    && a.ino() == b.ino()
+                    && a.mode() == b.mode()
+                    && a.ctime() == b.ctime()
+                    && a.ctime_nsec() == b.ctime_nsec()
+            }
+            (None, None) => true,
+            _ => false,
+        }
     }
 
-    fn prepare(
-        checkout: &Path,
+    fn active_receipt(launcher: &Path, uid: u32) -> Result<Option<Receipt>> {
+        if entry(launcher)?.is_none_or(|meta| meta.is_symlink()) {
+            return Ok(None);
+        }
+        let file = binary_file(launcher, uid)?;
+        let receipt = read_receipt(&file)?;
+        match receipt {
+            Some(receipt)
+                if receipt.schema_version == 1
+                    && sha256_file(launcher)? == receipt.binary_sha256 =>
+            {
+                Ok(Some(receipt))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn install_rolling(
+        home: &Path,
         revision: &str,
         tree: &str,
-        release: &Path,
-        home: &Path,
-    ) -> Result<()> {
-        if optional(release)? {
-            verify_release(release, tree)?;
-            verify_profile(checkout, tree, release)?;
-            return status(
-                Command::new(release.join("bin/topgrade")).arg("--version"),
-                "Verify prepared Topgrade CLI",
-            );
+        build: impl FnOnce(&Path) -> Result<Prepared>,
+    ) -> Result<bool> {
+        let launcher = checked_launcher(home)?;
+        let uid = home.metadata()?.uid();
+        let original = entry(&launcher)?;
+        ensure!(
+            original
+                .as_ref()
+                .is_none_or(|meta| meta.uid() == uid && (meta.is_file() || meta.is_symlink())),
+            "Unsafe installed Topgrade entry"
+        );
+        if active_receipt(&launcher, uid)?
+            .is_some_and(|r| r.studio_commit == revision && r.component_tree == tree)
+        {
+            return Ok(false);
         }
-        let stage = new_stage(release.parent().context("Missing release parent")?)?;
-        let source = stage.0.join("source");
-        fs::create_dir(&source)?;
-        let archive = stage.0.join("component.tar");
-        status(
-            Command::new("/usr/bin/git")
-                .current_dir(checkout)
-                .args(["archive", "--format=tar", "--output"])
-                .arg(&archive)
-                .arg(tree),
-            "Export the exact Topgrade component tree",
-        )?;
-        status(
-            Command::new("/usr/bin/tar")
-                .arg("-xf")
-                .arg(&archive)
-                .arg("-C")
-                .arg(&source),
-            "Extract the reviewed component",
-        )?;
-        let candidate = stage.0.join("release");
-        status(
-            Command::new(home.join(".cargo/bin/cargo"))
-                .current_dir(&source)
-                .args(["+nightly", "install", "--locked", "--path", ".", "--root"])
-                .arg(&candidate)
-                .env("HOMEBREW_NO_AUTO_UPDATE", "1"),
-            "Build Topgrade with the existing Rustup Nightly",
-        )?;
-        let binary = candidate.join("bin/topgrade");
-        regular(&binary)?;
-        status(
-            Command::new(&binary).arg("--version"),
+
+        let parent = launcher.parent().context("Missing launcher parent")?;
+        let stage = tempfile::Builder::new()
+            .prefix(".studio-topgrade-")
+            .tempdir_in(parent)?;
+        let prepared = build(stage.path())?;
+        interrupted()?;
+        let binary = &prepared.binary;
+        ensure!(
+            binary.starts_with(stage.path()) && binary.canonicalize()? == *binary,
+            "Prepared executable is outside staging"
+        );
+        let file = binary_file(binary, uid)?;
+        ensure!(
+            prepared.receipt.schema_version == 1
+                && prepared.receipt.studio_commit == revision
+                && prepared.receipt.component_tree == tree
+                && sha256_file(binary)? == prepared.receipt.binary_sha256,
+            "Staged Topgrade executable failed integrity verification"
+        );
+        let version = output(
+            Command::new(binary).arg("--version"),
             "Verify candidate CLI version",
         )?;
-        status(
-            Command::new(&binary)
-                .arg("--config-reference")
-                .stdout(std::process::Stdio::null()),
+        ensure!(
+            version.stdout.starts_with(b"topgrade "),
+            "Unexpected staged Topgrade version"
+        );
+        let reference = output(
+            Command::new(binary).arg("--config-reference"),
             "Verify candidate CLI startup",
         )?;
-        let manifest = candidate.join("profile-manifest.json");
-        fs::rename(source.join(PROFILE), candidate.join("profile"))?;
-        fs::copy(candidate.join("profile").join("manifest.json"), &manifest)?;
-        fs::File::open(&manifest)?.sync_all()?;
-        fs::File::open(&binary)?.sync_all()?;
-        let receipt = Receipt {
-            schema_version: 1,
-            studio_commit: revision.to_owned(),
-            component_tree: tree.to_owned(),
-            binary_sha256: sha256_file(&binary)?,
-            profile_sha256: sha256_file(&manifest)?,
-            assets: asset_map(&manifest)?,
-        };
-        write_json(&candidate.join("studio-engine.json"), &receipt)?;
-        verify_profile(checkout, tree, &candidate)?;
-        fs::rename(&candidate, release)?;
-        fs::File::open(release.parent().context("Missing release parent")?)?.sync_all()?;
-        verify_release(release, tree)?;
-        Ok(())
-    }
-
-    fn verify_release(release: &Path, tree: &str) -> Result<()> {
-        let receipt_path = release.join("studio-engine.json");
-        regular(&receipt_path)?;
-        let receipt: Receipt = serde_json::from_slice(&fs::read(receipt_path)?)?;
-        let manifest = release.join("profile-manifest.json");
-        let binary = release.join("bin/topgrade");
-        regular(&binary)?;
-        let binary_metadata = binary.metadata()?;
         ensure!(
-            binary_metadata.mode() & 0o111 != 0
-                && binary_metadata.mode() & 0o022 == 0
-                && binary_metadata.nlink() == 1
-                && binary_metadata.uid() == account_home()?.metadata()?.uid(),
-            "Unsafe prepared executable"
+            !reference.stdout.is_empty(),
+            "No configuration reference from staged Topgrade"
         );
-        ensure!(
-            receipt.schema_version == 1
-                && receipt.component_tree == tree
-                && hexadecimal(&receipt.studio_commit, 40)
-                && sha256_file(&binary)? == receipt.binary_sha256
-                && sha256_file(&manifest)? == receipt.profile_sha256
-                && asset_map(&manifest)? == receipt.assets,
-            "Prepared release failed integrity verification"
-        );
-        Ok(())
-    }
-
-    fn managed_target(path: &Path, releases: &Path) -> Result<()> {
-        let relative = path
-            .strip_prefix(releases)
-            .context("Topgrade launcher points outside managed releases")?;
-        let parts: Vec<_> = relative.iter().collect();
-        ensure!(
-            parts.len() == 3
-                && parts[0]
-                    .to_str()
-                    .is_some_and(|value| hexadecimal(value, 40))
-                && parts[1] == "bin"
-                && parts[2] == "topgrade",
-            "Invalid managed launcher target"
-        );
-        regular(path)
-    }
-
-    fn checked_launcher(home: &Path) -> Result<PathBuf> {
-        let directory = home.join(".local/bin");
-        let metadata = directory.metadata()?;
-        ensure!(
-            directory.canonicalize()? == directory
-                && metadata.is_dir()
-                && metadata.uid() == home.metadata()?.uid()
-                && metadata.mode() & 0o022 == 0,
-            "Expected a real user-owned Topgrade launcher directory"
-        );
-        Ok(directory.join("topgrade"))
-    }
-
-    fn swap_link(link: &Path, expected: &Path, target: &Path) -> Result<()> {
-        ensure!(
-            fs::read_link(link)? == expected,
-            "Topgrade launcher changed since review"
-        );
-        let stage = new_stage(link.parent().context("Missing launcher parent")?)?;
-        let pending_link = stage.0.join("topgrade");
-        symlink(target, &pending_link)?;
-        fs::rename(&pending_link, link)?;
-        fs::File::open(link.parent().context("Missing launcher parent")?)?.sync_all()?;
-        Ok(())
-    }
-
-    fn require_topgrade_idle() -> Result<()> {
-        let probe = Command::new("/usr/bin/pgrep")
-            .args(["-x", "topgrade"])
-            .output()?;
-        ensure!(
-            probe.status.code() == Some(1),
-            "Topgrade must be idle before switching the active launcher"
-        );
-        Ok(())
-    }
-
-    fn profile(release: &Path, home: &Path, args: &[&str]) -> Result<serde_json::Value> {
-        profile::execute(&release.join("profile"), home, args)
-            .context("Topgrade profile transaction")
-    }
-
-    fn restore_activation(home: &Path, tree: &str, expected_previous: Option<&str>) -> Result<()> {
-        let base = home.join(".local/share/topgrade-rustup-head");
-        let releases = base.join("releases");
-        let link = checked_launcher(home)?;
-        let target = releases.join(tree).join("bin/topgrade");
-        let pending = base.join("studio-activation.pending.json");
-        let journal = base.join(format!("studio-activation-{tree}.json"));
-        ensure!(
-            fs::read_link(&link)? == target && !optional(&pending)?,
-            "The reviewed engine is no longer active or a pending activation needs recovery"
-        );
-        regular(&journal)?;
-        ensure!(
-            journal.metadata()?.mode() & 0o077 == 0,
-            "Expected a private activation receipt"
-        );
-        let saved: Activation =
-            profile::read_json(&journal)?.context("Missing current engine activation")?;
-        ensure!(
-            saved.schema_version == 1 && saved.target == target && saved.previous != target,
-            "This activation is not current or has no distinct rollback target"
-        );
-        let current = verified_engine_release(home, &target)?;
-        let previous = verified_engine_release(home, &saved.previous)?;
-        ensure!(
-            expected_previous.is_none_or(|tree| tree == previous.component_tree),
-            "The rollback target changed since review"
-        );
-        ensure!(
-            saved.profile_transaction.is_some()
-                || current.profile_sha256 == previous.profile_sha256,
-            "Different profiles require a recorded rollback transaction"
-        );
-        let current_profile = releases.join(&current.component_tree).join("profile");
-        let previous_profile = releases.join(&previous.component_tree).join("profile");
-        let (state, _profile_lock) = profile::lock(home)?;
-        profile::rollback_activation(
-            &current_profile,
-            &previous_profile,
-            home,
-            &state,
-            saved.profile_transaction.as_deref(),
-            || write_json(&pending, &saved),
-        )?;
-        swap_link(&link, &target, &saved.previous)?;
-        let restored = verified_engine_release(home, &link.canonicalize()?)?;
-        ensure!(
-            fs::read_link(&link)? == saved.previous && restored == previous,
-            "Restored launcher or receipt changed during rollback"
-        );
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        fs::rename(
-            &journal,
-            base.join(format!("studio-rollback-{tree}-{timestamp}.json")),
-        )?;
-        fs::remove_file(&pending)?;
-        fs::File::open(&base)?.sync_all()?;
-        println!(
-            "Restored Topgrade {} (Studio {}, tree {}, binary SHA-256 {}) and verified installed profile {} (SHA-256 {})",
-            restored.upstream_version,
-            restored.studio_commit,
-            restored.component_tree,
-            restored.binary_sha256,
-            restored.profile_version,
-            restored.profile_sha256,
-        );
-        Ok(())
-    }
-
-    fn rollback_current(tree: &str, previous_tree: &str) -> Result<()> {
-        ensure!(
-            hexadecimal(tree, 40) && hexadecimal(previous_tree, 40) && tree != previous_tree,
-            "Supply the distinct full active and previous component tree SHAs"
-        );
-        let home = account_home()?;
-        let base = home.join(".local/share/topgrade-rustup-head");
-        ensure!(
-            base.canonicalize()? == base,
-            "Unexpected managed engine directory"
-        );
-        let _lock = acquire_mutation_lock()?;
-        let _activation = acquire_engine_activation_lock()?;
-        require_topgrade_idle()?;
-        restore_activation(&home, tree, Some(previous_tree))
-    }
-
-    fn verify_current(tree: &str) -> Result<()> {
-        ensure!(
-            hexadecimal(tree, 40),
-            "Supply the full active component tree SHA"
-        );
-        let home = account_home()?;
-        let base = home.join(".local/share/topgrade-rustup-head");
-        let release = base.join("releases").join(tree);
-        let target = release.join("bin/topgrade");
-        let link = checked_launcher(&home)?;
-        let pending = base.join("studio-activation.pending.json");
-        let current = || -> Result<()> {
+        write_receipt(&file, &prepared.receipt)?;
+        file.sync_all()?;
+        let parent_directory = fs::File::open(parent)?;
+        let verify_entry = || -> Result<()> {
+            interrupted()?;
             ensure!(
-                fs::read_link(&link)? == target && !optional(&pending)?,
-                "The reviewed engine is no longer active or a pending activation needs recovery"
+                same_entry(original.as_ref(), entry(&launcher)?.as_ref()),
+                "Topgrade entry changed during the update"
             );
             Ok(())
         };
-        current()?;
-        let identity = verified_engine_release(&home, &target)?;
-        let packaged = release.join("profile");
-        let count = profile::verify_installed(&packaged, &home)?;
-        ensure!(
-            sha256_file(&packaged.join("manifest.json"))? == identity.profile_sha256,
-            "Packaged profile changed during verification"
-        );
-        current()?;
-        println!(
-            "Verified Topgrade {} (Studio {}, tree {}, binary SHA-256 {}) and installed profile {} ({} assets, SHA-256 {})",
-            identity.upstream_version,
-            identity.studio_commit,
-            identity.component_tree,
-            identity.binary_sha256,
-            identity.profile_version,
-            count,
-            identity.profile_sha256,
-        );
-        Ok(())
+        verify_entry()?;
+
+        let profile = prepared.profile.as_deref();
+        let transaction = if let Some(source) = profile {
+            let applied = profile::execute(source, home, &["--apply"])?;
+            match applied["status"].as_str() {
+                Some("installed") => Some(
+                    applied["transaction"]
+                        .as_str()
+                        .context("Missing installed profile transaction")?
+                        .to_owned(),
+                ),
+                Some("already-current") => None,
+                _ => bail!("Unexpected profile transaction status"),
+            }
+        } else {
+            None
+        };
+        let activation = (|| -> Result<()> {
+            if let Some(source) = profile {
+                profile::verify_installed(source, home)?;
+            }
+            verify_entry()?;
+            fs::rename(binary, &launcher).context("Atomically replace the Topgrade executable")
+        })();
+        if let Err(error) = activation {
+            if let (Some(source), Some(id)) = (profile, transaction.as_deref())
+                && let Err(recovery) = profile::execute(source, home, &["--rollback", id])
+            {
+                return Err(error.context(format!("Profile recovery {id} failed: {recovery:#}")));
+            }
+            return Err(error);
+        }
+        if let Err(error) = parent_directory.sync_all() {
+            eprintln!("Topgrade is active, but launcher directory synchronization failed: {error}");
+        }
+        Ok(true)
     }
 
     pub(super) fn execute(args: &[String]) -> Result<()> {
-        if let [mode, value] = args {
-            match mode.as_str() {
-                "verify-current" => return verify_current(value),
-                "check-upstream" | "record-upstream" | "export-upstream-agent" => {
-                    return upstream::execute(mode, Path::new(value));
-                }
-                _ => {}
-            }
-        }
-        let [mode, checkout_arg, revision] = args else {
+        let [mode, checkout] = args else {
             bail!(
-                "Usage: devenv-studio topgrade-engine <plan|prepare|prepare-upstream|install|rollback> <absolute checkout> <full commit>\n       devenv-studio topgrade-engine <check-upstream|record-upstream|export-upstream-agent> <absolute checkout>\n       devenv-studio topgrade-engine rollback-current <active component tree> <previous component tree>\n       devenv-studio topgrade-engine verify-current <active component tree>"
+                "Usage: devenv-studio topgrade-engine <plan|update|verify-current|check-upstream|record-upstream|export-upstream-agent> <absolute checkout>"
             );
         };
-        if mode == "rollback-current" {
-            return rollback_current(checkout_arg, revision);
+        let checkout = Path::new(checkout);
+        if matches!(
+            mode.as_str(),
+            "check-upstream" | "record-upstream" | "export-upstream-agent"
+        ) {
+            return upstream::execute(mode, checkout);
         }
         ensure!(
-            matches!(
-                mode.as_str(),
-                "plan" | "prepare" | "prepare-upstream" | "install" | "rollback"
-            ),
+            matches!(mode.as_str(), "plan" | "update" | "verify-current"),
             "Unknown engine maintenance action"
         );
-        ensure!(
-            hexadecimal(revision, 40),
-            "Supply the reviewed full Studio commit SHA"
-        );
-        let checkout = Path::new(checkout_arg);
-        ensure!(
-            checkout.is_absolute() && checkout.canonicalize()? == checkout,
-            "Expected a canonical absolute checkout"
-        );
-        ensure!(
-            git(checkout, &["rev-parse", "--show-toplevel"])? == checkout_arg.as_str()
-                && git(checkout, &["rev-parse", "HEAD"])? == *revision
-                && git(
-                    checkout,
-                    &["status", "--porcelain=v1", "--untracked-files=all"]
-                )?
-                .is_empty(),
-            "Expected a clean Studio checkout at the reviewed commit"
-        );
-        let tree = git(
-            checkout,
-            &["rev-parse", &format!("{revision}:components/topgrade")],
-        )?;
-        ensure!(hexadecimal(&tree, 40), "Invalid Topgrade component tree");
-        if mode == "prepare-upstream" {
-            upstream::verify_current(checkout, revision)?;
-        }
         let home = account_home()?;
-        let base = home.join(".local/share/topgrade-rustup-head");
-        let releases = base.join("releases");
-        let release = releases.join(&tree);
-        let link = checked_launcher(&home)?;
-        let previous =
-            fs::read_link(&link).context("Expected the existing managed Topgrade launcher")?;
-        managed_target(&previous, &releases)?;
+        if mode == "plan" {
+            let (revision, tree) = tracked(checkout, false)?;
+            println!(
+                "Tracked Studio commit {revision}, Topgrade tree {tree}; activation path: {}",
+                home.join(".local/bin/topgrade").display()
+            );
+            return Ok(());
+        }
+        if mode == "verify-current" {
+            let (revision, tree) = tracked(checkout, false)?;
+            let launcher = home.join(".local/bin/topgrade");
+            let identity = studio_deployment::maintenance::verified_engine(&home, &launcher)?;
+            ensure!(
+                identity.studio_commit == revision && identity.component_tree == tree,
+                "Installed Topgrade differs from the tracked Studio commit"
+            );
+            println!(
+                "Verified {} (Studio {revision}, tree {tree}, SHA-256 {})",
+                launcher.display(),
+                identity.binary_sha256
+            );
+            return Ok(());
+        }
+        handle_signals()?;
+        let _lock = acquire_mutation_lock()?;
+        let _activation = acquire_engine_activation_lock()?;
+        let pending = home.join(".local/share/topgrade-rustup-head/studio-activation.pending.json");
         ensure!(
-            base.canonicalize()? == base && releases.canonicalize()? == releases,
-            "Unexpected managed engine directories"
-        );
-        let target = release.join("bin/topgrade");
-        let journal = base.join(format!("studio-activation-{tree}.json"));
-        let pending = base.join("studio-activation.pending.json");
-        ensure!(
-            !optional(&pending)?,
+            entry(&pending)?.is_none(),
             "Pending engine activation needs review at {}",
             pending.display()
         );
-        if mode == "plan" {
-            println!("Studio {revision}, Topgrade tree {tree}");
-            println!("Current engine: {}", previous.display());
-            println!("Candidate: {}", target.display());
-            if optional(&release)? {
-                verify_release(&release, &tree)?;
-                verify_profile(checkout, &tree, &release)?;
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&profile(&release, &home, &[])?)?
-                );
-            } else {
-                println!("Prepare the verified release to inspect its profile plan.");
-            }
-            return Ok(());
+        let (revision, tree) = tracked(checkout, true)?;
+        let launcher = checked_launcher(&home)?;
+        if let Some(active) = active_receipt(&launcher, home.metadata()?.uid())? {
+            ensure!(
+                hexadecimal(&active.studio_commit, 40),
+                "Invalid installed Topgrade provenance"
+            );
+            output(
+                git_command(checkout).args([
+                    "merge-base",
+                    "--is-ancestor",
+                    &active.studio_commit,
+                    &revision,
+                ]),
+                "Require the tracked Studio commit to descend from the installed engine",
+            )?;
         }
-        let _lock = acquire_mutation_lock()?;
-        let _activation = acquire_engine_activation_lock()?;
-        ensure!(
-            fs::read_link(&link)? == previous && !optional(&pending)?,
-            "Engine changed while acquiring the maintenance lock"
-        );
-        if mode == "rollback" {
-            require_topgrade_idle()?;
-            verify_release(&release, &tree)?;
-            verify_profile(checkout, &tree, &release)?;
-            return restore_activation(&home, &tree, None);
+        if install_rolling(&home, &revision, &tree, |stage| {
+            prepare(checkout, &revision, &tree, stage, &home)
+        })? {
+            println!(
+                "Activated {} from Studio {revision}",
+                home.join(".local/bin/topgrade").display()
+            );
+        } else {
+            profile::verify_installed(&checkout.join("components/topgrade").join(PROFILE), &home)?;
+            println!("Topgrade and its profile are current at Studio {revision}");
         }
-        prepare(checkout, revision, &tree, &release, &home)?;
-        if matches!(mode.as_str(), "prepare" | "prepare-upstream") {
-            println!("Prepared verified engine at {}", target.display());
-            return Ok(());
-        }
-        if previous == target {
-            profile(&release, &home, &["--verify"])?;
-            println!("Engine and profile already current");
-            return Ok(());
-        }
-        ensure!(
-            !optional(&journal)?,
-            "Activation history already exists for this release"
-        );
-        require_topgrade_idle()?;
-        let mut activation = Activation {
-            schema_version: 1,
-            previous,
-            target,
-            profile_transaction: None,
-        };
-        profile(&release, &home, &[])?;
-        write_json(&pending, &activation)?;
-        let installed = profile(&release, &home, &["--apply"])?;
-        match installed["status"].as_str() {
-            Some("installed") => {
-                let tx = installed["transaction"]
-                    .as_str()
-                    .context("Missing profile transaction")?;
-                ensure!(hexadecimal(tx, 32), "Invalid profile transaction");
-                activation.profile_transaction = Some(tx.to_owned());
-            }
-            Some("already-current") => {}
-            _ => bail!("Unexpected profile transaction status"),
-        }
-        // Retain the activation and rollback evidence even when a later gate fails.
-        write_json(&journal, &activation)?;
-        let verified = (|| -> Result<()> {
-            profile(&release, &home, &["--verify"])?;
-            swap_link(&link, &activation.previous, &activation.target)?;
-            status(
-                Command::new(&link).arg("--version"),
-                "Verify active Topgrade launcher",
-            )
-        })();
-        if let Err(error) = verified {
-            let recovery = (|| -> Result<()> {
-                let current = fs::read_link(&link)?;
-                if current == activation.target {
-                    swap_link(&link, &activation.target, &activation.previous)?;
-                } else {
-                    ensure!(
-                        current == activation.previous,
-                        "Unexpected launcher after activation failure"
-                    );
-                }
-                if let Some(tx) = activation.profile_transaction.as_deref() {
-                    profile(&release, &home, &["--rollback", tx])?;
-                }
-                let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-                fs::rename(
-                    &journal,
-                    base.join(format!("studio-failed-{tree}-{timestamp}.json")),
-                )?;
-                fs::remove_file(&pending)?;
-                fs::File::open(&base)?.sync_all()?;
-                Ok(())
-            })();
-            return match recovery {
-                Ok(()) => Err(error.context(
-                    "Activation failed and the previous launcher and profile were restored",
-                )),
-                Err(recovery) => Err(error.context(format!(
-                    "Activation recovery also failed: {recovery:#}; inspect {}",
-                    pending.display()
-                ))),
-            };
-        }
-        fs::remove_file(&pending)?;
-        fs::File::open(&base)?.sync_all()?;
-        println!("Activated {}", activation.target.display());
-        println!("Activation record: {}", journal.display());
         Ok(())
     }
 

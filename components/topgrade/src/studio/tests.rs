@@ -115,16 +115,13 @@ fn studio_llvm_requires_an_exclusive_candidate_and_manual_entry() {
 }
 
 #[test]
-fn studio_release_rejects_asset_drift_and_receipt_replacement() {
+fn studio_rolling_engine_rejects_asset_drift_and_receipt_replacement() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().canonicalize().unwrap();
-    let tree = "a".repeat(40);
-    let release = home.join(RELEASES).join(&tree);
-    let executable = release.join("bin/topgrade");
+    let executable = home.join(".local/bin/topgrade");
     fs::create_dir_all(executable.parent().unwrap()).unwrap();
     private_file(&executable, b"fixture engine");
-    let profile = release.join("profile-manifest.json");
-    private_file(&profile, b"fixture profile");
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
 
     let mut assets = BTreeMap::new();
     for relative in REQUIRED_ASSETS {
@@ -133,30 +130,50 @@ fn studio_release_rejects_asset_drift_and_receipt_replacement() {
         private_file(&path, relative.as_bytes());
         assets.insert(relative, digest(&path));
     }
-    let receipt = release.join("studio-engine.json");
-    private_file(
-        &receipt,
-        &serde_json::to_vec(&serde_json::json!({
-            "schema_version": 1,
-            "studio_commit": "b".repeat(40),
-            "component_tree": tree,
-            "binary_sha256": digest(&executable),
-            "profile_sha256": digest(&profile),
-            "assets": assets,
-        }))
-        .unwrap(),
-    );
-    let reviewed = digest(&receipt);
-    verify_release(&home, &executable, &reviewed).unwrap();
+
+    let receipt = serde_json::json!({
+        "schema_version": 1,
+        "studio_commit": "b".repeat(40),
+        "component_tree": "a".repeat(40),
+        "binary_sha256": digest(&executable),
+        "profile_sha256": "c".repeat(64),
+        "profile_version": 1,
+        "assets": assets,
+    })
+    .to_string();
+    let receipt_fixture = home.join("receipt-fixture");
+    private_file(&receipt_fixture, receipt.as_bytes());
+    let reviewed = digest(&receipt_fixture);
+    let write_receipt = |value: &str| {
+        command(Path::new("/usr/bin/xattr"))
+            .args(["-w", "org.devenv-studio.topgrade-engine", value])
+            .arg(&executable)
+            .status_checked()
+            .unwrap();
+    };
+    write_receipt(&receipt);
+    verify_engine(&home, &executable, &reviewed).unwrap();
 
     let asset = REQUIRED_ASSETS[0];
     fs::write(home.join(asset), b"unexpected config").unwrap();
-    let error = verify_release(&home, &executable, &reviewed).err().unwrap();
+    let error = verify_engine(&home, &executable, &reviewed).err().unwrap();
     assert!(error.to_string().contains("Managed file changed"));
     fs::write(home.join(asset), asset).unwrap();
-    fs::write(&receipt, b"{}").unwrap();
-    let error = verify_release(&home, &executable, &reviewed).err().unwrap();
+
+    fs::write(&executable, b"unexpected binary").unwrap();
+    let error = verify_engine(&home, &executable, &reviewed).err().unwrap();
+    assert!(error.to_string().contains("Managed engine bytes changed"));
+    fs::write(&executable, b"fixture engine").unwrap();
+
+    write_receipt("{}");
+    let error = verify_engine(&home, &executable, &reviewed).err().unwrap();
     assert!(error.to_string().contains("Reviewed engine receipt has changed"));
+
+    write_receipt(&receipt);
+    let other = home.join("other");
+    fs::rename(&executable, &other).unwrap();
+    symlink(&other, &executable).unwrap();
+    assert!(verify_engine(&home, &executable, &reviewed).is_err());
 }
 
 #[test]

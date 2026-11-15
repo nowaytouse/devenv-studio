@@ -1,124 +1,234 @@
 use super::*;
-use serde_json::json;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 
 const OLD: &str = "1111111111111111111111111111111111111111";
 const NEW: &str = "2222222222222222222222222222222222222222";
+const CONFIG: &[u8] = b"# keep local topgrade settings\n";
 
-fn release(home: &Path, tree: &str, config: &[u8]) -> Result<PathBuf> {
-    let release = home
-        .join(".local/share/topgrade-rustup-head/releases")
-        .join(tree);
-    let binary = release.join("bin/topgrade");
-    fs::create_dir_all(binary.parent().unwrap())?;
-    fs::write(
-        &binary,
-        format!("#!/bin/sh\n# {tree}\nprintf 'topgrade 17.15.0\\n'\n"),
-    )?;
-    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755))?;
-    let profile = release.join("profile");
-    let mut assets = Vec::new();
+fn test_home() -> Result<tempfile::TempDir> {
+    let home = tempfile::tempdir()?;
     for destination in ASSETS {
-        let source = format!("config/{}", destination.strip_prefix(".config/").unwrap());
-        let path = profile.join(&source);
+        let path = home.path().join(destination);
         fs::create_dir_all(path.parent().unwrap())?;
-        fs::write(
-            &path,
-            if destination == ASSETS[0] {
-                config
-            } else {
-                b"unchanged"
-            },
-        )?;
-        assets.push(json!({
-            "source": source,
-            "destination": destination,
-            "sha256": sha256_file(&path)?,
-            "mode": 0o644,
-        }));
+        fs::write(&path, CONFIG)?;
     }
-    let manifest = release.join("profile-manifest.json");
-    write_json(&manifest, &json!({"version": 1, "files": assets}))?;
-    fs::copy(&manifest, profile.join("manifest.json"))?;
-    write_json(
-        &release.join("studio-engine.json"),
-        &Receipt {
-            schema_version: 1,
-            studio_commit: tree.to_owned(),
-            component_tree: tree.to_owned(),
-            binary_sha256: sha256_file(&binary)?,
-            profile_sha256: sha256_file(&manifest)?,
-            assets: asset_map(&manifest)?,
-        },
-    )?;
-    Ok(release)
+    Ok(home)
+}
+
+fn candidate(stage: &Path, home: &Path, revision: &str, valid: bool) -> Result<Prepared> {
+    let binary = stage.join("candidate");
+    let script = format!(
+        "#!/bin/sh\n# {revision}\ncase \"$1\" in\n--version) printf 'topgrade 17.16.0\\n';;\n--config-reference) printf '[misc]\\n'; exit {};;\n*) exit 2;;\nesac\n",
+        i32::from(!valid),
+    );
+    fs::write(&binary, script)?;
+    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755))?;
+    let assets = ASSETS
+        .iter()
+        .map(|destination| {
+            let digest = sha256_file(&home.join(destination))?;
+            Ok(((*destination).to_owned(), digest))
+        })
+        .collect::<Result<_>>()?;
+    let receipt = Receipt {
+        schema_version: 1,
+        studio_commit: revision.to_owned(),
+        component_tree: revision.to_owned(),
+        binary_sha256: sha256_file(&binary)?,
+        profile_sha256: "a".repeat(64),
+        profile_version: 1,
+        assets,
+    };
+    Ok(Prepared {
+        binary,
+        receipt,
+        profile: None,
+    })
+}
+
+fn assert_clean_install(home: &Path) -> Result<()> {
+    let bin = home.join(".local/bin");
+    let entries: Vec<_> = fs::read_dir(&bin)?.collect::<std::io::Result<_>>()?;
+    assert_eq!(entries.len(), 1, "temporary files or extra executables");
+    assert_eq!(entries[0].file_name(), "topgrade");
+    assert!(entries[0].path().symlink_metadata()?.is_file());
+    assert!(
+        !home
+            .join(".local/share/topgrade-rustup-head/releases")
+            .exists()
+    );
+    for destination in ASSETS {
+        assert_eq!(fs::read(home.join(destination))?, CONFIG);
+    }
+    Ok(())
 }
 
 #[test]
-fn same_version_rollback_restores_verified_binary_profile_and_receipt() -> Result<()> {
-    let fixture = tempfile::tempdir()?;
+fn first_install_and_repeat_keep_one_regular_topgrade() -> Result<()> {
+    let fixture = test_home()?;
     let home = fixture.path().canonicalize()?;
-    let previous = release(&home, OLD, b"original")?;
-    let current = release(&home, NEW, b"updated")?;
-    let receipt = home.join(".local/state/topgrade-macos-profile/installed.json");
-    let prior = profile(&previous, &home, &["--apply"])?;
-    let original_receipt = fs::read(&receipt)?;
-    let applied = profile(&current, &home, &["--apply"])?;
-    let id = applied["transaction"].as_str().unwrap();
-    let link = home.join(".local/bin/topgrade");
-    fs::create_dir_all(link.parent().unwrap())?;
-    let target = current.join("bin/topgrade");
-    let original = previous.join("bin/topgrade");
-    symlink(&target, &link)?;
-    let base = home.join(".local/share/topgrade-rustup-head");
-    let journal = base.join(format!("studio-activation-{NEW}.json"));
-    let pending = base.join("studio-activation.pending.json");
-    write_json(
-        &journal,
-        &Activation {
-            schema_version: 1,
-            previous: original.clone(),
-            target: target.clone(),
-            profile_transaction: Some(id.to_owned()),
-        },
-    )?;
-    let active = verified_engine_release(&home, &target)?;
-    let rollback = verified_engine_release(&home, &original)?;
-    assert_eq!(active.upstream_version, rollback.upstream_version);
-    assert_ne!(active.binary_sha256, rollback.binary_sha256);
-    assert_ne!(active.profile_sha256, rollback.profile_sha256);
-    assert!(restore_activation(&home, NEW, Some(NEW)).is_err());
-    assert!(!pending.exists());
+    let executable = home.join(".local/bin/topgrade");
+    assert!(!executable.exists());
 
-    let backup = receipt
-        .parent()
-        .unwrap()
-        .join(format!("transactions/{id}/backup/0"));
-    let original_backup = fs::read(&backup)?;
-    fs::write(&backup, b"tampered")?;
-    assert!(
-        format!(
-            "{:#}",
-            restore_activation(&home, NEW, Some(OLD)).unwrap_err()
-        )
-        .contains("Profile backup checksum mismatch")
-    );
-    assert!(!pending.exists());
-    assert_eq!(fs::read_link(&link)?, target);
-    assert_eq!(fs::read(home.join(ASSETS[0]))?, b"updated");
-    fs::write(&backup, original_backup)?;
+    assert!(install_rolling(&home, OLD, OLD, |stage| candidate(
+        stage, &home, OLD, true
+    ))?);
+    let identity = studio_deployment::maintenance::verified_engine(&home, &executable)?;
+    assert_eq!(identity.binary, executable);
+    assert_eq!(identity.studio_commit, OLD);
+    assert_eq!(identity.component_tree, OLD);
+    let original = fs::metadata(&executable)?;
+    assert!(!install_rolling(&home, OLD, OLD, |_| panic!(
+        "current executable must not be rebuilt"
+    ))?);
+    assert_eq!(fs::metadata(&executable)?.ino(), original.ino());
+    assert_clean_install(&home)
+}
 
-    restore_activation(&home, NEW, Some(OLD))?;
-    assert_eq!(fs::read_link(&link)?, original);
-    assert_eq!(sha256_file(&link.canonicalize()?)?, rollback.binary_sha256);
-    assert_eq!(fs::read(home.join(ASSETS[0]))?, b"original");
-    assert_eq!(fs::read(&receipt)?, original_receipt);
+#[test]
+fn rolling_replacement_accepts_existing_regular_file_and_symlink() -> Result<()> {
+    for symlink_install in [false, true] {
+        let fixture = test_home()?;
+        let home = fixture.path().canonicalize()?;
+        let executable = home.join(".local/bin/topgrade");
+        fs::create_dir_all(executable.parent().unwrap())?;
+        let source = home.join("user-file");
+        if symlink_install {
+            fs::write(&source, b"user data")?;
+            symlink(&source, &executable)?;
+        } else {
+            fs::write(&executable, b"original")?;
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))?;
+        }
+
+        assert!(install_rolling(&home, NEW, NEW, |stage| candidate(
+            stage, &home, NEW, true
+        ))?);
+        assert!(fs::read_to_string(&executable)?.contains(NEW));
+        assert_clean_install(&home)?;
+        if symlink_install {
+            assert_eq!(fs::read(&source)?, b"user data");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn build_validation_and_interruption_leave_current_binary_and_config_untouched() -> Result<()> {
+    let fixture = test_home()?;
+    let home = fixture.path().canonicalize()?;
+    let executable = home.join(".local/bin/topgrade");
+    assert!(install_rolling(&home, OLD, OLD, |stage| candidate(
+        stage, &home, OLD, true
+    ))?);
+    let expected = fs::read(&executable)?;
+    let inode = fs::metadata(&executable)?.ino();
+
+    let build = install_rolling(&home, NEW, NEW, |stage| {
+        fs::write(stage.join("incomplete"), b"partial build")?;
+        bail!("synthetic build failure");
+    });
+    assert!(format!("{:#}", build.unwrap_err()).contains("synthetic build failure"));
+    assert_clean_install(&home)?;
+
+    let validation = install_rolling(&home, NEW, NEW, |stage| candidate(stage, &home, NEW, false));
+    assert!(validation.is_err());
+    assert_clean_install(&home)?;
+
+    let interrupted = install_rolling(&home, NEW, NEW, |stage| {
+        candidate(stage, &home, NEW, true)?;
+        Err(std::io::Error::from(std::io::ErrorKind::Interrupted).into())
+    });
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&original_receipt)?["transaction"],
-        prior["transaction"]
+        interrupted
+            .unwrap_err()
+            .downcast_ref::<std::io::Error>()
+            .map(std::io::Error::kind),
+        Some(std::io::ErrorKind::Interrupted),
     );
-    assert!(!journal.exists());
-    assert!(!pending.exists());
-    assert!(restore_activation(&home, NEW, Some(OLD)).is_err());
+    assert_eq!(fs::metadata(&executable)?.ino(), inode);
+    assert_eq!(fs::read(&executable)?, expected);
+    assert_clean_install(&home)
+}
+
+#[test]
+fn rolling_update_refuses_to_overwrite_a_concurrent_launcher_change() -> Result<()> {
+    let fixture = test_home()?;
+    let home = fixture.path().canonicalize()?;
+    let executable = home.join(".local/bin/topgrade");
+    assert!(install_rolling(&home, OLD, OLD, |stage| candidate(
+        stage, &home, OLD, true
+    ))?);
+
+    let result = install_rolling(&home, NEW, NEW, |stage| {
+        let prepared = candidate(stage, &home, NEW, true)?;
+        fs::write(&executable, b"independent change during build")?;
+        Ok(prepared)
+    });
+
+    assert!(result.unwrap_err().to_string().contains("entry changed"));
+    assert_eq!(fs::read(&executable)?, b"independent change during build");
+    assert_clean_install(&home)
+}
+
+fn commit_fixture(checkout: &Path, contents: &str) -> Result<String> {
+    let path = "components/topgrade/fixture";
+    fs::create_dir_all(checkout.join("components/topgrade"))?;
+    fs::write(checkout.join(path), contents)?;
+    git(checkout, &["add", path])?;
+    git(
+        checkout,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-m",
+            contents,
+        ],
+    )?;
+    git(checkout, &["rev-parse", "HEAD"])
+}
+
+#[test]
+fn fetch_and_fast_forward_preserve_dirty_or_diverged_checkouts() -> Result<()> {
+    let fixture = tempfile::tempdir()?;
+    let root = fixture.path().canonicalize()?;
+    let origin = root.join("origin");
+    let checkout = root.join("checkout");
+    fs::create_dir(&origin)?;
+    git(&origin, &["init", "-b", "main"])?;
+    let original = commit_fixture(&origin, "initial")?;
+    git(&root, &["clone", "--no-hardlinks", "origin", "checkout"])?;
+    let latest = commit_fixture(&origin, "remote update")?;
+
+    let local_edit = checkout.join("keep-this-file");
+    fs::write(&local_edit, b"local")?;
+    assert!(tracked(&checkout, true).is_err());
+    assert_eq!(git(&checkout, &["rev-parse", "HEAD"])?, original);
+    assert_eq!(fs::read(&local_edit)?, b"local");
+    fs::remove_file(local_edit)?;
+
+    let (revision, tree) = tracked(&checkout, true)?;
+    assert_eq!(revision, latest);
+    assert_eq!(git(&checkout, &["rev-parse", "HEAD"])?, revision);
+    assert_eq!(
+        git(&checkout, &["rev-parse", "HEAD:components/topgrade"])?,
+        tree
+    );
+
+    let local = commit_fixture(&checkout, "local branch")?;
+    commit_fixture(&origin, "remote branch")?;
+    assert!(tracked(&checkout, true).is_err());
+    assert_eq!(git(&checkout, &["rev-parse", "HEAD"])?, local);
+    assert_eq!(
+        fs::read_to_string(checkout.join("components/topgrade/fixture"))?,
+        "local branch"
+    );
     Ok(())
 }

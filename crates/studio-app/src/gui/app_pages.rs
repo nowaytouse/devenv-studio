@@ -626,8 +626,8 @@ impl Studio {
                 tx("更新本机开发工具", "Update local developer tools"),
                 [
                     tx(
-                        "检查当前 Topgrade。可展开构建详情，核对上一版并复制终端回退命令。",
-                        "Check the active Topgrade. Expand its build details, review the previous version, and copy the rollback command when available.",
+                        "检查当前 Topgrade 并展开构建详情。",
+                        "Check the active Topgrade and expand its build details.",
                     ),
                     tx(
                         "选择可在 Studio 执行的步骤，核对范围后单独确认。",
