@@ -868,6 +868,25 @@ def successful_bulk_upgrade_leaves_outdated_formula(f):
     f.assert_restored()
 
 
+def media_formula_statuses_use_existing_scans(f, remains=False):
+    target = "homebrew-ffmpeg/ffmpeg/ffmpeg"
+    result = f.run(TEST_INSTALLED=f"llvm\n{target}\nlibavif\nopencv",
+                   TEST_PINNED="llvm\nopencv", TEST_OUTDATED="ffmpeg",
+                   TEST_BULK_STILL_OUTDATED="ffmpeg" if remains else "")
+    assert (result.returncode != 0) == remains, result.stdout
+    for expected in (
+            f"CHECKING {target}", "CURRENT libavif",
+            "SKIPPED opencv: protected or pinned", f"UPDATE_PENDING {target}",
+            f"{'STILL_OUTDATED' if remains else 'UPDATED'} {target}"):
+        assert expected in result.stdout, result.stdout
+    scans = [line for line in f.events() if line.startswith("brew outdated ")]
+    assert scans == [
+        f"brew outdated --formula --fetch-HEAD --json=v2 {target} libavif",
+        f"brew outdated --formula --fetch-HEAD --json=v2 {target}",
+    ], scans
+    f.assert_restored()
+
+
 def successful_jpeg_xl_upgrade_leaves_outdated_formula(f):
     target = "nyamiiko/headfixes/jpeg-xl"
     result = f.run(TEST_INSTALLED=f"llvm\n{target}", TEST_OUTDATED="jpeg-xl",
@@ -1164,6 +1183,8 @@ if native:
         ("stable LLVM failure stops dependency upgrades", llvm_stable_failure_stops_before_dependants),
         ("an incomplete LLVM update preserves its journal", incomplete_llvm_update_preserves_journal),
         ("bulk upgrade exit 0 with a remaining outdated formula is incomplete", successful_bulk_upgrade_leaves_outdated_formula),
+        ("media formulas report current, upgraded and pinned from existing scans", media_formula_statuses_use_existing_scans),
+        ("media formulas remaining outdated are reported without success", lambda f: media_formula_statuses_use_existing_scans(f, True)),
         ("JPEG XL transaction exit 0 with an outdated target is incomplete", successful_jpeg_xl_upgrade_leaves_outdated_formula),
         ("current dirty tap checks the tracker and preserves its local files", lambda f: dirty_tap_preserves_checkout(f, "current")),
         ("self-remote tap has no pending upstream refresh", lambda f: dirty_tap_preserves_checkout(f, "current", self_remote=True)),

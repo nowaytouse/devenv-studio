@@ -32,6 +32,15 @@ mod tests;
 const LLAMA_REMOTE: &str = "https://github.com/ggml-org/llama.cpp.git";
 const REF: &str = "refs/heads/master";
 const PAIR: [&str; 2] = ["ggml", "llama.cpp"];
+const MEDIA_FORMULAE: &[&str] = &[
+    "ffmpeg",
+    "jpeg-xl",
+    "libavif",
+    "imagemagick",
+    "opencv",
+    "yt-dlp",
+    "exiftool",
+];
 const JPEG_JOURNAL: &str = "jpeg-xl-active.json";
 const PAIR_JOURNAL: &str = "ggml-llama-active.json";
 const PAIR_UPGRADE_JOURNAL: &str = "ggml-llama-upgrade-active.json";
@@ -673,13 +682,37 @@ impl Headsync {
         let mut jpeg = installed.iter().filter(|formula| basename(formula) == "jpeg-xl");
         let provider = jpeg.next();
         ensure!(jpeg.next().is_none(), "Ambiguous installed JPEG XL formula identity");
+        println!("\n== Media update checks (Homebrew --fetch-HEAD) ==");
+        for formula in installed
+            .iter()
+            .filter(|formula| MEDIA_FORMULAE.contains(&basename(formula)))
+        {
+            if candidates.contains(&formula.as_str()) {
+                println!("CHECKING {formula}");
+            } else {
+                println!("SKIPPED {formula}: protected or pinned");
+            }
+        }
         let mut outdated = if candidates.is_empty() {
             println!("No eligible installed formulae; skipping outdated scan");
             Vec::new()
         } else {
-            self.outdated(&candidates)?
+            self.outdated(&candidates).inspect_err(|_| {
+                eprintln!("FAILED formula update checks: Homebrew --fetch-HEAD scan did not complete");
+            })?
         };
         let requested = outdated.clone();
+        for formula in candidates
+            .iter()
+            .filter(|formula| MEDIA_FORMULAE.contains(&basename(formula)))
+        {
+            let status = if requested.iter().any(|pending| pending == formula) {
+                "UPDATE_PENDING"
+            } else {
+                "CURRENT"
+            };
+            println!("{status} {formula}");
+        }
         if let Some(index) = outdated.iter().position(|formula| basename(formula) == "jpeg-xl") {
             let jxl = outdated.remove(index);
             let group = self.jpeg_group(&jxl)?;
@@ -709,7 +742,21 @@ impl Headsync {
         }
         println!("\n== Verify requested formula upgrades ==");
         let requested: Vec<&str> = requested.iter().map(String::as_str).collect();
-        self.outdated(&requested)
+        let residual = self.outdated(&requested).inspect_err(|_| {
+            eprintln!("FAILED formula update verification: Homebrew --fetch-HEAD readback did not complete");
+        })?;
+        for formula in requested
+            .iter()
+            .filter(|formula| MEDIA_FORMULAE.contains(&basename(formula)))
+        {
+            let status = if residual.iter().any(|pending| pending == formula) {
+                "STILL_OUTDATED"
+            } else {
+                "UPDATED"
+            };
+            println!("{status} {formula}");
+        }
+        Ok(residual)
     }
 
     fn repair_pair_consumers(&self, txn: &journal::Journal) -> Result<()> {

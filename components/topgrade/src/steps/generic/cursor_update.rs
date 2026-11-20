@@ -98,10 +98,30 @@ mod tests {
 
     #[test]
     fn stops_a_stalled_cursor_process_group() {
+        let ready = tempfile::NamedTempFile::new().unwrap();
         let mut command = RunType::Wet.execute("/bin/sh");
-        command.args(["-c", "/bin/sleep 20 & wait"]);
-        let error = run(&mut command, Duration::from_millis(50)).unwrap_err();
-        assert!(error.to_string().contains("exceeded"));
-        assert!(!error.to_string().contains("unable to stop"));
+        // Let the fixture reap its own child instead of waiting for launchd.
+        command
+            .args([
+                "-c",
+                r#"trap 'wait "$worker"; exit 0' TERM
+/bin/sleep 20 &
+worker=$!
+printf '%s\n' "$worker" > "$1"
+wait "$worker""#,
+                "cursor-fixture",
+            ])
+            .arg(ready.path());
+        let error = run(&mut command, Duration::from_secs(1)).unwrap_err();
+        let worker = std::fs::read_to_string(ready.path()).unwrap();
+        assert!(
+            worker.trim().parse::<u32>().is_ok(),
+            "fixture failed to start its child"
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains("exceeded") && !message.contains("unable to stop"),
+            "{error:#}"
+        );
     }
 }

@@ -31,7 +31,7 @@ GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来�
 
 同目录的 `serena.json` 记录本地 Serena 版本及标准 `.serena/cache` 符号文件的大小、时间和状态。Serena 的符号缓存对应实时检出内容，由 Serena 按文件内容和语言服务器配置判断有效性。索引维护不会反序列化这些缓存，也不会启动语言服务器。结束对应项目的 Serena 会话后，可对明确指定的检出目录运行 `topgrade-project-indexes.py --quarantine-empty-serena-cache /path/to/checkout`，将空的符号缓存移入 `serena-quarantine/`。正常缓存、项目设置和记忆保留。已配置的项目可用 Serena 官方 `serena project index /path/to/checkout` 重建符号缓存，重建时还应核对工具是否报告部分文件失败。 [Serena 项目工作流](https://oraios.github.io/serena/02-usage/040_workflow.html)
 
-「更新中心」从已核验的 Topgrade 引擎读取步骤目录。「更新任务」区分工具与缓存和只读诊断，默认零选中。可审核计数来自本机工具可用性。重跑前需重新检查。「终端维护」置顶 BetterDisplay 与 Homebrew HEAD-sync，并提供其余引擎步骤搜索和本机 profile 预演。预演读取正常 Topgrade 配置，前后置命令及配置中的 `misc.only` 也会参与。以预演结果核对实际范围。配置迁移包仍是独立的备份和提取入口。
+「更新中心」从已核验的 Topgrade 引擎读取步骤目录。「更新任务」区分工具与缓存和只读诊断，默认零选中。可审核计数来自本机工具可用性。重跑前需重新检查。「终端维护」置顶 BetterDisplay 与 Homebrew HEAD-sync，并提供其余引擎步骤搜索和本机 profile 预演。预演读取本机 profile。命令行显式指定 `--only` 时，以该步骤列表覆盖 `misc.only`，并跳过全局前后置命令。配置迁移包仍是独立的备份和提取入口。
 
 「Homebrew 已安装」读取本机 Formula 与 Cask，提供搜索、固定版本筛选和安装、链接、`opt` 详情，并展示读取命令。清单使用 Homebrew 的本地 JSON 列表，读取时关闭自动更新。单包安装、升级和卸载可由 Homebrew 官方应用处理。 [BrewUI](https://github.com/Homebrew/BrewUI)
 
@@ -42,6 +42,8 @@ GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来�
 首次构建 LLVM HEAD 时，Studio 使用私有 Git 缓存。首次下载只获取官方 main 的提交历史和当前提交的文件，完整提交匹配后才写入缓存。后续构建会复用缓存，Homebrew 仍会在安装前核验实际取到的完整提交。
 
 普通 `topgrade -y` 会在 Homebrew HEAD-sync 内默认更新两个 LLVM 渠道。刷新目录后先核验并升级 Homebrew 的 `llvm`，确认 Homebrew Rust 仍能运行后才推进 pin，然后升级其他配方。最后检查已安装的 `nyamiiko/tools/llvm-head`，按 LLVM 官方 main 的完整提交构建到独立 keg。新 ABI 系列需要单独核验。自动更新中断后，HEAD-sync 会保留 `brew-headsync` 状态目录中的 `llvm_stable-before.json` 或 `llvm_head-before.json`，并提示检查原 `opt` 和 pin。GUI 单渠道更新仍可使用其运行目录中的 `llvm-before.json`。
+
+媒体配方的状态来自已有的 Homebrew `--fetch-HEAD` 扫描和升级后复核。日志会显示哪些配方已检查、已有更新、已更新、仍然过期或因 pin 跳过。该状态按 Homebrew 的候选结果判定，完整 Git SHA 需要从上游和安装收据另行核对。
 
 检查后，「当前更新引擎」显示实际运行版本、组件树短标识及 profile 清单版本和摘要。展开来源可查看二进制路径、Studio 构建提交、完整组件树和两份 SHA-256。组件树区分同一个 Topgrade 版本下的不同源码，二进制摘要进一步区分产物。执行记录保留当时的引擎身份及可用回退候选。旧记录保留已写入的组件树，缺失字段保持未知。
 
@@ -78,6 +80,8 @@ GitHub CLI 对 Gemini 中已核对的旧版 `discovering-gcp-data-assets` 单独
 查询 Docker Hub 的官方 `library` 镜像标签与摘要时，使用临时空的凭据配置，避免调用系统凭据助手。其他镜像仍使用现有认证配置。限流和网络失败继续报告为未完成。
 
 Homebrew 公式步骤先刷新目录，再扫描并升级过期公式。所有 tap 干净时使用常规 `brew update`。存在本地改动时，公式步骤改用 Git 刷新 `homebrew/core` 和 tap 目录，并保留本地补丁。包含最新上游提交的 tap 直接报告当前，缺少的提交只在能快进且来件路径与本地改动不重叠时合入。分叉、路径重叠或缺少跟踪分支会延期，日志列出原因。这个分支的目录刷新使用 Git 中的公式，Homebrew 程序和 API 缓存由常规 `brew update` 刷新。仅指向自身的未跟踪 tap 显示为本地专用目录。官方 core 刷新失败时，公式升级停止。升级后再次核对本轮请求的公式。目录延期或仍有公式过期时，摘要显示“部分完成”并返回非零退出码。固定版本和独立管理的公式仍会列出排除原因。
+
+tap 负责构建配方和自定义参数。已经按 HEAD 安装的 `nyamiiko/tools/libavif` 由公式中的官方 Git `main` 和 Topgrade 的 `--fetch-HEAD` 跟踪。只有上游改动触及构建要求、依赖版本、自定义参数或验证时，才需要更新这份公式。
 
 摘要会显示模拟执行和后置命令的结果。显式配置或其引用无法读取或解析时，Topgrade 会在更新前停止。
 

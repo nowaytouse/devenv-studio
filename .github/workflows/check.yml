@@ -48,3 +48,4 @@ jobs:
           brew install python@3.15
           "$(brew --prefix python@3.15)/bin/python3.15" -m unittest discover -s profiles/macos/tests
           HOMEBREW_NO_INSTALL_FROM_API=1 brew ruby ../../scripts/test_jpeg_xl_transaction.rb
+          "$(brew ruby -e 'print RbConfig.ruby')" profiles/macos/tests/headsync_pair_test.rb "$PWD/src/studio/headsync/jpeg_xl.rb"
