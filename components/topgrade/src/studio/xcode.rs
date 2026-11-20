@@ -8,7 +8,7 @@ use std::process::Stdio;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
-use color_eyre::eyre::{Context, Result, bail, ensure, eyre};
+use color_eyre::eyre::{Context, OptionExt, Result, bail, ensure, eyre};
 use nix::libc::{O_NOFOLLOW, O_NONBLOCK};
 use regex::Regex;
 use serde::Deserialize;
@@ -28,12 +28,12 @@ struct Candidate {
     name: String,
     developer: PathBuf,
     key: (Vec<u64>, u64),
-    build: String,
+    build: Option<String>,
 }
 
 fn candidate(applications: &Path) -> Result<Option<Candidate>> {
     static NAME: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)\AXcode-([0-9]+(?:\.[0-9]+)*)-Beta([0-9]+)-([0-9A-Za-z]+)\.app\z")
+        Regex::new(r"(?i)\AXcode-([0-9]+(?:\.[0-9]+)*)-Beta([0-9]+)(?:-([0-9A-Za-z]+))?\.app\z")
             .expect("valid Xcode bundle name pattern")
     });
     let mut best: Option<Candidate> = None;
@@ -74,7 +74,7 @@ fn candidate(applications: &Path) -> Result<Option<Candidate>> {
                     name: name.to_owned(),
                     developer,
                     key,
-                    build: parts[3].to_owned(),
+                    build: parts.get(3).map(|build| build.as_str().to_owned()),
                 });
             }
         }
@@ -105,7 +105,7 @@ fn plist(path: &Path, args: &[&str]) -> Result<String> {
         .stdout)
 }
 
-fn inspect_bundle(target: &Candidate) -> Result<()> {
+fn inspect_bundle(target: &Candidate) -> Result<String> {
     let contents = target
         .developer
         .parent()
@@ -123,19 +123,44 @@ fn inspect_bundle(target: &Candidate) -> Result<()> {
     struct Version {
         #[serde(rename = "ProductBuildVersion")]
         build: Option<String>,
+        #[serde(rename = "CFBundleShortVersionString")]
+        version: Option<String>,
     }
     let version = contents.join("version.plist");
-    if super::exists(&version)? {
-        let metadata: Version = serde_json::from_str(&plist(&version, &["-convert", "json", "-o", "-"])?)?;
+    let metadata = if super::exists(&version)? {
+        Some(serde_json::from_str::<Version>(&plist(
+            &version,
+            &["-convert", "json", "-o", "-"],
+        )?)?)
+    } else {
+        None
+    };
+    if let Some(expected) = &target.build {
         ensure!(
             metadata
-                .build
-                .as_deref()
-                .is_none_or(|build| build.is_empty() || build == target.build),
+                .as_ref()
+                .and_then(|version| version.build.as_deref())
+                .is_none_or(|build| build.is_empty() || build == expected),
             "Xcode version.plist and bundle name disagree on the build"
         );
+        return Ok(expected.clone());
     }
-    Ok(())
+    let metadata = metadata.ok_or_eyre("Xcode bundle without a build suffix requires version.plist")?;
+    let reported_version = metadata
+        .version
+        .as_deref()
+        .ok_or_eyre("Missing Xcode short version in version.plist")?
+        .split('.')
+        .map(str::parse::<u64>)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    ensure!(
+        reported_version == target.key.0,
+        "Xcode version.plist and bundle name disagree on the version"
+    );
+    metadata
+        .build
+        .filter(|build| !build.is_empty() && build.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+        .ok_or_eyre("Missing or invalid Xcode build in version.plist")
 }
 
 fn active() -> Result<PathBuf> {
@@ -200,12 +225,13 @@ fn switch(developer: &Path) -> Result<()> {
 
 fn select(
     target: &Candidate,
+    expected_build: &str,
     terminal: bool,
     mut active: impl FnMut() -> Result<PathBuf>,
     mut version: impl FnMut(Option<&Path>, &str) -> Result<String>,
     mut switch: impl FnMut(&Path) -> Result<()>,
 ) -> Result<()> {
-    version(Some(&target.developer), &target.build).wrap_err("Could not validate the target Xcode")?;
+    version(Some(&target.developer), expected_build).wrap_err("Could not validate the target Xcode")?;
     let previous = active().wrap_err("Could not determine the current developer directory for rollback")?;
     if previous == target.developer {
         println!("Xcode Auto Select: CURRENT — {}", target.name);
@@ -227,7 +253,7 @@ fn select(
             active()? == target.developer,
             "xcode-select did not select the target developer directory"
         );
-        let output = version(None, &target.build)?;
+        let output = version(None, expected_build)?;
         ensure!(
             active()? == target.developer,
             "Active developer directory changed during Xcode validation"
@@ -268,9 +294,9 @@ pub(super) fn run() -> Result<()> {
         println!("Xcode Auto Select: SKIPPED — 未发现已安装的版本化 Beta");
         return Ok(());
     };
-    inspect_bundle(&target)?;
+    let expected_build = inspect_bundle(&target)?;
     let terminal = io::stdin().is_terminal() && io::stderr().is_terminal();
-    select(&target, terminal, active, version, switch)
+    select(&target, &expected_build, terminal, active, version, switch)
 }
 
 #[cfg(test)]
@@ -291,7 +317,7 @@ mod tests {
             name: "Xcode-27.3-Beta1-27C5020n.app".into(),
             developer: "/Applications/Xcode-27.3-Beta1-27C5020n.app/Contents/Developer".into(),
             key: (vec![27, 3], 1),
-            build: "27C5020n".into(),
+            build: Some("27C5020n".into()),
         }
     }
 
@@ -318,7 +344,7 @@ mod tests {
 
         let selected = candidate(root).unwrap().unwrap();
         assert_eq!(selected.developer, latest);
-        assert_eq!(selected.build, "27Z5030n");
+        assert_eq!(selected.build.as_deref(), Some("27Z5030n"));
         bundle(root, "Xcode-27.10-Beta10-27Z5031n.app");
         assert!(
             candidate(root)
@@ -358,10 +384,54 @@ mod tests {
     }
 
     #[test]
+    fn xcodes_bundle_without_a_build_suffix_requires_matching_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        bundle(dir.path(), "Xcode-27.3-Beta1-27C5020n.app");
+        let developer = bundle(dir.path(), "Xcode-27.3-Beta2.app");
+        let target = candidate(dir.path()).unwrap().unwrap();
+        assert_eq!(target.developer, developer);
+        let contents = developer.parent().unwrap();
+        fs::write(
+            contents.join("Info.plist"),
+            r#"<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.apple.dt.Xcode</string></dict></plist>"#,
+        )
+        .unwrap();
+        assert!(
+            inspect_bundle(&target)
+                .unwrap_err()
+                .to_string()
+                .contains("requires version.plist")
+        );
+
+        let write_metadata = |version: &str, build: &str| {
+            fs::write(contents.join("version.plist"), format!(
+                r#"<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>{version}</string><key>ProductBuildVersion</key><string>{build}</string></dict></plist>"#
+            )).unwrap();
+        };
+        write_metadata("27.2", "27C5035i");
+        assert!(
+            inspect_bundle(&target)
+                .unwrap_err()
+                .to_string()
+                .contains("disagree on the version")
+        );
+        write_metadata("27.3", "bad build");
+        assert!(
+            inspect_bundle(&target)
+                .unwrap_err()
+                .to_string()
+                .contains("invalid Xcode build")
+        );
+        write_metadata("27.3", "27C5035i");
+        assert_eq!(inspect_bundle(&target).unwrap(), "27C5035i");
+    }
+
+    #[test]
     fn no_tty_is_a_noop_only_when_the_target_is_already_current() {
         let target = target();
         select(
             &target,
+            "27C5020n",
             false,
             || Ok(target.developer.clone()),
             verified,
@@ -371,6 +441,7 @@ mod tests {
 
         let error = select(
             &target,
+            "27C5020n",
             false,
             || Ok("/previous".into()),
             verified,
@@ -386,6 +457,7 @@ mod tests {
         let mut active = ["/previous", "/independent"].into_iter();
         let error = select(
             &target,
+            "27C5020n",
             true,
             || Ok(active.next().unwrap().into()),
             verified,
@@ -403,6 +475,7 @@ mod tests {
         let mut calls = Vec::new();
         let error = select(
             &target,
+            "27C5020n",
             true,
             || Ok(current.borrow().clone()),
             |developer, build| {
@@ -431,6 +504,7 @@ mod tests {
         let version_checks = Cell::new(0);
         select(
             &target,
+            "27C5020n",
             true,
             || Ok(current.borrow().clone()),
             |developer, build| {
@@ -464,6 +538,7 @@ mod tests {
             let mut calls = 0;
             let error = select(
                 &target,
+                "27C5020n",
                 true,
                 || Ok(current.borrow().clone()),
                 |developer, build| {
