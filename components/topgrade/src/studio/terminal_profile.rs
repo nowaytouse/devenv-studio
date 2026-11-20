@@ -25,7 +25,8 @@ pub(super) fn run(id: &str, mode: RunType) -> Result<()> {
         "sqlite_python_trunk" => || sqlite::run(true),
         "tourbox_beta" => preview::tourbox_beta,
         "xcode_select_beta" => xcode::run,
-        "xcode_beta_install" => preview::xcode_beta,
+        "xcode_beta_install" => || preview::xcode_beta(false),
+        "xcode_beta_check" => || preview::xcode_beta(true),
         _ => bail!("Unknown native profile operation: {id}"),
     };
     if mode.dry() {

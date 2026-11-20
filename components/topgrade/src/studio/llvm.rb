@@ -130,30 +130,47 @@ def llvm_prepare_head_cache(cache, revision)
   end
 end
 
+def llvm_compatibility_present?
+  [HOMEBREW_CELLAR/"llvm", HOMEBREW_PREFIX/"opt/llvm", HOMEBREW_PREFIX/"var/homebrew/pinned/llvm",
+   HOMEBREW_PREFIX/"var/homebrew/pinned/.llvm.topgrade-headsync-suspended"].any? do |path|
+    File.lstat(path)
+    true
+  rescue Errno::ENOENT
+    false
+  end
+end
+
+def llvm_compatibility_unchanged?(snapshot)
+  if snapshot[:opt]
+    snapshot.values_at(:opt, :pin).all? { |link| llvm_unchanged(link) }
+  else
+    !llvm_compatibility_present?
+  end
+end
+
 def llvm_snapshot(step)
   unless HOMEBREW_PREFIX.to_s == "/opt/homebrew" && HOMEBREW_CELLAR.to_s == "/opt/homebrew/Cellar" &&
          Hardware::CPU.arm?
     raise "Studio LLVM updates require Apple Silicon Homebrew in /opt/homebrew"
   end
-  stable = Formulary.factory("homebrew/core/llvm", :stable)
-  raise "Unexpected stable LLVM build policy" unless stable.tap&.core_tap? && stable.keg_only? && !stable.fetch_defined?
+  current = {schema_version: 1, step:}
+  if step == "llvm_stable" || llvm_compatibility_present?
+    stable = Formulary.factory("homebrew/core/llvm", :stable)
+    raise "Unexpected stable LLVM build policy" unless stable.tap&.core_tap? && stable.keg_only? && !stable.fetch_defined?
 
-  [stable.rack, stable.opt_prefix.dirname, FormulaPin.new(stable).path.dirname].each do |path|
-    llvm_path(path, :directory?)
+    [stable.rack, stable.opt_prefix.dirname, FormulaPin.new(stable).path.dirname].each do |path|
+      llvm_path(path, :directory?)
+    end
+    opt = llvm_link(stable.opt_prefix, stable.rack)
+    pin = llvm_link(FormulaPin.new(stable).path, stable.rack)
+    installed = File.basename(opt.fetch(:target))
+    unless opt[:target] == pin[:target] && LLVM_STABLE_VERSION.match?(installed)
+      raise "Active Homebrew LLVM and its pin must select the same stable keg"
+    end
+    current.merge!(opt:, pin:, stable_receipt: llvm_receipt(opt.fetch(:target), "homebrew/core", "stable"))
   end
-  opt = llvm_link(stable.opt_prefix, stable.rack)
-  pin = llvm_link(FormulaPin.new(stable).path, stable.rack)
-  installed = File.basename(opt.fetch(:target))
-  unless opt[:target] == pin[:target] && LLVM_STABLE_VERSION.match?(installed)
-    raise "Active Homebrew LLVM and its pin must select the same stable keg"
-  end
-
-  current = {
-    schema_version: 1, step:, opt:, pin:,
-    stable_receipt: llvm_receipt(opt.fetch(:target), "homebrew/core", "stable"),
-    old_head_kegs: llvm_history(stable),
-  }
   if step == "llvm_stable"
+    current[:old_head_kegs] = llvm_history(stable)
     version = stable.pkg_version.to_s
     series = installed.split(".").first(2)
     unless LLVM_STABLE_VERSION.match?(version) && version.split(".").first(2) == series &&
@@ -263,8 +280,9 @@ def llvm_run(formula, snapshot, journal)
   journal_written = false
   candidate_path = nil
   begin
-    protected_links = snapshot.values_at(:opt, :pin, :head_opt, :rust_opt).compact
-    unless protected_links.all? { |link| llvm_unchanged(link) } && llvm_formula_digest(formula) == snapshot[:formula_sha256]
+    protected_links = snapshot.values_at(:head_opt, :rust_opt).compact
+    unless llvm_compatibility_unchanged?(snapshot) && protected_links.all? { |link| llvm_unchanged(link) } &&
+           llvm_formula_digest(formula) == snapshot[:formula_sha256]
       raise "LLVM formula or active keg changed while acquiring Homebrew locks"
     end
     if stable && !installer.pour_bottle?
@@ -316,8 +334,8 @@ def llvm_run(formula, snapshot, journal)
     else
       receipt = llvm_receipt(candidate[:target], "nyamiiko/tools", "head")
       raise "Installed LLVM HEAD differs from the reviewed commit" unless receipt[:revision] == version
-      unless llvm_unchanged(snapshot[:opt]) && llvm_unchanged(snapshot[:pin])
-        raise "Stable LLVM changed during the HEAD update"
+      unless llvm_compatibility_unchanged?(snapshot)
+        raise "Homebrew compatibility LLVM changed during the rolling update"
       end
       llvm_capture(File.join(candidate[:target], "bin/llvm-config"), "--version")
     end

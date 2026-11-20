@@ -404,6 +404,9 @@ mod mac {
                 .arg(&archive)
                 .args([
                     revision,
+                    "Cargo.toml",
+                    "Cargo.lock",
+                    "crates",
                     "components/topgrade",
                     "scripts/test_jpeg_xl_transaction.rb",
                 ]),
@@ -430,10 +433,10 @@ mod mac {
         let run_cargo = |args: &[&str], action| -> Result<()> {
             status(
                 Command::new(home.join(".cargo/bin/cargo"))
-                    .current_dir(&component)
+                    .current_dir(&source)
                     .arg("+nightly")
                     .args(args)
-                    .args(["--locked", "--target-dir"])
+                    .args(["--locked", "--package", "topgrade", "--target-dir"])
                     .arg(&target)
                     .env("CARGO_BUILD_BUILD_DIR", &target)
                     .env("HOMEBREW_NO_AUTO_UPDATE", "1"),
@@ -442,10 +445,16 @@ mod mac {
         };
         run_cargo(&["test"], "Test the tracked Topgrade component")?;
         run_cargo(
-            &["build", "--release", "--bin", "topgrade"],
+            &[
+                "build",
+                "--profile",
+                "topgrade-release",
+                "--bin",
+                "topgrade",
+            ],
             "Build Topgrade with Rustup Nightly",
         )?;
-        let compiled = target.join("release/topgrade");
+        let compiled = target.join("topgrade-release/topgrade");
         let binary = stage.join("topgrade");
         // Cargo can hard-link its output into the artifact directory.
         fs::copy(&compiled, &binary)?;

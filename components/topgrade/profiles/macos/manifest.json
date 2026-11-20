@@ -137,7 +137,7 @@
     {
       "source": "bin/update-preview-extras",
       "destination": ".local/bin/update-preview-extras",
-      "sha256": "00f155e85068950647bacd2c433a7ccb02d0c11a560c1a7cdc8a0168c5e14c9f",
+      "sha256": "4232a3e3caef1ad3463740d6494bbeb4ebf002a62199b584df51161419e4a265",
       "mode": 493,
       "adoptSha256": "e27b460400caadb23c22f971ee5edea4ac3f73cfe7870c4c228c3b3ac1cfaff4"
     },
@@ -172,7 +172,7 @@
     {
       "source": "bin/update-xcode-beta",
       "destination": ".local/bin/update-xcode-beta",
-      "sha256": "00706c2ee6f07699cc4418d30f13993cc32f89c26f03a820440e6f962f226800",
+      "sha256": "c43a23b46842273952f764aadf816db2d3aad58e4175fe75df8c67a510a807bc",
       "mode": 493,
       "adoptSha256": "34728fe08efbd145e203b16c1c6b0396cb5104e75de04d308bdef67985a0a1f8"
     },

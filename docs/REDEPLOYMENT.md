@@ -76,6 +76,8 @@ mise 清单读取使用 mise --no-config ls --installed --json --backend core，
 
 ### fork 环境与安装来源
 
+现行安装从 DevEnv Studio 工作区的跟踪提交和根 Cargo 锁文件构建 Topgrade。旧独立 fork 已归档。安装和迁移应核对 Studio 提交、引擎产物与受管 profile 的身份。见[本机构建与切换](TOPGRADE_MAINTENANCE.md#本机构建与切换)。
+
 2026-10-31 本设备已切换到所有者 [nowaytouse/topgrade fork](https://github.com/nowaytouse/topgrade/tree/0a2969bf976ce124b813a7064d17119a68cc25ac)，固定 revision `0a2969bf976ce124b813a7064d17119a68cc25ac`，版本仍为 17.14.1。当前二进制、Cargo 安装来源记录和本地源码 revision 已一致核对；二进制指纹、个人配置、脚本原文及归档只保存在本地私有快照，不成为应用默认配置。
 
 fork 的 [macOS profile](https://github.com/nowaytouse/topgrade/blob/0a2969bf976ce124b813a7064d17119a68cc25ac/profiles/macos/README.md) 包含 `[helm].repository_updater`、`[github_cli].skills_updater` 等专用配置和相应验证脚本。迁移器原样保存这些文本；目标设备必须核对 fork 来源、固定提交和先决工具，仅凭版本号不能判断兼容。34 文件文本包与 210 文件资源附件覆盖固定 profile 的 241 项及三个本地配置/安装记录，已逐项核验；资源附件超过文本包边界，因此单独私有保存。归档并不代表二进制或全部工具链已重部署。

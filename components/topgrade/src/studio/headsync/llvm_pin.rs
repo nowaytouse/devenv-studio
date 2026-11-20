@@ -108,13 +108,38 @@ fn move_exclusive(source: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(super) fn present(prefix: &Path) -> Result<bool> {
+    for path in [
+        "Cellar/llvm",
+        "opt/llvm",
+        "var/homebrew/pinned/llvm",
+        "var/homebrew/pinned/.llvm.topgrade-headsync-suspended",
+    ] {
+        if Paths::occupied(&prefix.join(path))? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub(super) fn recover(prefix: &Path) -> Result<()> {
-    let paths = Paths::new(prefix)?;
-    if !Paths::occupied(&paths.held)? {
+    if !Paths::occupied(&prefix.join("var/homebrew/pinned/.llvm.topgrade-headsync-suspended"))? {
         return Ok(());
     }
+    let paths = Paths::new(prefix)?;
     println!("Recovering a suspended LLVM pin before Homebrew maintenance");
     paths.finish().wrap_err("Recovery of suspended LLVM pin failed")
+}
+
+pub(super) fn suspend_if_required(prefix: &Path, expected: bool) -> Result<Option<Suspension>> {
+    if expected {
+        return suspend(prefix).map(Some);
+    }
+    ensure!(
+        !present(prefix)?,
+        "Homebrew compatibility LLVM appeared during HEAD-sync"
+    );
+    Ok(None)
 }
 
 pub(super) struct Suspension {

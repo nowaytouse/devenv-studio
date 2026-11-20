@@ -277,6 +277,31 @@ pub(in crate::studio) fn reviewed_local_rex(home: &Path, path: &Path, scope: &st
     Ok(tree(&canonical)? == reviewed && tree(&mirror)? == reviewed)
 }
 
+pub(in crate::studio) const REVIEWED_LOCAL_SKILLS: &str = ".local/share/devenv-studio/reviewed-skills";
+
+pub(in crate::studio) fn reviewed_local(home: &Path, path: &Path, scope: &str, name: &str) -> Result<bool> {
+    if !matches!(scope, "user" | "project")
+        || !component(name)
+        || CURSOR_NAMES.contains(&name)
+        || path != home.join(".agents/skills").join(name)
+    {
+        return Ok(false);
+    }
+    let root = home.join(REVIEWED_LOCAL_SKILLS);
+    let source = root.join(name);
+    if !super::super::exists(&source)? {
+        return Ok(false);
+    }
+    super::super::check_dir(&root, true)?;
+    super::super::check_dir(&source, true)?;
+    ensure!(
+        name_matches(&source, name)?,
+        "Reviewed local skill identity mismatch: {}",
+        source.display()
+    );
+    Ok(tree(&source)? == tree(path)?)
+}
+
 pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec<Item>, Delegated)> {
     ensure!(
         !rows.is_empty() && rows.len() <= 4096,
@@ -343,7 +368,9 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
                 row.path.display()
             );
             delegated.cursor += 1;
-        } else if name == "rex" && reviewed_local_rex(home, &row.path, &row.scope, REVIEWED_REX_SHA)? {
+        } else if (name == "rex" && reviewed_local_rex(home, &row.path, &row.scope, REVIEWED_REX_SHA)?)
+            || reviewed_local(home, &row.path, &row.scope, name)?
+        {
             delegated.local += 1;
         } else {
             color_eyre::eyre::bail!(
@@ -376,6 +403,38 @@ mod tests {
         assert!(!reviewed_local_rex(&home, &home.join("rex"), "project", &sha)?);
         fs::write(mirror.join("SKILL.md"), b"changed")?;
         assert!(!reviewed_local_rex(&home, &canonical, "user", &sha)?);
+        Ok(())
+    }
+
+    #[test]
+    fn local_source_requires_matching_private_copy_and_installation() -> Result<()> {
+        use std::os::unix::fs::{DirBuilderExt as _, symlink};
+
+        let fixture = tempfile::tempdir()?;
+        let home = fixture.path().canonicalize()?;
+        let name = "local-custom";
+        let installed = home.join(".agents/skills").join(name);
+        let source_root = home.join(REVIEWED_LOCAL_SKILLS);
+        let source = source_root.join(name);
+        fs::create_dir_all(&installed)?;
+        let markdown = b"---\nname: local-custom\n---\noriginal\n";
+        fs::write(installed.join("SKILL.md"), markdown)?;
+        assert!(!reviewed_local(&home, &installed, "user", name)?);
+
+        fs::DirBuilder::new().recursive(true).mode(0o700).create(&source)?;
+        fs::write(source.join("SKILL.md"), markdown)?;
+        assert!(reviewed_local(&home, &installed, "user", name)?);
+        assert!(!reviewed_local(&home, &source, "user", name)?);
+        assert!(!reviewed_local(&home, &installed, "repository", name)?);
+
+        fs::write(installed.join("extra.txt"), b"changed")?;
+        assert!(!reviewed_local(&home, &installed, "project", name)?);
+        fs::remove_file(installed.join("extra.txt"))?;
+
+        let file = source.join("SKILL.md");
+        fs::remove_file(&file)?;
+        symlink(installed.join("SKILL.md"), &file)?;
+        assert!(reviewed_local(&home, &installed, "user", name).is_err());
         Ok(())
     }
 }

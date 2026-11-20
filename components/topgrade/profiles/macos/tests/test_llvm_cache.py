@@ -77,6 +77,16 @@ Dir.mktmpdir do |temporary|
   installer.define_singleton_method(:formula) { Struct.new(:opt_prefix).new(opt) }
   installer.link(keg)
   raise "Unexpected opt link" unless File.readlink(opt) == keg.to_s
+
+  prefix = directory/"brew"
+  Object.send(:remove_const, :HOMEBREW_PREFIX)
+  Object.const_set(:HOMEBREW_PREFIX, prefix)
+  Object.send(:remove_const, :HOMEBREW_CELLAR)
+  Object.const_set(:HOMEBREW_CELLAR, prefix/"Cellar")
+  raise "Empty prefix should permit LLVM HEAD alone" unless llvm_compatibility_unchanged?({})
+  FileUtils.mkdir_p(prefix/"opt")
+  File.symlink(prefix/"missing-keg", prefix/"opt/llvm")
+  raise "Dangling compatibility link was treated as absence" if llvm_compatibility_unchanged?({})
 end
 """
         subprocess.run(

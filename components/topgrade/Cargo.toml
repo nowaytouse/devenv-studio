@@ -4,7 +4,7 @@ description = "Upgrade all the things"
 categories = ["command-line-utilities"]
 keywords = ["upgrade", "update"]
 license = "GPL-3.0-or-later"
-repository = "https://github.com/nowaytouse/topgrade"
+repository = "https://github.com/nowaytouse/devenv-studio/tree/main/components/topgrade"
 rust-version = "1.95.0"
 version = "17.16.0"
 exclude = ["doc/screenshot.gif"]
@@ -105,10 +105,6 @@ parselnk = "0.1"
 self_update_crate = { version = "1.3", default-features = false, optional = true, package = "self_update", features = ["archive-zip", "compression-zip-deflate", "github", "progress-bar", "rustls", "reqwest"] }
 windows = { version = "0.62", features = ["Win32_System_Console"] }
 windows-registry = "0.100"
-
-[profile.release]
-lto = true
-codegen-units = 1
 
 [features]
 default = []

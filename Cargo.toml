@@ -1,6 +1,12 @@
 [workspace]
-members = ["crates/studio-core", "crates/studio-platform", "crates/studio-deployment", "crates/studio-legacy", "crates/studio-app"]
-exclude = ["components/topgrade"]
+members = [
+    "components/topgrade",
+    "crates/studio-core",
+    "crates/studio-platform",
+    "crates/studio-deployment",
+    "crates/studio-legacy",
+    "crates/studio-app",
+]
 resolver = "3"
 
 [workspace.package]
@@ -23,3 +29,9 @@ studio-legacy = { path = "crates/studio-legacy" }
 [profile.release]
 lto = "thin"
 strip = true
+
+[profile.topgrade-release]
+inherits = "release"
+lto = true
+codegen-units = 1
+strip = false

@@ -37,15 +37,19 @@ GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来�
 
 「更新任务」的审核视图显示每项的命令或运行方式。任务结束后进入「执行记录」，可查看结果和本地输出，也可以独立刷新历史。
 
-在 Apple Silicon 的「更新任务」中，打开「LLVM 手动更新」并一次审核一个渠道。稳定版使用当前已安装系列的 Homebrew 官方 LLVM 瓶装，成功回读 LLVM 版本和 Homebrew Rust 后才切换 pin。HEAD 从官方 LLVM main 核对完整提交，构建 `nyamiiko/tools/llvm-head` 并只切换该渠道的 `opt`。审核后的公式、版本或链接发生变化会停止。构建可能耗时数小时，两个入口都保留原 keg；缺少依赖时停止并列出受影响的公式。
+在 Apple Silicon 的「LLVM 工具链」中，用滚动 LLVM 跟进官方 LLVM main。Studio 核对完整提交，构建 `nyamiiko/tools/llvm-head`，并验证该工具链的 `opt` 和版本。需要命令行使用时，从 `brew --prefix llvm-head` 对应的 `bin` 选择工具。Xcode 仍使用自己的 SDK 和工具链。
+
+Homebrew 的 `llvm` 仅用于兼容已安装配方。Homebrew Rust 可能在动态链接表中写入该配方的绝对路径和精确 LLVM ABI。应先迁移依赖，再让 Homebrew 自己验证并移除旧提供者。兼容依赖仍存在时，只接受已安装 ABI 系列的官方瓶装，验证 LLVM 和 Homebrew Rust 后才切换 pin。构建和审核中途发现配方、版本或链接变化时停止并保留原 keg。
 
 首次构建 LLVM HEAD 时，Studio 使用私有 Git 缓存。首次下载只获取官方 main 的提交历史和当前提交的文件，完整提交匹配后才写入缓存。后续构建会复用缓存，Homebrew 仍会在安装前核验实际取到的完整提交。
 
-普通 `topgrade -y` 会在 Homebrew HEAD-sync 内默认更新两个 LLVM 渠道。刷新目录后先核验并升级 Homebrew 的 `llvm`，确认 Homebrew Rust 仍能运行后才推进 pin，然后升级其他配方。最后检查已安装的 `nyamiiko/tools/llvm-head`，按 LLVM 官方 main 的完整提交构建到独立 keg。新 ABI 系列需要单独核验。自动更新中断后，HEAD-sync 会保留 `brew-headsync` 状态目录中的 `llvm_stable-before.json` 或 `llvm_head-before.json`，并提示检查原 `opt` 和 pin。GUI 单渠道更新仍可使用其运行目录中的 `llvm-before.json`。
+普通 `topgrade -y` 默认跟进已安装的滚动 LLVM。有现存 Homebrew 兼容依赖时，HEAD-sync 在升级其余配方前核验并在同 ABI 系列内推进兼容瓶装。兼容 keg、`opt` 和 pin 均已清理且 Homebrew 报告依赖完整时，就只处理滚动 LLVM。配方预检如果要求隐式安装或升级 LLVM，会在写入前停止。更新中断时保留对应事务记录，供检查原 `opt` 和 pin。
 
 LLVM 预览版的工作进程失败且事务恢复已确认时，本轮显示“部分完成”，已完成的 Homebrew 阶段不会被自动重试。恢复未完成时保留日志并报告失败。
 
 媒体配方的状态来自已有的 Homebrew `--fetch-HEAD` 扫描和升级后复核。日志会显示哪些配方已检查、已有更新、已更新、仍然过期或因 pin 跳过。该状态按 Homebrew 的候选结果判定，完整 Git SHA 需要从上游和安装收据另行核对。
+
+技能目录按来源管理。GitHub 和 NPX 技能沿用客户端的发现路径及原有元数据，Cursor 的预置技能由 `~/.cursor/skills-cursor` 提供，经核验后同步到 `~/.agents/skills`。整份 Cursor 镜像缺失时从同名原生源恢复，源不可用或现有目录无法核验时保留现状并报告原因。手工改写的共享技能可以在 `~/.local/share/devenv-studio/reviewed-skills/<技能名>` 保存一份私有审核副本，目录权限设为 `0700`。审核时逐项比较两份目录的文件路径和内容，确认一致后显示“已审核的本地技能”，留在原路径供客户端使用。更新器不会改写这类技能或审核副本，修改后需重新核对审核副本。覆盖报告按 GitHub、NPX、Cursor 和审核本地副本列出归属。
 
 检查后，「当前更新引擎」显示实际运行版本、组件树短标识及 profile 清单版本和摘要。展开来源可查看二进制路径、Studio 构建提交、完整组件树和两份 SHA-256。组件树区分同一个 Topgrade 版本下的不同源码，二进制摘要进一步区分产物。执行记录保留当时的引擎身份及可用回退候选。旧记录保留已写入的组件树，缺失字段保持未知。
 
@@ -59,7 +63,7 @@ Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受�
 | Homebrew 链接审计、CLI 版本报告 | Rust 审计与版本探测 | 可审核执行 |
 | GitHub CLI 扩展、TLDR | Topgrade 自身步骤 | 可审核执行 |
 | gcloud、MAS、Xcode Beta 选择 | Rust 保留重试、核验或回退边界 | 终端入口 |
-| Homebrew HEAD-sync | Rust 保留双渠道 LLVM 更新、成对完整 SHA 校验和事务恢复 | 终端入口 |
+| Homebrew HEAD-sync | Rust 跟进滚动 LLVM，保护现存的 Homebrew ABI 兼容依赖，并核验配对完整 SHA 和事务恢复 | 终端入口 |
 | SQLite CLI、Python 3.15 SQLite | Rust 共享源码版本与更新锁，保留事务和运行时验证 | 终端入口 |
 | Gradle Nightly | Rust 核对下载和安全解包，验证运行时后切换启动器 | 终端入口 |
 | Krita Next、BetterDisplay、TourBox Beta、Xcode Beta 安装 | Rust 核对来源、包身份和安装回读，保留备份或厂商安装机制 | 终端入口 |
@@ -89,6 +93,10 @@ tap 负责构建配方和自定义参数。已经按 HEAD 安装的 `nyamiiko/to
 
 ## 本机构建与切换
 
+Studio 桌面端与 Topgrade 引擎共用一个 Cargo 工作区、锁文件和 CI。GUI 继续通过现有命令和运行记录调用引擎，Topgrade 保持独立执行入口与原许可证。旧独立 fork 已归档，上游变更统一在这个仓库审核。
+
+从旧结构首次升级时，先在本仓库构建新版 `devenv-studio`，再使用该版本运行 `topgrade-engine update`。旧版安装器只会导出旧的独立引擎目录，无法读取共用锁文件。
+
 更新器读取 Studio checkout 已配置的跟踪分支。工作区干净且能快进时，使用 Rust nightly 校验并构建实际跟踪的 HEAD。通过验证的候选文件与默认入口位于同一文件系统，最后一次重命名会将候选启用为 `~/.local/bin/topgrade` 普通文件。构建产物和验证目录只用于本次更新，引擎身份和摘要保存在当前文件的扩展属性中。
 
 ```sh
@@ -103,7 +111,7 @@ devenv-studio topgrade-engine verify-current /absolute/studio-checkout
 
 `topgrade-engine check-upstream /absolute/studio-checkout` 从该 checkout 当前提交读取 `topgrade-upstream.json`，通过 HTTPS 查询 Topgrade 官方 Git 标签，按版本号比较稳定版。输出记录 Studio 提交、已审核的标签对象和提交、当前最高稳定标签及检查时间。新版本显示 `new_release`。已审核标签被移动或消失时显示 `pin_changed` 或 `pin_missing`。普通版本检查只读 Git 引用，无需 GitHub 凭据。
 
-发现官方新版本后，在隔离工作树导入并审核组件源码、Cargo 锁文件及本机 profile，然后在同一 Studio 提交更新上游 pin。合入 Studio 跟踪分支后，常规滚动更新器会从新的项目 HEAD 构建。
+发现官方新版本后，在隔离工作树导入并审核组件源码、共用 Cargo 锁文件及本机 profile，然后在同一 Studio 提交更新上游 pin。合入 Studio 跟踪分支后，常规滚动更新器会从新的项目 HEAD 构建。
 
 需要每日自动检查时，可自行启用只读 LaunchAgent。请从你信任且长期保留的 Studio 二进制生成文件，将示例中的两条绝对路径换成本机实际位置：
 

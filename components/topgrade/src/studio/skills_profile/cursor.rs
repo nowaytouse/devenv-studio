@@ -2,7 +2,7 @@ use super::*;
 use crate::studio::{
     github_skills::ownership::{
         CURSOR_NAMES, REVIEWED_REX_SHA, USER_CONFIG, lean_ctx_mirror, lean_ctx_mirror_path, name_matches, repository,
-        reviewed_local_rex,
+        reviewed_local, reviewed_local_rex,
     },
     is_hex,
 };
@@ -102,11 +102,30 @@ pub(in crate::studio) fn exchange(left: &Path, right: &Path) -> Result<()> {
 fn mirror(native: &Path, shared: &Path, name: &str, backup_dir: &Path) -> Result<&'static str> {
     let source = native.join(name);
     let target = shared.join(name);
-    let native_before = tree(&source)?;
-    let shared_before = tree(&target)?;
+    let native_before = tree(&source).wrap_err("Cursor skill source is unavailable or invalid")?;
+    ensure!(name_matches(&source, name)?, "Cursor skill source identity mismatch");
+    if !exists(&target)? {
+        let stage = tempfile::tempdir_in(backup_dir)?;
+        for (path, entry) in native_before.iter().filter(|(path, _)| !config(path)) {
+            copy(&source, stage.path(), path, entry)?;
+        }
+        let staged = tree(stage.path())?;
+        ensure!(
+            equivalent(&native_before, &staged) && tree(&source)? == native_before,
+            "Cursor skill source changed while staging a missing mirror"
+        );
+        crate::studio::preview::move_exclusive(stage.path(), &target)?;
+        ensure!(
+            tree(&target)? == staged,
+            "Restored Cursor skill failed read-back verification"
+        );
+        sync_directory(shared)?;
+        return Ok("RESTORED");
+    }
+    let shared_before = tree(&target).wrap_err("Existing Cursor skill is invalid; preserved for review")?;
     ensure!(
-        name_matches(&source, name)? && name_matches(&target, name)?,
-        "Cursor skill identity mismatch"
+        name_matches(&target, name)?,
+        "Installed Cursor skill identity mismatch; preserved for review"
     );
     if equivalent(&native_before, &shared_before) {
         return Ok("CURRENT");
@@ -326,7 +345,9 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
             "NPX_MIRROR_VERIFIED"
         } else if npx {
             "NPX_TRACKED"
-        } else if retained_local_rex(home, row, REVIEWED_REX_SHA)? {
+        } else if retained_local_rex(home, row, REVIEWED_REX_SHA)?
+            || reviewed_local(home, &row.path, row.scope.as_deref().unwrap_or_default(), name)?
+        {
             "REVIEWED_LOCAL_RETAINED_NOT_UPDATED"
         } else if CURSOR_NAMES.contains(&name.as_str()) && row.path == shared.join(name) {
             let native = native.join(name);
@@ -479,6 +500,46 @@ fn mirror_keeps_configuration_and_archives_previous_tree() -> Result<()> {
     assert!(String::from_utf8(bytes(&shared.join("design/SKILL.md"), MAX_FILE)?)?.ends_with("new\n"));
     assert!(String::from_utf8(bytes(&backup.join("design/SKILL.md"), MAX_FILE)?)?.ends_with("old\n"));
     assert_eq!(mirror(&native, &shared, "design", &backup)?, "CURRENT");
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn mirror_restores_absence_from_named_source_and_preserves_corruption() -> Result<()> {
+    let fixture = tempfile::tempdir()?;
+    let home = fixture.path().canonicalize()?;
+    let native = directory(&home, Path::new("native"), true)?;
+    let shared = directory(&home, Path::new("shared"), true)?;
+    let backup = directory(&home, Path::new("backups"), true)?;
+    let target = shared.join("design");
+
+    assert!(
+        mirror(&native, &shared, "design", &backup)
+            .unwrap_err()
+            .to_string()
+            .contains("source is unavailable")
+    );
+    assert!(!exists(&target)?);
+
+    let source = directory(&native, Path::new("design"), true)?;
+    let markdown = b"---\nname: design\n---\nverified native copy\n";
+    fs::write(source.join("SKILL.md"), markdown)?;
+    fs::write(source.join(".env"), b"native-only configuration")?;
+    assert_eq!(mirror(&native, &shared, "design", &backup)?, "RESTORED");
+    assert_eq!(bytes(&target.join("SKILL.md"), MAX_FILE)?, markdown);
+    assert!(!exists(&target.join(".env"))?);
+    assert_eq!(mirror(&native, &shared, "design", &backup)?, "CURRENT");
+
+    fs::remove_file(target.join("SKILL.md"))?;
+    fs::write(target.join("private.txt"), b"preserve")?;
+    assert!(
+        mirror(&native, &shared, "design", &backup)
+            .unwrap_err()
+            .to_string()
+            .contains("preserved for review")
+    );
+    assert_eq!(bytes(&target.join("private.txt"), MAX_FILE)?, b"preserve");
+    assert!(!exists(&target.join("SKILL.md"))?);
     Ok(())
 }
 

@@ -492,7 +492,7 @@ impl Studio {
                 for group in [
                     tx("工具与缓存", "Tools and caches"),
                     tx("只读诊断", "Read-only diagnostics"),
-                    tx("LLVM 手动更新", "Manual LLVM updates"),
+                    tx("LLVM 工具链", "LLVM toolchain"),
                 ] {
                     let steps = check
                         .steps
@@ -506,8 +506,8 @@ impl Studio {
                         ui.strong(group);
                         if group == task_group("llvm_stable") {
                             ui.label(tx(
-                                "每次选择一个 LLVM 渠道并单独审核。",
-                                "Select and review one LLVM channel at a time.",
+                                "LLVM HEAD 跟进官方主分支。Homebrew Rust 兼容依赖单独审核。",
+                                "LLVM HEAD follows upstream main. Review the Homebrew Rust compatibility dependency separately.",
                             ));
                         }
                         for (index, step) in steps.enumerate() {
@@ -927,7 +927,7 @@ fn manual_llvm(id: &str) -> bool {
 
 fn task_group(id: &str) -> &'static str {
     if manual_llvm(id) {
-        tx("LLVM 手动更新", "Manual LLVM updates")
+        tx("LLVM 工具链", "LLVM toolchain")
     } else if diagnostic_step(id) {
         tx("只读诊断", "Read-only diagnostics")
     } else {
@@ -942,8 +942,11 @@ fn step_label<'a>(id: &str, fallback: &'a str) -> &'a str {
         "github_cli_extensions" => tx("GitHub CLI 扩展", "GitHub CLI extensions"),
         "github_cli_skills" => tx("GitHub CLI 技能", "GitHub CLI skills"),
         "helm" => tx("Helm 仓库", "Helm repositories"),
-        "llvm_head" => "LLVM HEAD",
-        "llvm_stable" => tx("LLVM 稳定版", "LLVM stable"),
+        "llvm_head" => tx("滚动 LLVM（HEAD）", "Rolling LLVM (HEAD)"),
+        "llvm_stable" => tx(
+            "Homebrew Rust 的 LLVM 依赖",
+            "LLVM dependency for Homebrew Rust",
+        ),
         "tldr" => tx("TLDR 命令手册", "TLDR command pages"),
         _ => fallback,
     }
@@ -979,8 +982,8 @@ fn step_detail(step: &maintenance::Step) -> &str {
             "Build the reviewed LLVM main commit in its separate keg. This may take several hours.",
         ),
         "llvm_stable" => tx(
-            "只接受官方 LLVM 23.1 瓶装。核验 Homebrew Rust 后更新稳定版 pin，保留旧 keg。",
-            "Use an official LLVM 23.1 bottle. Verify Homebrew Rust before updating the pin and retain the previous keg.",
+            "只接受已安装 ABI 系列的官方 LLVM 瓶装。核验 Homebrew Rust 后更新兼容依赖并保留旧 keg。",
+            "Use an official LLVM bottle for the installed ABI series. Verify Homebrew Rust and retain the previous keg.",
         ),
         "tldr" => tx(
             "刷新 TLDR 手册缓存。使用多语言缓存时，请先在 tealdeer 中明确配置下载语言。",

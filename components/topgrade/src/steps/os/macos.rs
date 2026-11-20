@@ -1,4 +1,5 @@
 use crate::command::CommandExt;
+use crate::error::SkipStep;
 use crate::execution_context::ExecutionContext;
 use crate::step::Step;
 use crate::terminal::{print_separator, prompt_yesno};
@@ -128,16 +129,27 @@ pub fn run_sparkle(ctx: &ExecutionContext) -> Result<()> {
 }
 
 pub fn update_xcodes(ctx: &ExecutionContext) -> Result<()> {
+    let config = ctx.config();
+    let managed_beta = config.should_run(Step::CustomCommands)
+        && config.commands().as_ref().is_some_and(|commands| {
+            commands.iter().any(|(name, command)| {
+                command == "@studio:xcode_beta_install" && config.should_run_custom_command(name)
+            })
+        });
+    if managed_beta && config.yes(Step::Xcodes) {
+        return Err(SkipStep("The managed Xcode Beta step owns unattended Xcode checks".into()).into());
+    }
+
     let xcodes = require("xcodes")?;
     print_separator("Xcodes");
 
-    let should_ask = !(ctx.config().yes(Step::Xcodes) || ctx.run_type().dry());
-
-    let releases = ctx.execute(&xcodes).args(["update"]).output_checked_utf8()?.stdout;
+    let should_ask = !(config.yes(Step::Xcodes) || ctx.run_type().dry());
+    let command = if managed_beta { "list" } else { "update" };
+    let releases = ctx.execute(&xcodes).arg(command).output_checked_utf8()?.stdout;
 
     let releases_installed: Vec<String> = releases
         .lines()
-        .filter(|r| r.contains("(Installed)"))
+        .filter(|r| xcodes_installed(r))
         .map(String::from)
         .collect();
 
@@ -183,13 +195,16 @@ pub fn update_xcodes(ctx: &ExecutionContext) -> Result<()> {
     if installed_gm {
         process_xcodes_releases(releases_gm, should_ask, ctx)?;
     }
-    if installed_beta {
+    if installed_beta && !managed_beta {
         process_xcodes_releases(releases_beta, should_ask, ctx)?;
     }
     if installed_regular {
         process_xcodes_releases(releases_regular, should_ask, ctx)?;
     }
 
+    if !should_ask || (managed_beta && !installed_gm && !installed_regular) {
+        return Ok(());
+    }
     let releases_new = ctx
         .execute(&xcodes)
         .always()
@@ -205,7 +220,7 @@ pub fn update_xcodes(ctx: &ExecutionContext) -> Result<()> {
         .collect();
     let releases_beta_new_installed: HashSet<_> = releases_new
         .lines()
-        .filter(|release| release.contains("(Installed)") && release.contains("Beta"))
+        .filter(|release| !managed_beta && release.contains("(Installed)") && release.contains("Beta"))
         .collect();
     let releases_regular_new_installed: HashSet<_> = releases_new
         .lines()
@@ -220,7 +235,7 @@ pub fn update_xcodes(ctx: &ExecutionContext) -> Result<()> {
         releases_beta_new_installed,
         releases_regular_new_installed,
     ] {
-        if should_ask && releases_new_installed.len() == 2 {
+        if releases_new_installed.len() == 2 {
             let answer_uninstall =
                 prompt_yesno(t!("Would you like to move the former Xcode release to the trash?").as_ref())?;
             if answer_uninstall {
@@ -238,10 +253,27 @@ pub fn update_xcodes(ctx: &ExecutionContext) -> Result<()> {
     Ok(())
 }
 
+fn xcodes_installed(release: &str) -> bool {
+    let release = release.trim_end();
+    release.ends_with("(Installed)") || release.ends_with("(Installed, Selected)")
+}
+
+#[test]
+fn xcodes_selected_release_is_already_installed() {
+    assert!(xcodes_installed(
+        "27.3 Beta 2 (27C5035i) [Apple Silicon] (Installed, Selected)"
+    ));
+    assert!(xcodes_installed("27.2 (27B50) [Apple Silicon] (Installed)"));
+    assert!(!xcodes_installed("27.3 Beta 2 (27C5035i) [Apple Silicon]"));
+}
+
 pub fn process_xcodes_releases(releases_filtered: Vec<String>, should_ask: bool, ctx: &ExecutionContext) -> Result<()> {
     let xcodes = require("xcodes")?;
 
-    if releases_filtered.last().is_none_or(|s| !s.contains("(Installed)")) && !releases_filtered.is_empty() {
+    if releases_filtered
+        .last()
+        .is_some_and(|release| !xcodes_installed(release))
+    {
         println!(
             "{} {}",
             t!("New Xcode release detected:"),

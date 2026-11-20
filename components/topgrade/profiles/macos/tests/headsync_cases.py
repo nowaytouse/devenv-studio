@@ -237,7 +237,7 @@ elif len(args) == 2 and args[0] == "--prefix" and args[1] in ("ggml", "llama.cpp
 elif len(args) == 2 and args[0] == "--cellar" and args[1] in ("ggml", "llama.cpp"):
  print(root/"Cellar"/args[1])
 elif args == ["missing"]:
- pass
+ if missing := os.environ.get("TEST_MISSING"): print(missing)
 else:
  print("unexpected brew call: " + repr(args),file=sys.stderr); sys.exit(35)
 '''
@@ -846,6 +846,35 @@ def llvm_channels_run_in_order(f):
     f.assert_restored()
 
 
+def rolling_llvm_without_compatibility_keg(f, missing=False, implicit=False):
+    opt = f.root / "opt/llvm"
+    pin = f.root / "var/homebrew/pinned/llvm"
+    rack = f.root / "Cellar/llvm"
+    opt.unlink()
+    pin.unlink()
+    receipt = rack / "23.1.5/INSTALL_RECEIPT.json"
+    receipt.unlink()
+    receipt.parent.rmdir()
+    rack.rmdir()
+    result = f.run(TEST_PINNED="", TEST_INSTALLED="nyamiiko/tools/llvm-head\nz3",
+                   TEST_OUTDATED="z3", TEST_MISSING="rust: llvm" if missing else "",
+                   TEST_BULK_PLAN_LLVM="1" if implicit else "")
+    events = f.events()
+    assert not any("automatic llvm_stable " in line for line in events), events
+    if missing:
+        assert result.returncode != 0 and "rust: llvm" in result.stdout, result.stdout
+        assert not any(line.startswith("brew upgrade ") for line in events), events
+    elif implicit:
+        assert result.returncode != 0 and "would modify LLVM" in result.stdout, result.stdout
+        assert "brew upgrade --formula --fetch-HEAD z3" not in events, events
+    else:
+        assert result.returncode == 0, result.stdout
+        assert "brew upgrade --formula --fetch-HEAD z3" in events, events
+        assert any("automatic llvm_head " in line for line in events), events
+    assert not (opt.exists() or pin.exists() or rack.exists()), events
+    f.assert_restored()
+
+
 def llvm_stable_failure_stops_before_dependants(f):
     result = f.run(TEST_OUTDATED="z3", TEST_LLVM_STABLE_FAIL="1")
     assert result.returncode != 0 and "synthetic stable LLVM failure" in result.stdout, result.stdout
@@ -1207,6 +1236,9 @@ if native:
         ("remaining formula failure restores exact stable LLVM pin", remaining_upgrade_failure_restores_exact_llvm_pin),
         ("remaining formula preflight refuses an unjournaled LLVM upgrade", remaining_llvm_dependency_plan_fails_closed),
         ("stable LLVM runs before its consumers and preview runs after", llvm_channels_run_in_order),
+        ("rolling LLVM alone runs without installing stable LLVM", rolling_llvm_without_compatibility_keg),
+        ("missing compatibility ABI stops rolling-only maintenance", lambda f: rolling_llvm_without_compatibility_keg(f, missing=True)),
+        ("rolling-only maintenance rejects an implicit LLVM install", lambda f: rolling_llvm_without_compatibility_keg(f, implicit=True)),
         ("stable LLVM failure stops dependency upgrades", llvm_stable_failure_stops_before_dependants),
         ("an incomplete LLVM update preserves its journal", incomplete_llvm_update_preserves_journal),
         ("recovered LLVM preview failure retains partial formula results", llvm_preview_failure_keeps_completed_formula_updates),

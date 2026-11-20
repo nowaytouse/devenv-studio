@@ -267,9 +267,21 @@ impl Headsync {
             &command_text(self.brew(&["list", "--formula", "--full-name"]))
                 .wrap_err("unable to enumerate installed Homebrew formulae")?,
         )?;
+        let has_compatibility_llvm = installed
+            .iter()
+            .any(|name| matches!(name.as_str(), "llvm" | "homebrew/core/llvm"));
+        ensure!(
+            has_compatibility_llvm == llvm_pin::present(&command_path(self.brew(&["--prefix"]))?)?,
+            "Homebrew LLVM inventory disagrees with the compatibility keg, opt link or pin"
+        );
+        if !has_compatibility_llvm {
+            self.verify_no_missing_dependencies()?;
+        }
         let catalogs = self.refresh_catalogs(txn.core())?;
         let pins = self.pins()?;
-        self.update_llvm(super::Step::LlvmStable)?;
+        if has_compatibility_llvm {
+            self.update_llvm(super::Step::LlvmStable)?;
+        }
         ensure!(
             self.pins()? == pins,
             "Homebrew pin set changed during the stable LLVM update"
@@ -286,7 +298,7 @@ impl Headsync {
             })?;
             println!("HEAD-sync transaction prepared and applied");
             let prefix = command_path(self.brew(&["--prefix"]))?;
-            let suspended = llvm_pin::suspend(&prefix)?;
+            let suspended = llvm_pin::suspend_if_required(&prefix, has_compatibility_llvm)?;
             let operation = (|| -> Result<()> {
                 println!("\n== Check upgrade requirements for both synchronized formulae ==");
                 let output = self
@@ -313,7 +325,7 @@ impl Headsync {
                 self.abi_transaction("pair-upgrade", PAIR_UPGRADE_JOURNAL, std::slice::from_ref(&revision))
                     .wrap_err("Synchronized provider upgrade or exact-keg link repair failed")
             })();
-            let restored = suspended.restore();
+            let restored = suspended.map_or(Ok(()), llvm_pin::Suspension::restore);
             match (operation, restored) {
                 (Ok(()), Ok(())) => {}
                 (Err(error), Ok(())) | (Ok(()), Err(error)) => return Err(error),
@@ -328,11 +340,14 @@ impl Headsync {
         };
         self.verify_runtime(&active)?;
         self.repair_pair_consumers(txn)?;
-        let residual = self.remaining(txn, &installed, &pins)?;
+        let residual = self.remaining(txn, &installed, &pins, has_compatibility_llvm)?;
         self.verify_runtime(&self.verify_pair(&revision)?)?;
         self.verify_linkage()?;
-        let missing = command_text(self.brew(&["missing"]))?;
-        ensure!(missing.is_empty(), "Homebrew dependencies are missing:\n{missing}");
+        ensure!(
+            self.pins()? == pins,
+            "Homebrew pin set changed during formula maintenance"
+        );
+        self.verify_no_missing_dependencies()?;
         ensure!(
             catalogs.errors.is_empty(),
             "Some Homebrew tap catalogs could not be refreshed:\n{}",
@@ -367,9 +382,9 @@ impl Headsync {
         println!(
             "\n== Update {} ==",
             if step == super::Step::LlvmStable {
-                "Homebrew LLVM"
+                "Homebrew LLVM compatibility dependency"
             } else {
-                "LLVM preview (official main)"
+                "Rolling LLVM (official main)"
             }
         );
         let prefix = command_path(self.brew(&["--prefix"]))?;
@@ -606,16 +621,20 @@ impl Headsync {
                 .wrap_err("unable to enumerate pinned Homebrew formulae")?,
         )?;
         ensure!(
-            pinned
-                .iter()
-                .any(|name| matches!(name.as_str(), "llvm" | "homebrew/core/llvm")),
-            "Homebrew llvm must remain pinned to preserve the Rust runtime"
-        );
-        ensure!(
             !pinned.iter().any(|name| PAIR.contains(&basename(name))),
             "The synchronized ggml/llama.cpp pair cannot be upgraded while either formula is pinned"
         );
         let prefix = command_path(self.brew(&["--prefix"]))?;
+        let llvm_pinned = pinned
+            .iter()
+            .any(|name| matches!(name.as_str(), "llvm" | "homebrew/core/llvm"));
+        if !llvm_pinned {
+            ensure!(
+                !llvm_pin::present(&prefix)?,
+                "Homebrew llvm must remain pinned to preserve the Rust runtime"
+            );
+            return Ok(pinned);
+        }
         let opt = prefix.join("opt/llvm");
         let pin = prefix.join("var/homebrew/pinned/llvm");
         for link in [&opt, &pin] {
@@ -668,7 +687,13 @@ impl Headsync {
         Ok(revision.to_owned())
     }
 
-    fn remaining(&self, txn: &journal::Journal, installed: &[String], pinned: &[String]) -> Result<Vec<String>> {
+    fn remaining(
+        &self,
+        txn: &journal::Journal,
+        installed: &[String],
+        pinned: &[String],
+        has_compatibility_llvm: bool,
+    ) -> Result<Vec<String>> {
         println!("\n== Upgrade remaining formulae ==");
         let candidates: Vec<&str> = installed
             .iter()
@@ -734,7 +759,7 @@ impl Headsync {
             }
         }
         if !outdated.is_empty() {
-            self.upgrade_remaining(&outdated)?;
+            self.upgrade_remaining(&outdated, has_compatibility_llvm)?;
             self.repair_pair_consumers(txn)?;
         }
         if let Some(provider) = provider {
@@ -849,7 +874,7 @@ impl Headsync {
             .wrap_err("invalid Homebrew outdated result")
     }
 
-    fn upgrade_remaining(&self, outdated: &[String]) -> Result<()> {
+    fn upgrade_remaining(&self, outdated: &[String], has_compatibility_llvm: bool) -> Result<()> {
         let dependents = names(
             &command_text(self.brew(&["uses", "--installed", "--include-build", "--formula", "rust"]))
                 .wrap_err("unable to identify installed Homebrew Rust dependents")?,
@@ -883,9 +908,9 @@ impl Headsync {
         // durably and restored on every exit path (including an interrupted
         // upgrade); a subsequent run recovers it before doing any other work.
         let prefix = command_path(self.brew(&["--prefix"]))?;
-        let suspended = llvm_pin::suspend(&prefix)?;
+        let suspended = llvm_pin::suspend_if_required(&prefix, has_compatibility_llvm)?;
         let operation = (|| -> Result<()> {
-            println!("\n== Check remaining formula upgrade requirements with stable LLVM temporarily unpinned ==");
+            println!("\n== Check remaining formula upgrade requirements ==");
             let output = self
                 .brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"])
                 .args(outdated)
@@ -907,7 +932,7 @@ impl Headsync {
             );
             status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))
         })();
-        let restored = suspended.restore();
+        let restored = suspended.map_or(Ok(()), llvm_pin::Suspension::restore);
         match (operation, restored) {
             (Ok(()), Ok(())) => {}
             (Err(error), Ok(())) | (Ok(()), Err(error)) => return Err(error),
@@ -916,6 +941,12 @@ impl Headsync {
             }
         }
         self.pins()?;
+        Ok(())
+    }
+
+    fn verify_no_missing_dependencies(&self) -> Result<()> {
+        let missing = command_text(self.brew(&["missing"]))?;
+        ensure!(missing.is_empty(), "Homebrew dependencies are missing:\n{missing}");
         Ok(())
     }
 

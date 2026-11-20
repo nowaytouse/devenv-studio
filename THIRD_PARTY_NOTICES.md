@@ -14,7 +14,7 @@ The registry integration does not download or execute WinUtil, Sophia Script or 
 
 ## Development-environment integrations
 
-The following projects supply documented native formats, command contracts or design references. DevEnv Studio invokes supported tools already present on the user's machine; it does not bundle their executables or copy their source code. These references do not imply that every upstream feature is integrated.
+The following projects supply native formats, command contracts, design references or component source. DevEnv Studio invokes supported tools already present on the user's machine. The Topgrade engine source and notices live under `components/topgrade`. Studio executables are distributed separately.
 
 | Project | Reviewed revision | Upstream license | Integration |
 | --- | --- | --- | --- |
@@ -34,4 +34,4 @@ The rustup and uv revisions were checked against pinned repository metadata and 
 
 Rust dependencies retain their own licenses. The dependency versions are fixed in Cargo.lock; package metadata includes each crate's license information. eframe/egui is available under MIT or Apache-2.0. The application uses system fonts, so it does not redistribute macOS or Windows font files.
 
-Studio invokes the independently built Topgrade executable through a command and versioned run records. Topgrade retains its own Cargo workspace, lockfile, [license](components/topgrade/LICENSE) and source history. Studio packages continue to distribute Studio executables. Any distribution of a Topgrade binary requires the matching component source, build material and license notices.
+Studio invokes Topgrade through its executable and versioned run records. Both are built from the same Cargo workspace and lockfile. Topgrade retains its [license](components/topgrade/LICENSE) and source history. Studio packages distribute the Studio executables. Any distribution of a Topgrade binary requires the matching component source, build material and license notices.

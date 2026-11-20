@@ -48,7 +48,7 @@ Windows 的同一入口可读取和搜索 WinGet 导出的本机软件、来源�
 
 命令行支持 `devenv-studio topgrade-backup --output /absolute/topgrade.json --include /absolute/script`（`--include` 可重复），以及 `devenv-studio topgrade-extract --input /absolute/topgrade.json --output /absolute/new-directory --all`；也可用重复的 `--file` 精选文件。新目录和新档案均拒绝覆盖。目标设备的 Topgrade、工具安装、主目录路径和自定义命令须另行审核，详见[重部署范围](docs/REDEPLOYMENT.md#topgrade-配置与脚本迁移包)。
 
-迁移包也保留 fork 的自定义配置原文；重部署须核对来源仓库、固定提交和安装记录，版本号相同不代表实现兼容。本设备现用 Topgrade fork 的来源与资源附件边界见[重部署说明](docs/REDEPLOYMENT.md#fork-环境与安装来源)。本仓库已配置兼容依赖滚动策略，保留 Windows 绑定的配套版本约束。
+迁移包也保留 fork 的自定义配置原文；重部署须核对来源仓库、固定提交和安装记录，版本号相同不代表实现兼容。当前 Topgrade 引擎与桌面端在本仓库统一构建。旧独立 fork 的安装档案与新结构的迁移见[重部署说明](docs/REDEPLOYMENT.md#fork-环境与安装来源)。本仓库已配置兼容依赖滚动策略，保留 Windows 绑定的配套版本约束。
 
 ## 开发环境重部署与渠道
 

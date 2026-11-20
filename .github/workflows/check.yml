@@ -31,13 +31,6 @@ jobs:
         run: cargo test --workspace --locked --no-fail-fast
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Topgrade component
-        if: runner.os == 'macOS' || runner.os == 'Windows'
-        working-directory: components/topgrade
-        run: >-
-          cargo fmt --all -- --check &&
-          cargo test --locked &&
-          cargo clippy --all-targets --locked -- -D warnings
       - name: Topgrade profile
         if: runner.os == 'macOS'
         working-directory: components/topgrade

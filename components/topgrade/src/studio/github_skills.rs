@@ -344,7 +344,7 @@ pub(super) fn run() -> Result<()> {
     );
     if summary.local > 0 {
         println!(
-            "Retained {} reviewed local Rex copies without updating them.",
+            "Retained {} reviewed local skill copies without updating them.",
             summary.local
         );
     }

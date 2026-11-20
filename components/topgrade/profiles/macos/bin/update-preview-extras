@@ -1,9 +1,6 @@
 #!/usr/bin/env python3.15
 import plistlib
-import io
-import os
 import re
-from datetime import datetime
 import subprocess
 import sys
 from pathlib import Path
@@ -111,80 +108,13 @@ def betterdisplay_preference_probe():
         print(f"BetterDisplay: native preference probe unavailable ({type(exc).__name__})")
 
 
-_XCODE_CATALOG_ITEM = re.compile(
-    r"^\s*\d+(?:\.\d+){1,4}(?:\s+(?:Beta|Release Candidate|GM Seed|RC)(?:\s+\d+)?)?"
-    r"\s+\([A-Za-z0-9]+\)(?:\s+\[[^]]+\])?(?:\s+\(Installed(?:, Selected)?\))?\s*$",
-    re.I,
-)
-
-
-def _filtered_xcode_lines(stream, raw_log):
-    in_catalog = False
-    omitted = 0
-    for line in stream:
-        raw_log.write(line)
-        if "更新 Xcode 版本目录" in line:
-            in_catalog = True
-        if in_catalog and _XCODE_CATALOG_ITEM.match(line.strip()):
-            omitted += 1
-            continue
-        if in_catalog and ("Showing Xcodes" in line or re.search(r"(?:目标|Xcode|已安装)\s*[:：]", line)):
-            in_catalog = False
-            if omitted:
-                yield f"[Xcode 版本目录已折叠：{omitted} 条，完整内容保存在日志中]\n"
-                omitted = 0
-        yield line
-    if omitted:
-        yield f"[Xcode 版本目录已折叠：{omitted} 条，完整内容保存在日志中]\n"
-
-
 def xcode_beta():
-    command = str(Path.home() / ".local/bin/update-xcode-beta")
-    if not Path(command).is_file():
-        print(f"ERROR: Xcode 更新器不存在：{command}")
-        return 1
-    log_dir = Path.home() / "Library/Logs/TopgradeUpdater"
-    try:
-        log_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-        log_path = log_dir / f"xcode-beta-{stamp}.log"
-        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
-        fd = os.open(log_path, flags, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8", errors="replace") as raw_log:
-            with subprocess.Popen(
-                [command, "--apply"], stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, stdin=None, text=True,
-                encoding="utf-8", errors="replace", bufsize=1,
-            ) as process:
-                assert process.stdout is not None
-                for line in _filtered_xcode_lines(process.stdout, raw_log):
-                    print(line, end="", flush=True)
-                result = process.wait()
-        print(f"Xcode 完整运行日志：{log_path}")
-        return result
-    except OSError as exc:
-        print(f"ERROR: Xcode 输出转发失败：{exc}")
-        return 1
+    command = Path.home() / ".local/bin/update-xcode-beta"
+    return subprocess.run([command, "--apply"]).returncode
 
-
-def self_test():
-    demo = [
-        "=== 更新 Xcode 版本目录 ===\n", "1.0 (7B85)\n", "27.0 Beta (27A5194q) [Apple Silicon]\n",
-        "27.2 Beta 2 (27B5028f) [Apple Silicon] (Installed, Selected)\n",
-        "Showing Xcodes for this Mac\n", "目标：27.2 Beta 2\n", "Xcode: CURRENT\n",
-    ]
-    raw = io.StringIO()
-    filtered = "".join(_filtered_xcode_lines(demo, raw))
-    assert "折叠：3 条" in filtered and "Xcode: CURRENT" in filtered
-    assert "1.0 (7B85)" not in filtered and "1.0 (7B85)" in raw.getvalue()
-    assert _XCODE_CATALOG_ITEM.match("27.2 Beta 2 (27B5028f) [Apple Silicon] (Installed, Selected)")
-    print("SELF-TEST: PASS (Xcode catalogue folding and original log preservation)")
 
 if __name__ == "__main__":
     try:
-        if sys.argv[1:] == ["--self-test"]:
-            self_test()
-            sys.exit(0)
         if sys.argv[1:] == ["--betterdisplay"]:
             sys.exit(betterdisplay())
         if sys.argv[1:] == ["--xcode"]:

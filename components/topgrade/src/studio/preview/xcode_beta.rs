@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Context, ContextCompat, Result, bail, ensure};
+use color_eyre::eyre::{Context, ContextCompat, Result, ensure};
 use regex::Regex;
 use std::{
     borrow::Cow,
@@ -12,7 +12,7 @@ use std::{
 };
 
 use super::{APPLICATIONS, bounded_output, bundle, move_exclusive, plist, private_path, signature, tool_command};
-use crate::command::CommandExt as _;
+use crate::{command::CommandExt as _, error::PartialStep};
 
 const ID: &str = "com.apple.dt.Xcode";
 const REQUIREMENT: &str = "=anchor apple and identifier \"com.apple.dt.Xcode\"";
@@ -137,14 +137,9 @@ fn installed(applications: &Path, build: &str) -> Result<Option<PathBuf>> {
     Ok(None)
 }
 
-fn logged(command: &mut Command, log: &mut File, fold_catalog: bool) -> Result<()> {
-    static CATALOG_ITEM: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)^\s*[0-9]+(?:\.[0-9]+){1,4}(?:\s+(?:Beta|Release Candidate|GM Seed|RC)(?:\s+[0-9]+)?)?\s+\([A-Za-z0-9]+\)(?:\s+\[[^]]+\])?(?:\s+\(Installed(?:, Selected)?\))?\s*$")
-            .expect("valid Xcode version row")
-    });
+fn logged(command: &mut Command, log: &mut File) -> Result<()> {
     let (pipe, writer) = io::pipe()?;
     let mut child = command
-        .stdin(Stdio::inherit())
         .stdout(Stdio::from(writer.try_clone()?))
         .stderr(Stdio::from(writer))
         .spawn_checked()?;
@@ -154,7 +149,6 @@ fn logged(command: &mut Command, log: &mut File, fold_catalog: bool) -> Result<(
         let mut reader = io::BufReader::new(pipe);
         let mut output = io::stdout().lock();
         let mut line = Vec::new();
-        let mut omitted = 0;
         loop {
             line.clear();
             if reader.read_until(b'\n', &mut line)? == 0 {
@@ -163,15 +157,8 @@ fn logged(command: &mut Command, log: &mut File, fold_catalog: bool) -> Result<(
             let text = String::from_utf8_lossy(&line);
             let text = without_urls(&text);
             log.write_all(text.as_bytes())?;
-            if fold_catalog && CATALOG_ITEM.is_match(&text) {
-                omitted += 1;
-            } else {
-                output.write_all(text.as_bytes())?;
-                output.flush()?;
-            }
-        }
-        if omitted > 0 {
-            writeln!(output, "[Xcode 版本目录已折叠：{omitted} 条，完整内容保存在日志中]")?;
+            output.write_all(text.as_bytes())?;
+            output.flush()?;
         }
         log.sync_all()?;
         Ok(())
@@ -183,6 +170,15 @@ fn logged(command: &mut Command, log: &mut File, fold_catalog: bool) -> Result<(
     result?;
     ensure!(status.success(), "Xcode command failed ({status}); see the private log");
     Ok(())
+}
+
+fn download(command: &mut Command, tty: &File) -> Result<()> {
+    // Give Xcodes the real terminal for prompts without newlines and keep authentication out of logs.
+    command
+        .stdin(Stdio::from(tty.try_clone()?))
+        .stdout(Stdio::from(tty.try_clone()?))
+        .stderr(Stdio::from(tty.try_clone()?))
+        .status_checked()
 }
 
 fn without_urls(text: &str) -> Cow<'_, str> {
@@ -209,6 +205,15 @@ fn unique_entry(directory: &Path, extension: &str, want_directory: bool) -> Resu
 }
 
 fn install(executable: &Path, applications: &Path, home: &Path, target: &Release, log: &mut File) -> Result<()> {
+    ensure!(
+        io::stdin().is_terminal(),
+        "Open Terminal to complete Apple authentication"
+    );
+    let tty = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/tty")
+        .wrap_err("Open the controlling terminal for Apple authentication")?;
     let destination = target.destination(applications);
     ensure!(!super::super::exists(&destination)?, "Xcode destination already exists");
     let staging = tempfile::Builder::new()
@@ -228,13 +233,14 @@ fn install(executable: &Path, applications: &Path, home: &Path, target: &Release
     fs::create_dir(&expanded)?;
     let name = target.name();
     println!("=== 自动下载 {name} ({}) ===", target.build);
-    logged(
-        xcodes(executable)?
-            .args(["download", &name, "--directory"])
-            .arg(&archives),
-        log,
-        false,
-    )?;
+    println!("如需登录，请在此终端完成 Apple 账户验证。登录与下载输出不写入日志。");
+    let mut command = xcodes(executable)?;
+    command
+        .args(["download", &name, "--data-source", "xcodeReleases", "--directory"])
+        .arg(&archives);
+    writeln!(log, "Starting interactive download of {name} ({})", target.build)?;
+    log.sync_all()?;
+    download(&mut command, &tty)?;
     let archive = unique_entry(&archives, "xip", false)?;
     println!("=== 解压并验证官方 XIP ===");
     logged(
@@ -243,7 +249,6 @@ fn install(executable: &Path, applications: &Path, home: &Path, target: &Release
             .arg(&archive)
             .current_dir(&expanded),
         log,
-        false,
     )?;
     let source = unique_entry(&expanded, "app", true)?;
     verify(&source, &target.build)?;
@@ -287,7 +292,31 @@ fn xcodes(executable: &Path) -> Result<Command> {
     Ok(command)
 }
 
-pub(in crate::studio) fn xcode_beta() -> Result<()> {
+fn catalog(executable: &Path, log: &mut File) -> Result<Release> {
+    // Xcodes refreshes its public catalog when stale without authenticating.
+    let (status, stdout, stderr) = bounded_output(
+        tool_command(executable)?.args([
+            "list",
+            "--architecture",
+            "arm64",
+            "--data-source",
+            "xcodeReleases",
+            "--no-color",
+        ]),
+        Duration::from_secs(120),
+        8 * 1024 * 1024,
+    )?;
+    log.write_all(without_urls(&stdout).as_bytes())?;
+    log.write_all(without_urls(&stderr).as_bytes())?;
+    log.sync_all()?;
+    ensure!(
+        status.success(),
+        "Xcodes catalog failed ({status}); see the private log"
+    );
+    parse_catalog(&stdout)
+}
+
+pub(in crate::studio) fn xcode_beta(check_only: bool) -> Result<()> {
     super::super::user_only()?;
     let home = super::super::account_home()?;
     let _lock = super::lock(&home, "xcode-beta-updater.lock")?;
@@ -298,19 +327,8 @@ pub(in crate::studio) fn xcode_beta() -> Result<()> {
         .suffix(".log")
         .tempfile_in(logs)?
         .keep()?;
-    println!("Xcode 完整运行日志：{}", path.display());
-    println!("=== 更新 Xcode 版本目录 ===");
-    logged(xcodes(&executable)?.arg("update"), &mut log, true)?;
-    let (status, stdout, stderr) = bounded_output(
-        xcodes(&executable)?.arg("list"),
-        Duration::from_secs(120),
-        8 * 1024 * 1024,
-    )?;
-    log.write_all(without_urls(&stdout).as_bytes())?;
-    log.write_all(without_urls(&stderr).as_bytes())?;
-    log.sync_all()?;
-    ensure!(status.success(), "Xcodes catalog failed; see the private log");
-    let target = parse_catalog(&stdout)?;
+    println!("Xcode 检查与解包日志：{}", path.display());
+    let target = catalog(&executable, &mut log)?;
     let name = target.name();
     println!("目标：{name} ({})", target.build);
     let applications = Path::new(APPLICATIONS);
@@ -318,10 +336,18 @@ pub(in crate::studio) fn xcode_beta() -> Result<()> {
         println!("Xcode: CURRENT — {name} ({})\n已安装：{}", target.build, path.display());
         return Ok(());
     }
-    if !io::stdin().is_terminal() {
-        bail!("Xcode Beta installation requires a Terminal for Apple authentication");
+    if check_only {
+        println!("Xcode: UPDATE_AVAILABLE — {name} ({})", target.build);
+        return Ok(());
     }
-    install(&executable, applications, &home, &target, &mut log)
+    install(&executable, applications, &home, &target, &mut log).map_err(|error| {
+        crate::ctrlc::unset_interrupted();
+        PartialStep(format!(
+            "Xcode Beta {name} ({}) remains pending: {error:#}. No automatic authentication retry.",
+            target.build
+        ))
+        .into()
+    })
 }
 
 #[cfg(test)]
@@ -358,5 +384,83 @@ mod tests {
         assert!(safe.starts_with("Downloading Xcode"));
         assert!(safe.contains("[URL redacted]"));
         assert!(!safe.contains("secret"));
+    }
+
+    #[test]
+    fn catalog_uses_the_cached_public_list_without_login_or_forced_refresh() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let xcodes = dir.path().join("xcodes");
+        fs::write(
+            &xcodes,
+            concat!(
+                "#!/bin/sh\n",
+                "test \"$*\" = 'list --architecture arm64 --data-source xcodeReleases --no-color' || exit 95\n",
+                "printf '%s\\n' '27.3 Beta 2 (27C5035i) [Apple Silicon]'\n",
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&xcodes, fs::Permissions::from_mode(0o700)).unwrap();
+        let mut log = tempfile::tempfile().unwrap();
+        assert_eq!(catalog(&xcodes, &mut log).unwrap().build, "27C5035i");
+    }
+
+    #[test]
+    fn authentication_prompt_without_newline_can_be_answered_on_a_terminal() {
+        use nix::libc;
+        use std::io::Read;
+        use std::os::fd::{AsRawFd, FromRawFd};
+
+        let mut master = -1;
+        let mut slave = -1;
+        // openpty returns two owned descriptors on success.
+        assert_eq!(
+            unsafe {
+                libc::openpty(
+                    &mut master,
+                    &mut slave,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            },
+            0
+        );
+        let mut master = unsafe { File::from_raw_fd(master) };
+        let tty = unsafe { File::from_raw_fd(slave) };
+        crate::studio::set_close_on_exec(master.as_raw_fd(), true).unwrap();
+        crate::studio::set_close_on_exec(tty.as_raw_fd(), true).unwrap();
+        let user = std::thread::spawn(move || {
+            let mut poll = libc::pollfd {
+                fd: master.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            assert_eq!(unsafe { libc::poll(&mut poll, 1, 5000) }, 1);
+            let mut prompt = [0; 19];
+            master.read_exact(&mut prompt).unwrap();
+            assert_eq!(&prompt, b"Verification code: ");
+            master.write_all(b"123456\n").unwrap();
+            // Keep the PTY available until the child has processed the answer.
+            master.read_exact(&mut [0]).unwrap();
+            master
+        });
+        download(
+            tool_command(Path::new("/bin/sh")).unwrap().args([
+                "-c",
+                r#"
+                test -t 0 && test -t 1 && test -t 2 || exit 96
+                stty -echo
+                printf 'Verification code: ' >&2
+                IFS= read -r otp || exit 97
+                test "$otp" = 123456 || exit 98
+                printf 'X' >&2
+            "#,
+            ]),
+            &tty,
+        )
+        .unwrap();
+        user.join().unwrap();
     }
 }
