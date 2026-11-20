@@ -9,7 +9,7 @@ use std::process::Command;
 use color_eyre::eyre::{Result, ensure};
 
 use super::{Step, account_home, check_dir, exists, open_file, resolve_tool, state_dir, tool_command, user_only};
-use crate::command::CommandExt as _;
+use crate::{command::CommandExt as _, error::PartialStep};
 
 // This is the update lock used by Homebrew's cmd/update.sh and utils/lock.sh.
 // Take it before resolving the run's formula and hold it through the build
@@ -170,6 +170,14 @@ pub(super) fn automatic(
     }
     let result = execute(command.arg(journal));
     automatic_journal(&state, step)?;
+    if step == Step::LlvmHead {
+        return result.map_err(|error| {
+            PartialStep(format!(
+                "LLVM preview update did not complete; restoration check passed: {error:#}"
+            ))
+            .into()
+        });
+    }
     result
 }
 

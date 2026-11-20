@@ -82,6 +82,12 @@ elif len(args) == 4 and args[:2] == ["studio-llvm-worker", "automatic"]:
  assert os.environ["HOMEBREW_NO_AUTO_UPDATE"] == "1"
  if step == "llvm_head":
   assert pathlib.Path(os.environ["HOMEBREW_CACHE"]).is_relative_to(root/"home")
+  if mode := os.environ.get("TEST_LLVM_HEAD_FAIL"):
+   journal.write_text("{}"); journal.chmod(0o600)
+   if mode == "recovered":
+    done = journal.with_suffix(".json.done")
+    done.write_text('{"restored":true}'); done.chmod(0o600)
+   print("synthetic LLVM preview interruption", file=sys.stderr); sys.exit(49)
  elif os.environ.get("TEST_LLVM_STABLE_FAIL") == "1":
   print("synthetic stable LLVM failure", file=sys.stderr); sys.exit(48)
  elif os.environ.get("TEST_LLVM_STABLE_UPGRADE") == "1":
@@ -856,6 +862,27 @@ def incomplete_llvm_update_preserves_journal(f):
     assert journal.read_text() == '{"earlier":"transaction"}'
 
 
+def llvm_preview_failure_keeps_completed_formula_updates(f, restored=True):
+    result = f.run(TEST_INSTALLED="llvm\nnyamiiko/tools/llvm-head\nz3",
+                   TEST_OUTDATED="z3", TEST_BULK_STILL_OUTDATED="z3",
+                   TEST_LLVM_HEAD_FAIL="recovered" if restored else "incomplete")
+    assert result.returncode != 0, result.stdout
+    assert "synthetic LLVM preview interruption" in result.stdout, result.stdout
+    events = f.events()
+    assert events.count("brew upgrade --formula --fetch-HEAD ggml") == 1, events
+    assert events.count("brew upgrade --formula --fetch-HEAD llama.cpp") == 1, events
+    if restored:
+        assert "Homebrew still reports outdated formulae: z3" in result.stdout, result.stdout
+        assert "LLVM preview update did not complete; restoration check passed" in result.stdout, result.stdout
+        assert "HEAD sync transaction: OK" in result.stdout, result.stdout
+        assert not list(f.state.glob("llvm_*-before.json*"))
+    else:
+        assert "LLVM restoration was incomplete" in result.stdout, result.stdout
+        assert "restoration check passed" not in result.stdout, result.stdout
+        assert (f.state / "llvm_head-before.json").exists()
+    f.assert_restored()
+
+
 def successful_bulk_upgrade_leaves_outdated_formula(f):
     result = f.run(TEST_OUTDATED="z3\natuin", TEST_RUST_HEALTH="healthy",
                    TEST_BULK_STILL_OUTDATED="z3")
@@ -1182,6 +1209,8 @@ if native:
         ("stable LLVM runs before its consumers and preview runs after", llvm_channels_run_in_order),
         ("stable LLVM failure stops dependency upgrades", llvm_stable_failure_stops_before_dependants),
         ("an incomplete LLVM update preserves its journal", incomplete_llvm_update_preserves_journal),
+        ("recovered LLVM preview failure retains partial formula results", llvm_preview_failure_keeps_completed_formula_updates),
+        ("LLVM preview failure with incomplete restoration remains hard failure", lambda f: llvm_preview_failure_keeps_completed_formula_updates(f, False)),
         ("bulk upgrade exit 0 with a remaining outdated formula is incomplete", successful_bulk_upgrade_leaves_outdated_formula),
         ("media formulas report current, upgraded and pinned from existing scans", media_formula_statuses_use_existing_scans),
         ("media formulas remaining outdated are reported without success", lambda f: media_formula_statuses_use_existing_scans(f, True)),

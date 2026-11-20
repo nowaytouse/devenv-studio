@@ -43,6 +43,8 @@ GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来�
 
 普通 `topgrade -y` 会在 Homebrew HEAD-sync 内默认更新两个 LLVM 渠道。刷新目录后先核验并升级 Homebrew 的 `llvm`，确认 Homebrew Rust 仍能运行后才推进 pin，然后升级其他配方。最后检查已安装的 `nyamiiko/tools/llvm-head`，按 LLVM 官方 main 的完整提交构建到独立 keg。新 ABI 系列需要单独核验。自动更新中断后，HEAD-sync 会保留 `brew-headsync` 状态目录中的 `llvm_stable-before.json` 或 `llvm_head-before.json`，并提示检查原 `opt` 和 pin。GUI 单渠道更新仍可使用其运行目录中的 `llvm-before.json`。
 
+LLVM 预览版的工作进程失败且事务恢复已确认时，本轮显示“部分完成”，已完成的 Homebrew 阶段不会被自动重试。恢复未完成时保留日志并报告失败。
+
 媒体配方的状态来自已有的 Homebrew `--fetch-HEAD` 扫描和升级后复核。日志会显示哪些配方已检查、已有更新、已更新、仍然过期或因 pin 跳过。该状态按 Homebrew 的候选结果判定，完整 Git SHA 需要从上游和安装收据另行核对。
 
 检查后，「当前更新引擎」显示实际运行版本、组件树短标识及 profile 清单版本和摘要。展开来源可查看二进制路径、Studio 构建提交、完整组件树和两份 SHA-256。组件树区分同一个 Topgrade 版本下的不同源码，二进制摘要进一步区分产物。执行记录保留当时的引擎身份及可用回退候选。旧记录保留已写入的组件树，缺失字段保持未知。

@@ -351,8 +351,14 @@ impl Headsync {
                 residual.join(", ")
             ));
         }
-        if installed.iter().any(|formula| formula == "nyamiiko/tools/llvm-head") {
-            self.update_llvm(super::Step::LlvmHead)?;
+        if installed.iter().any(|formula| formula == "nyamiiko/tools/llvm-head")
+            && let Err(error) = self.update_llvm(super::Step::LlvmHead)
+        {
+            if let Some(partial) = error.downcast_ref::<PartialStep>() {
+                incomplete.push(partial.0.clone());
+            } else {
+                return Err(error);
+            }
         }
         Ok(incomplete)
     }
