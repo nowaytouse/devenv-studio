@@ -5,9 +5,13 @@ use std::{
     ffi::OsStr,
     fs,
     io::{self, Write},
+    os::fd::{AsRawFd, OwnedFd},
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::atomic::{AtomicI32, Ordering},
+    sync::{
+        OnceLock,
+        atomic::{AtomicI32, Ordering},
+    },
 };
 
 use color_eyre::eyre::{Context, ContextCompat, Result, bail, ensure};
@@ -21,6 +25,7 @@ use crate::{
 };
 
 mod journal;
+mod llvm_pin;
 #[cfg(test)]
 mod tests;
 
@@ -29,7 +34,12 @@ const REF: &str = "refs/heads/master";
 const PAIR: [&str; 2] = ["ggml", "llama.cpp"];
 const JPEG_JOURNAL: &str = "jpeg-xl-active.json";
 const PAIR_JOURNAL: &str = "ggml-llama-active.json";
+const PAIR_UPGRADE_JOURNAL: &str = "ggml-llama-upgrade-active.json";
 static DEFERRED_SIGNAL: AtomicI32 = AtomicI32::new(0);
+static SIGNAL_WAKE_ERROR: AtomicI32 = AtomicI32::new(0);
+// Retain these descriptors for the process lifetime: a concurrent signal handler
+// must never write to a closed descriptor that has been reused for another file.
+static SIGNAL_PIPE: OnceLock<[OwnedFd; 2]> = OnceLock::new();
 
 pub(super) fn run() -> Result<()> {
     super::user_only()?;
@@ -115,20 +125,37 @@ impl Headsync {
 
     fn run_locked(&mut self) -> Result<()> {
         let _lock = journal::lock(&self.state)?;
+        // Restore pre-existing formula overlays and ordinary ABI journals
+        // before touching LLVM. In particular, a pending JPEG XL or consumer
+        // repair must be recovered before any unrelated Homebrew probe.
         if self.abi_pending("whisper-formula-active")? {
             let core = command_path(self.brew(&["--repo", "homebrew/core"]))?.canonicalize()?;
             journal::Journal::new(self.state.canonicalize()?, core)?
                 .whisper()
                 .recover()?;
         }
+        // An interrupted provider upgrade can leave the LLVM pin suspended.
+        // Restore that pin *before* replaying its provider-keg transaction.
+        if self.abi_pending(PAIR_UPGRADE_JOURNAL)? {
+            let brew_prefix = command_path(self.brew(&["--prefix"]))?;
+            llvm_pin::recover(&brew_prefix)?;
+            self.abi_transaction("pair-upgrade-recover", PAIR_UPGRADE_JOURNAL, &[])?;
+        }
         for (journal, mode) in [(PAIR_JOURNAL, "pair-recover"), (JPEG_JOURNAL, "recover")] {
             if self.abi_pending(journal)? {
                 self.abi_transaction(mode, journal, &[])?;
             }
         }
+        // A crash after pin suspension but before a provider journal is also
+        // recoverable. Never refresh catalogs or upgrade while it remains held.
+        let brew_prefix = command_path(self.brew(&["--prefix"]))?;
+        llvm_pin::recover(&brew_prefix)?;
         let core = command_path(self.brew(&["--repo", "homebrew/core"]))?.canonicalize()?;
         let txn = journal::Journal::new(self.state.canonicalize()?, core)?;
         txn.recover()?;
+        for step in [super::Step::LlvmStable, super::Step::LlvmHead] {
+            super::llvm::automatic_journal(&self.state.canonicalize()?, step)?;
+        }
 
         let result = self.upgrade(&txn);
         if result.is_ok() {
@@ -137,7 +164,9 @@ impl Headsync {
         let incomplete = match (result, txn.recover()) {
             (Ok(incomplete), Ok(())) => incomplete,
             (Err(error), Ok(())) => return Err(error),
-            (Ok(_), Err(error)) => return Err(error.wrap_err("HEAD-sync transaction recovery failed")),
+            (Ok(_), Err(error)) => {
+                return Err(error.wrap_err("HEAD-sync transaction recovery failed"));
+            }
             (Err(operation), Err(recovery)) => {
                 bail!("{operation:#}; HEAD-sync transaction recovery failed: {recovery:#}");
             }
@@ -185,17 +214,22 @@ impl Headsync {
 
     fn abi_transaction(&self, mode: &str, journal: &str, formulae: &[String]) -> Result<()> {
         let script = self.abi_script()?;
-        let result = status(&mut self.abi_command(script.path(), mode, formulae)?);
+        let mut command = self.abi_command(script.path(), mode, formulae)?;
+        let result = if mode == "pair-upgrade" {
+            pair_upgrade_status(&mut command)
+        } else {
+            status(&mut command)
+        };
         if let Err(error) = result {
             let exited = matches!(
                 error.downcast_ref::<TopgradeError>(),
                 Some(TopgradeError::ProcessFailed(_, status)) if status.code().is_some_and(|code| code < 128)
             );
             if !mode.ends_with("recover") && exited && interrupted().is_ok() && self.abi_pending(journal)? {
-                let recovery = if journal == PAIR_JOURNAL {
-                    "pair-recover"
-                } else {
-                    "recover"
+                let recovery = match journal {
+                    PAIR_UPGRADE_JOURNAL => "pair-upgrade-recover",
+                    PAIR_JOURNAL => "pair-recover",
+                    _ => "recover",
                 };
                 self.abi_transaction(recovery, journal, &[])
                     .wrap_err_with(|| format!("{error:#}; immediate recovery of {journal} also failed"))?;
@@ -226,6 +260,11 @@ impl Headsync {
         )?;
         let catalogs = self.refresh_catalogs(txn.core())?;
         let pins = self.pins()?;
+        self.update_llvm(super::Step::LlvmStable)?;
+        ensure!(
+            self.pins()? == pins,
+            "Homebrew pin set changed during the stable LLVM update"
+        );
         let revision = self.target_revision()?;
         println!("\nTarget llama.cpp snapshot:\n  {revision}");
 
@@ -237,16 +276,43 @@ impl Headsync {
                 status(self.command("ruby").arg("-c").arg(file).stdout(Stdio::null()))
             })?;
             println!("HEAD-sync transaction prepared and applied");
-            println!("\n== Check upgrade requirements for both synchronized formulae ==");
-            status(self.brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"]).args(PAIR))
-                .wrap_err("Synchronized formula preflight failed before either keg was upgraded; inspect the requirements above and preserve the LLVM pin. The official stable LLVM revision may have advanced since the pinned keg was installed")?;
-            for formula in PAIR {
-                println!("\n== Upgrade {formula} at {revision} ==");
-                status(
-                    self.brew(&["upgrade", "--formula", "--fetch-HEAD", formula])
-                        .env("HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK", "1"),
-                )?;
+            let prefix = command_path(self.brew(&["--prefix"]))?;
+            let suspended = llvm_pin::suspend(&prefix)?;
+            let operation = (|| -> Result<()> {
+                println!("\n== Check upgrade requirements for both synchronized formulae ==");
+                let output = self
+                    .brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"])
+                    .args(PAIR)
+                    .output_checked_with(|_| Ok(()))?;
+                io::stdout().write_all(&output.stdout)?;
+                io::stderr().write_all(&output.stderr)?;
+                ensure!(
+                    output.status.success(),
+                    "Synchronized formula preflight failed before either keg was upgraded"
+                );
+                // The provider journal covers ggml and llama.cpp, not LLVM.
+                // Reject an additional LLVM dependency upgrade before starting it.
+                let plan = format!(
+                    "{}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                ensure!(
+                    !includes_llvm_dependency_plan(&plan),
+                    "Homebrew preflight would also modify LLVM; the provider transaction cannot safely journal that change"
+                );
+                self.abi_transaction("pair-upgrade", PAIR_UPGRADE_JOURNAL, std::slice::from_ref(&revision))
+                    .wrap_err("Synchronized provider upgrade or exact-keg link repair failed")
+            })();
+            let restored = suspended.restore();
+            match (operation, restored) {
+                (Ok(()), Ok(())) => {}
+                (Err(error), Ok(())) | (Ok(()), Err(error)) => return Err(error),
+                (Err(operation), Err(recovery)) => {
+                    bail!("{operation:#}; LLVM pin restoration failed: {recovery:#}");
+                }
             }
+            self.pins()?;
             let active = self.verify_pair(&revision)?;
             txn.recover()?;
             active
@@ -276,7 +342,30 @@ impl Headsync {
                 residual.join(", ")
             ));
         }
+        if installed.iter().any(|formula| formula == "nyamiiko/tools/llvm-head") {
+            self.update_llvm(super::Step::LlvmHead)?;
+        }
         Ok(incomplete)
+    }
+
+    fn update_llvm(&self, step: super::Step) -> Result<()> {
+        println!(
+            "\n== Update {} ==",
+            if step == super::Step::LlvmStable {
+                "Homebrew LLVM"
+            } else {
+                "LLVM preview (official main)"
+            }
+        );
+        let prefix = command_path(self.brew(&["--prefix"]))?;
+        super::llvm::automatic(
+            step,
+            &self.brew,
+            &prefix,
+            &self.state,
+            |executable| Ok(self.command(executable)),
+            status,
+        )
     }
 
     fn refresh_catalogs(&self, core: &Path) -> Result<CatalogRefresh> {
@@ -658,7 +747,9 @@ impl Headsync {
             match (result, recovered) {
                 (Ok(()), Ok(())) => {}
                 (Err(error), Ok(())) | (Ok(()), Err(error)) => return Err(error),
-                (Err(error), Err(recovery)) => bail!("{error:#}; Whisper formula recovery failed: {recovery:#}"),
+                (Err(error), Err(recovery)) => {
+                    bail!("{error:#}; Whisper formula recovery failed: {recovery:#}")
+                }
             }
         }
         Ok(())
@@ -732,7 +823,47 @@ impl Headsync {
             )
             .wrap_err_with(|| format!("Homebrew Rust cannot run; required by {formula}"))?;
         }
-        status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))
+        // Homebrew considers an installed HEAD keg when checking whether the
+        // simultaneously installed, current stable LLVM satisfies dependencies.
+        // Its pin must therefore be suspended for the *remaining* formulae as
+        // well as the ggml/llama provider pair. The exact stable pin is held
+        // durably and restored on every exit path (including an interrupted
+        // upgrade); a subsequent run recovers it before doing any other work.
+        let prefix = command_path(self.brew(&["--prefix"]))?;
+        let suspended = llvm_pin::suspend(&prefix)?;
+        let operation = (|| -> Result<()> {
+            println!("\n== Check remaining formula upgrade requirements with stable LLVM temporarily unpinned ==");
+            let output = self
+                .brew(&["upgrade", "--dry-run", "--formula", "--fetch-HEAD"])
+                .args(outdated)
+                .output_checked_with(|_| Ok(()))?;
+            io::stdout().write_all(&output.stdout)?;
+            io::stderr().write_all(&output.stderr)?;
+            ensure!(
+                output.status.success(),
+                "Remaining formula preflight failed before modifying installed formulae"
+            );
+            let plan = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            ensure!(
+                !includes_llvm_dependency_plan(&plan),
+                "Remaining formula upgrade would modify LLVM; its installed keg is not part of a protected transaction"
+            );
+            status(self.brew(&["upgrade", "--formula", "--fetch-HEAD"]).args(outdated))
+        })();
+        let restored = suspended.restore();
+        match (operation, restored) {
+            (Ok(()), Ok(())) => {}
+            (Err(error), Ok(())) | (Ok(()), Err(error)) => return Err(error),
+            (Err(operation), Err(recovery)) => {
+                bail!("{operation:#}; LLVM pin restoration after remaining formulae failed: {recovery:#}");
+            }
+        }
+        self.pins()?;
+        Ok(())
     }
 
     fn verify_linkage(&self) -> Result<()> {
@@ -744,7 +875,9 @@ impl Headsync {
     }
 
     fn verify_pair(&self, revision: &str) -> Result<Vec<PathBuf>> {
+        ensure!(super::is_hex(revision, 40), "Expected a full target HEAD revision");
         let expected_keg = format!("HEAD-{}", &revision[..7]);
+        let prefix = command_path(self.brew(&["--prefix"]))?;
         let mut active = Vec::with_capacity(PAIR.len());
         for formula in PAIR {
             let opt = command_path(self.brew(&["--prefix", formula]))?;
@@ -776,6 +909,7 @@ impl Headsync {
                 receipt.source.spec == "head" && receipt.source.scm_revision == revision,
                 "{formula} full revision does not match target"
             );
+            verify_keg_links(&prefix, formula, &keg)?;
             active.push(keg);
         }
         println!("Both active receipts record full revision {revision}");
@@ -799,8 +933,60 @@ impl Headsync {
             "Missing ggml backend symbol {SYMBOL}"
         );
         status(self.command(active[1].join("bin/llama-cli")).arg("--version"))?;
+        let unified = active[1].join("bin/llama");
+        if unified.try_exists()? {
+            status(self.command(unified).arg("--version"))?;
+        }
         Ok(())
     }
+}
+
+fn verify_keg_links(prefix: &Path, formula: &str, keg: &Path) -> Result<()> {
+    let linked = prefix.join("var/homebrew/linked").join(formula);
+    ensure!(
+        linked.symlink_metadata()?.is_symlink() && linked.canonicalize()? == keg,
+        "{formula} linked-keg record does not select {}",
+        keg.display()
+    );
+    let bin = keg.join("bin");
+    let entries = match fs::read_dir(&bin) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error).wrap_err_with(|| format!("Cannot inspect {}", bin.display()));
+        }
+    };
+    for entry in entries {
+        let entry = entry?;
+        let source = entry.path();
+        if source.is_dir() {
+            continue;
+        }
+        let destination = prefix.join("bin").join(entry.file_name());
+        ensure!(
+            destination.symlink_metadata()?.is_symlink() && destination.canonicalize()? == source.canonicalize()?,
+            "{} does not resolve to the exact active {formula} executable {}",
+            destination.display(),
+            source.display()
+        );
+    }
+    Ok(())
+}
+
+fn includes_llvm_dependency_plan(plan: &str) -> bool {
+    plan.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '@' && ch != '.' && ch != '-')
+        .any(|token| token.eq_ignore_ascii_case("llvm") || token.starts_with("llvm@"))
+}
+
+#[test]
+fn prevents_unjournaled_llvm_dependency_upgrade() {
+    assert!(includes_llvm_dependency_plan(
+        "==> Would upgrade dependency:\nllvm HEAD-a -> HEAD-b"
+    ));
+    assert!(includes_llvm_dependency_plan("homebrew/core/llvm@22 needs upgrading"));
+    assert!(!includes_llvm_dependency_plan(
+        "ggml HEAD-abc -> HEAD-def\nllama.cpp HEAD-abc -> HEAD-def"
+    ));
 }
 
 fn overlaps(left: &[u8], right: &[u8]) -> bool {
@@ -818,18 +1004,109 @@ fn interrupted() -> Result<()> {
 }
 
 extern "C" fn defer_signal(signal: i32) {
-    let _ = DEFERRED_SIGNAL.compare_exchange(0, signal, Ordering::Relaxed, Ordering::Relaxed);
+    if DEFERRED_SIGNAL
+        .compare_exchange(0, signal, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    if let Some(pipe) = SIGNAL_PIPE.get() {
+        let saved_errno = nix::errno::Errno::last_raw();
+        let byte = 1_u8;
+        // POSIX write is async-signal-safe; this pipe is nonblocking. A full
+        // pipe already wakes the waiter, so EAGAIN needs no second notification.
+        loop {
+            let written = unsafe { nix::libc::write(pipe[1].as_raw_fd(), (&byte as *const u8).cast(), 1) };
+            let error = nix::errno::Errno::last_raw();
+            if written == 1 || (written == -1 && error == nix::libc::EAGAIN) {
+                break;
+            }
+            if written == -1 && error == nix::libc::EINTR {
+                continue;
+            }
+            SIGNAL_WAKE_ERROR.store(if written == -1 { error } else { nix::libc::EIO }, Ordering::Relaxed);
+            break;
+        }
+        nix::errno::Errno::set_raw(saved_errno);
+    }
+}
+
+fn signal_pipe() -> Result<&'static [OwnedFd; 2]> {
+    if let Some(pipe) = SIGNAL_PIPE.get() {
+        return Ok(pipe);
+    }
+    let (read, write) = nix::unistd::pipe().wrap_err("Could not create the HEAD-sync signal pipe")?;
+    for descriptor in [&read, &write] {
+        for (operation, flags) in [
+            (nix::libc::F_SETFD, nix::libc::FD_CLOEXEC),
+            (nix::libc::F_SETFL, nix::libc::O_NONBLOCK),
+        ] {
+            if unsafe { nix::libc::fcntl(descriptor.as_raw_fd(), operation, flags) } == -1 {
+                return Err(io::Error::last_os_error()).wrap_err("Could not configure the HEAD-sync signal pipe");
+            }
+        }
+    }
+    if let Err(unused) = SIGNAL_PIPE.set([read, write]) {
+        // Another initializer installed the shared pipe; close only our unused pair.
+        drop(unused);
+    }
+    SIGNAL_PIPE.get().context("HEAD-sync signal pipe was not initialized")
+}
+
+fn drain_signal_pipe(pipe: &[OwnedFd; 2]) -> Result<()> {
+    let mut bytes = [0_u8; 64];
+    loop {
+        let count = unsafe { nix::libc::read(pipe[0].as_raw_fd(), bytes.as_mut_ptr().cast(), bytes.len()) };
+        if count > 0 {
+            continue;
+        }
+        let error = io::Error::last_os_error();
+        if count == -1 && error.kind() == io::ErrorKind::Interrupted {
+            continue;
+        }
+        if count == -1 && error.kind() == io::ErrorKind::WouldBlock {
+            return Ok(());
+        }
+        ensure!(count != 0, "HEAD-sync signal pipe closed unexpectedly");
+        return Err(error).wrap_err("Could not read the HEAD-sync signal pipe");
+    }
+}
+
+fn wait_for_pair_signal(pipe: &[OwnedFd; 2]) -> Result<()> {
+    let mut descriptor = nix::libc::pollfd {
+        fd: pipe[0].as_raw_fd(),
+        events: nix::libc::POLLIN,
+        revents: 0,
+    };
+    let ready = unsafe { nix::libc::poll(&mut descriptor, 1, 100) };
+    if ready == -1 {
+        let error = io::Error::last_os_error();
+        if error.kind() == io::ErrorKind::Interrupted {
+            return Ok(());
+        }
+        return Err(error).wrap_err("Could not wait for a HEAD-sync signal");
+    }
+    ensure!(
+        descriptor.revents & (nix::libc::POLLERR | nix::libc::POLLHUP | nix::libc::POLLNVAL) == 0,
+        "HEAD-sync signal pipe became unavailable"
+    );
+    if ready > 0 {
+        drain_signal_pipe(pipe)?;
+    }
+    Ok(())
 }
 
 struct DeferredSignals(Vec<(Signal, SigAction)>);
 
 impl DeferredSignals {
     fn install() -> Result<Self> {
+        drain_signal_pipe(signal_pipe()?)?;
+        SIGNAL_WAKE_ERROR.store(0, Ordering::Relaxed);
         DEFERRED_SIGNAL.store(0, Ordering::Relaxed);
         let mut guard = Self(Vec::new());
         let handler = SigAction::new(SigHandler::Handler(defer_signal), SaFlags::SA_RESTART, SigSet::empty());
         // Keep the lock until any running child exits and formula recovery finishes.
-        for signal in [Signal::SIGTERM, Signal::SIGHUP] {
+        for signal in [Signal::SIGINT, Signal::SIGTERM, Signal::SIGHUP] {
             guard.0.push((signal, unsafe { sigaction(signal, &handler) }?));
         }
         Ok(guard)
@@ -859,6 +1136,63 @@ fn status(command: &mut Command) -> Result<()> {
     interrupted()?;
     command.status_checked()?;
     interrupted()
+}
+
+fn pair_upgrade_status(command: &mut Command) -> Result<()> {
+    interrupted()?;
+    let pipe = signal_pipe()?;
+    let mut child = command.spawn_checked()?;
+    let result = (|| {
+        let pid = nix::unistd::Pid::from_raw(i32::try_from(child.id())?);
+        let mut forwarded = false;
+        let exit = loop {
+            if let Some(exit) = child.try_wait()? {
+                break exit;
+            }
+            if !forwarded {
+                let deferred = DEFERRED_SIGNAL.load(Ordering::Relaxed);
+                let signal = if deferred != 0 {
+                    Some(Signal::try_from(deferred)?)
+                } else if ctrlc::interrupted() {
+                    Some(Signal::SIGINT)
+                } else {
+                    None
+                };
+                if let Some(signal) = signal {
+                    // Signal only the coordinating Ruby process. Its trap lets
+                    // the current builder finish, then rolls back before the
+                    // next provider. Retain the outer lock until it exits.
+                    forwarded = true;
+                    if let Err(error) = nix::sys::signal::kill(pid, signal)
+                        && error != nix::errno::Errno::ESRCH
+                    {
+                        return Err(error).wrap_err("Could not forward interruption to the provider transaction");
+                    }
+                }
+            }
+            wait_for_pair_signal(pipe)?;
+        };
+        let wake_error = SIGNAL_WAKE_ERROR.load(Ordering::Relaxed);
+        if wake_error != 0 {
+            return Err(io::Error::from_raw_os_error(wake_error))
+                .wrap_err("Could not notify the provider waiter of an interruption");
+        }
+        if !exit.success() {
+            return Err(TopgradeError::ProcessFailed(
+                command.get_program().to_string_lossy().into_owned(),
+                exit,
+            ))
+            .wrap_err("Synchronized provider transaction subprocess failed");
+        }
+        interrupted()
+    })();
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) => match child.wait() {
+            Ok(_) => Err(error),
+            Err(wait) => bail!("{error:#}; could not wait for the provider transaction: {wait}"),
+        },
+    }
 }
 
 fn command_text(mut command: Command) -> Result<String> {
@@ -943,4 +1277,75 @@ struct Receipt {
 struct ReceiptSource {
     spec: String,
     scm_revision: String,
+}
+
+#[cfg(test)]
+mod pair_link_tests {
+    use super::*;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    #[test]
+    fn matched_receipts_still_require_the_exact_linked_record_and_prefix_binary() -> Result<()> {
+        let stage = tempfile::tempdir()?;
+        let prefix = stage.path();
+        let revision = "0123456789abcdef0123456789abcdef01234567";
+        let keg = prefix.join("Cellar/llama.cpp/HEAD-0123456");
+        let previous = prefix.join("Cellar/llama.cpp/HEAD-fedcba9");
+        for path in [
+            keg.join("bin"),
+            previous.join("bin"),
+            prefix.join("bin"),
+            prefix.join("opt"),
+            prefix.join("var/homebrew/linked"),
+        ] {
+            fs::create_dir_all(path)?;
+        }
+        for formula in PAIR {
+            let current = prefix.join("Cellar").join(formula).join("HEAD-0123456");
+            fs::create_dir_all(&current)?;
+            fs::write(
+                current.join("INSTALL_RECEIPT.json"),
+                format!(r#"{{"source":{{"spec":"head","scm_revision":"{revision}"}}}}"#),
+            )?;
+            symlink(&current, prefix.join("opt").join(formula))?;
+        }
+        symlink(
+            prefix.join("Cellar/ggml/HEAD-0123456"),
+            prefix.join("var/homebrew/linked/ggml"),
+        )?;
+        let brew = prefix.join("brew");
+        fs::write(
+            &brew,
+            concat!(
+                "#!/bin/sh\nprefix=${0%/brew}\n",
+                "case \"$1:$2\" in\n",
+                "  --prefix:) printf '%s\\n' \"$prefix\";;\n",
+                "  --prefix:*) printf '%s\\n' \"$prefix/opt/$2\";;\n",
+                "  --cellar:*) printf '%s\\n' \"$prefix/Cellar/$2\";;\n",
+                "  *) exit 2;;\nesac\n",
+            ),
+        )?;
+        fs::set_permissions(&brew, fs::Permissions::from_mode(0o700))?;
+        let headsync = Headsync {
+            brew,
+            state: prefix.join("state"),
+            git_config_index: None,
+        };
+        fs::write(keg.join("bin/llama-cli"), "current")?;
+        fs::write(previous.join("bin/llama-cli"), "previous")?;
+        let linked = prefix.join("var/homebrew/linked/llama.cpp");
+        let binary = prefix.join("bin/llama-cli");
+
+        assert!(headsync.verify_pair(revision).is_err());
+        symlink(&previous, &linked)?;
+        symlink(previous.join("bin/llama-cli"), &binary)?;
+        assert!(headsync.verify_pair(revision).is_err());
+        fs::remove_file(&linked)?;
+        symlink(&keg, &linked)?;
+        assert!(headsync.verify_pair(revision).is_err());
+        fs::remove_file(&binary)?;
+        symlink(keg.join("bin/llama-cli"), &binary)?;
+        headsync.verify_pair(revision)?;
+        Ok(())
+    }
 }

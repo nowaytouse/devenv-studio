@@ -335,6 +335,24 @@ fn patch(source: &str, name: &str, revision: &str) -> Result<String> {
             "ggml build layout changed upstream"
         );
         updated = updated.replacen(CMAKE, CMAKE_VENDORED, 1);
+    } else if name == "llama.cpp.rb" {
+        // The pinned HEAD may use either side of llama.cpp's UI move. Keep the
+        // existing npm arguments and every CMake option; only locate its package.
+        let ui = Regex::new(r#"(?m)^([ \t]*)cd "(?:tools/ui|ui/apps/chat)" do[ \t]*$"#)?;
+        ensure!(
+            ui.find_iter(&updated).count() == 1,
+            "llama.cpp UI fetch layout changed upstream"
+        );
+        updated = ui
+            .replace(
+                &updated,
+                concat!(
+                    "${1}headsync_ui = %w[ui/apps/chat tools/ui].find { |path| File.file?(File.join(path, \"package.json\")) }\n",
+                    "${1}odie \"Cannot locate llama.cpp UI package.json (ui/apps/chat or tools/ui)\" unless headsync_ui\n",
+                    "${1}cd headsync_ui do"
+                ),
+            )
+            .into_owned();
     }
     Ok(updated)
 }
@@ -360,6 +378,53 @@ fn whisper_patch_requires_the_reviewed_formula_and_one_build_call() {
     assert!(whisper_patch(&source).unwrap().contains("find_package(llama REQUIRED)"));
     assert!(whisper_patch(&source.replace("1.9.5", "1.9.6")).is_err());
     assert!(whisper_patch(&format!("{source}\n{CMAKE}")).is_err());
+}
+
+#[test]
+fn llama_patch_adapts_the_ui_directory_without_changing_build_options() {
+    let source = r#"class LlamaCpp < Formula
+  head "https://github.com/ggml-org/llama.cpp.git", branch: "master"
+  def fetch
+    cd "tools/ui" do
+      system "npm", "install", *std_npm_args(prefix: false)
+    end
+  end
+  def install
+    args = %w[
+      -DLLAMA_BUILD_UI=ON
+      -DLLAMA_USE_PREBUILT_UI=OFF
+      -DLLAMA_USE_SYSTEM_GGML=ON
+      -DLLAMA_OPENSSL=ON
+    ]
+  end
+end
+"#;
+    let revision = "0123456789abcdef0123456789abcdef01234567";
+    for directory in ["tools/ui", "ui/apps/chat"] {
+        let input = source.replace("tools/ui", directory);
+        let updated = patch(&input, "llama.cpp.rb", revision).unwrap();
+        assert!(updated.contains("%w[ui/apps/chat tools/ui]"));
+        assert!(updated.contains("File.file?(File.join(path, \"package.json\"))"));
+        assert!(updated.contains("unless headsync_ui"));
+        assert!(updated.contains("system \"npm\", \"install\", *std_npm_args(prefix: false)"));
+        assert_eq!(
+            updated.split("  def install\n").nth(1),
+            source.split("  def install\n").nth(1)
+        );
+        assert!(updated.contains(&format!("revision: \"{revision}\"")));
+    }
+    assert!(patch(&source.replace("tools/ui", "unknown/ui"), "llama.cpp.rb", revision).is_err());
+    assert!(
+        patch(
+            &source.replace(
+                "    cd \"tools/ui\" do",
+                "    cd \"tools/ui\" do\n    cd \"tools/ui\" do"
+            ),
+            "llama.cpp.rb",
+            revision
+        )
+        .is_err()
+    );
 }
 
 #[cfg(test)]

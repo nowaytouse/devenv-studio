@@ -10,7 +10,7 @@ require "tmpdir"
 LLVM_REMOTE = "https://github.com/llvm/llvm-project.git".freeze
 LLVM_REF = "refs/heads/main".freeze
 LLVM_HEAD_FORMULA = "nyamiiko/tools/llvm-head".freeze
-LLVM_STABLE_VERSION = /\A23\.1\.\d+(?:_\d+)?\z/
+LLVM_STABLE_VERSION = /\A\d+\.\d+\.\d+(?:_\d+)?\z/
 LLVM_SHA = /\A[0-9a-f]{40}\z/
 LLVM_GIT_ENV = {
   "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_TERMINAL_PROMPT" => "0",
@@ -136,38 +136,35 @@ def llvm_snapshot(step)
     raise "Studio LLVM updates require Apple Silicon Homebrew in /opt/homebrew"
   end
   stable = Formulary.factory("homebrew/core/llvm", :stable)
-  head = Formulary.factory(LLVM_HEAD_FORMULA, :head)
-  unless stable.tap&.core_tap? && stable.keg_only? && !stable.fetch_defined? && head.full_name == LLVM_HEAD_FORMULA &&
-         head.keg_only? && head.head? && head.stable.nil? && head.head.url == LLVM_REMOTE &&
-         head.head.specs == {branch: "main"} && !head.fetch_defined? && !head.network_access_allowed?(:build)
-    raise "Unexpected LLVM formula origin or build policy"
-  end
-  [stable.rack, head.rack, stable.opt_prefix.dirname, FormulaPin.new(stable).path.dirname].each do |path|
+  raise "Unexpected stable LLVM build policy" unless stable.tap&.core_tap? && stable.keg_only? && !stable.fetch_defined?
+
+  [stable.rack, stable.opt_prefix.dirname, FormulaPin.new(stable).path.dirname].each do |path|
     llvm_path(path, :directory?)
   end
   opt = llvm_link(stable.opt_prefix, stable.rack)
   pin = llvm_link(FormulaPin.new(stable).path, stable.rack)
   installed = File.basename(opt.fetch(:target))
   unless opt[:target] == pin[:target] && LLVM_STABLE_VERSION.match?(installed)
-    raise "Active Homebrew LLVM and its pin must select the same LLVM 23.1 keg"
-  end
-  head_opt = llvm_link(head.opt_prefix, head.rack)
-  head_receipt = llvm_receipt(head_opt.fetch(:target), "nyamiiko/tools", "head")
-  unless LLVM_SHA.match?(head_receipt[:revision].to_s)
-    raise "Installed LLVM HEAD lacks a full Git revision"
+    raise "Active Homebrew LLVM and its pin must select the same stable keg"
   end
 
   current = {
-    schema_version: 1, step:, opt:, pin:, head_opt:, head_receipt:,
+    schema_version: 1, step:, opt:, pin:,
     stable_receipt: llvm_receipt(opt.fetch(:target), "homebrew/core", "stable"),
-    old_head_kegs: llvm_history(stable), head_kegs: llvm_history(head),
+    old_head_kegs: llvm_history(stable),
   }
   if step == "llvm_stable"
     version = stable.pkg_version.to_s
-    unless LLVM_STABLE_VERSION.match?(version) && PkgVersion.parse(version) >= PkgVersion.parse(installed)
-      raise "Official LLVM #{version} is outside the installed LLVM 23.1 upgrade range"
+    series = installed.split(".").first(2)
+    unless LLVM_STABLE_VERSION.match?(version) && version.split(".").first(2) == series &&
+           PkgVersion.parse(version) >= PkgVersion.parse(installed)
+      raise "Official LLVM #{version} is outside the installed LLVM #{series.join('.')} upgrade range"
     end
     rust_opt = llvm_link(HOMEBREW_PREFIX/"opt/rust", HOMEBREW_CELLAR/"rust")
+    preview_opt = HOMEBREW_PREFIX/"opt/llvm-head"
+    if File.exist?(preview_opt) || File.symlink?(preview_opt)
+      current[:head_opt] = llvm_link(preview_opt, HOMEBREW_CELLAR/"llvm-head")
+    end
     bottle = FormulaInstaller.new(stable, force_bottle: true).send(:selected_bottle)
     unless bottle && stable.bottle_tag? && stable.pour_bottle? &&
            bottle.url.match?(%r{\Ahttps://ghcr\.io/v2/homebrew/core/llvm/blobs/sha256:[0-9a-f]{64}\z})
@@ -178,10 +175,21 @@ def llvm_snapshot(step)
              "Verify Homebrew Rust and retain the previous LLVM keg."
     [stable, current, detail]
   else
+    head = Formulary.factory(LLVM_HEAD_FORMULA, :head)
+    unless head.full_name == LLVM_HEAD_FORMULA && head.keg_only? && head.head? && head.stable.nil? &&
+           head.head.url == LLVM_REMOTE && head.head.specs == {branch: "main"} &&
+           !head.fetch_defined? && !head.network_access_allowed?(:build)
+      raise "Unexpected preview LLVM origin or build policy"
+    end
+    llvm_path(head.rack, :directory?)
+    head_opt = llvm_link(head.opt_prefix, head.rack)
+    head_receipt = llvm_receipt(head_opt.fetch(:target), "nyamiiko/tools", "head")
+    raise "Installed LLVM HEAD lacks a full Git revision" unless LLVM_SHA.match?(head_receipt[:revision].to_s)
     raise "The separate LLVM HEAD formula is pinned" if FormulaPin.new(head).pinned?
 
     revision = llvm_upstream
-    current.merge!(formula_sha256: llvm_formula_digest(head), revision:, formula_revision: head.revision)
+    current.merge!(formula_sha256: llvm_formula_digest(head), revision:, formula_revision: head.revision,
+                   head_opt:, head_receipt:, head_kegs: llvm_history(head))
     detail = "#{LLVM_HEAD_FORMULA} #{head_receipt.fetch(:revision)} → #{revision}. " \
              "Build the official LLVM main revision in the separate keg."
     [head, current, detail]
@@ -240,7 +248,11 @@ def llvm_run(formula, snapshot, journal)
   active = stable ? snapshot[:opt] : snapshot[:head_opt]
   version = stable ? snapshot[:version] : snapshot[:revision]
   if stable ? File.basename(active[:target]) == version : snapshot[:head_receipt][:revision] == version
-    llvm_verify_stable(active[:target], version, snapshot.fetch(:rust_opt)) if stable
+    if stable
+      llvm_verify_stable(active[:target], version, snapshot.fetch(:rust_opt))
+    else
+      llvm_capture(File.join(active[:target], "bin/llvm-config"), "--version")
+    end
     puts "LLVM is already current at #{version}."
     return
   end
@@ -294,7 +306,9 @@ def llvm_run(formula, snapshot, journal)
     if stable
       llvm_receipt(candidate[:target], "homebrew/core", "stable")
       llvm_verify_stable(candidate[:target], version, snapshot.fetch(:rust_opt))
-      raise "Separate LLVM HEAD changed during the stable update" unless llvm_unchanged(snapshot[:head_opt])
+      if snapshot[:head_opt] && !llvm_unchanged(snapshot[:head_opt])
+        raise "Separate LLVM HEAD changed during the stable update"
+      end
       raise "LLVM pin changed during the stable update" unless llvm_unchanged(snapshot[:pin])
 
       llvm_replace_link(snapshot[:pin][:path], candidate[:target])
@@ -349,6 +363,8 @@ begin
   when "run"
     abort "LLVM review is stale. Review the current version and source again." unless digest == approved_digest
     llvm_run(formula, snapshot, journal)
+  when "automatic"
+    llvm_run(formula, snapshot, approved_digest)
   else
     abort "Invalid LLVM operation"
   end

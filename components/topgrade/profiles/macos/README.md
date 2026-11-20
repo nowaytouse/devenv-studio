@@ -1,10 +1,12 @@
 # This Mac's maintained Topgrade profile
 
-This Apple Silicon macOS profile configures the managed Rust Topgrade tasks. The manifest covers the configuration, compatibility helpers, and reviewed npm patch assets. LLVM 23.1.4 stays pinned, and the historical LLVM HEAD remains available.
+This Apple Silicon macOS profile configures the managed Rust Topgrade tasks. The manifest covers the configuration, compatibility helpers, and reviewed npm patch assets. The managed Homebrew step updates both the official LLVM bottle in its installed stable series and the separately installed LLVM preview.
 
 DevEnv Studio builds the tracked Studio HEAD, verifies the matching profile, and atomically replaces the executable at `~/.local/bin/topgrade`. The built-in Helm and GitHub Skills steps use their native validators. The older standalone helpers remain available for legacy entry points and recovery.
 
 The Homebrew formula step refreshes catalogs before checking for upgrades. When a tap has local changes, the step preserves that checkout and fast-forwards clean tracked tap checkouts, including `homebrew/core`. The log names deferred taps and reports refresh failures. A tap with no tracking branch whose sole remote points to itself is reported as local-only. A failed core refresh stops formula upgrades. The step checks the requested formulae again after upgrades. Deferred catalogs or formulae still reported as outdated produce `PARTIAL` with a nonzero exit status. Intentional pin and separately managed formula exclusions remain visible.
+
+The official LLVM bottle updates before its consumers. The stable pin advances after the Homebrew Rust runtime checks pass. The installed preview follows the exact official main commit after the ordinary formula updates. Explicit `--only` runs skip global pre/post hooks.
 
 Topgrade reports incomplete checks separately from completed steps. Dry runs and post-commands appear in the summary. If a selected configuration or its includes cannot be loaded, the CLI stops before executing updates.
 

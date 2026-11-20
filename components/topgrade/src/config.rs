@@ -930,7 +930,7 @@ pub struct CommandLineArgs {
     #[arg(long = "disable", value_name = "STEP", value_enum, num_args = 1..)]
     disable: Vec<Step>,
 
-    /// Perform only the specified steps
+    /// Perform only the specified steps and skip pre/post commands
     #[arg(long = "only", value_name = "STEP", value_enum, num_args = 1..)]
     only: Vec<Step>,
 
@@ -1129,13 +1129,19 @@ impl Config {
     }
 
     /// The list of commands to run before performing any step.
-    pub fn pre_commands(&self) -> &Option<Commands> {
-        &self.config_file.pre_commands
+    pub fn pre_commands(&self) -> Option<&Commands> {
+        self.config_file
+            .pre_commands
+            .as_ref()
+            .filter(|_| self.opt.only.is_empty())
     }
 
     /// The list of commands to run at the end of all steps
-    pub fn post_commands(&self) -> &Option<Commands> {
-        &self.config_file.post_commands
+    pub fn post_commands(&self) -> Option<&Commands> {
+        self.config_file
+            .post_commands
+            .as_ref()
+            .filter(|_| self.opt.only.is_empty())
     }
 
     /// The list of custom steps.
@@ -1208,13 +1214,9 @@ impl Config {
     }
 
     fn allowed_steps(opt: &CommandLineArgs, config_file: &ConfigFile) -> Vec<Step> {
-        // The enabled steps are
-        let mut enabled_steps: Vec<Step> = Vec::new();
-        // Any steps that are passed with `--only`
-        enabled_steps.extend(&opt.only);
-
-        // Plus any steps in the config file's `misc.only`
-        if let Some(misc) = config_file.misc.as_ref()
+        let mut enabled_steps = opt.only.clone();
+        if enabled_steps.is_empty()
+            && let Some(misc) = config_file.misc.as_ref()
             && let Some(only) = misc.only.as_ref()
         {
             enabled_steps.extend(only);
@@ -2665,6 +2667,31 @@ x = "cmd_x"
             config_file: toml::from_str(toml_str).expect("toml parse error"),
             allowed_steps: Vec::new(),
         }
+    }
+
+    #[test]
+    fn cli_only_limits_steps_and_suppresses_run_hooks() {
+        let mut config = config_from_toml(
+            r#"
+[misc]
+only = ["custom_commands"]
+disable = ["node"]
+[pre_commands]
+before = "before"
+[post_commands]
+after = "after"
+"#,
+        );
+        config.allowed_steps = Config::allowed_steps(&config.opt, &config.config_file);
+        assert!(config.should_run(Step::CustomCommands));
+        assert!(config.pre_commands().is_some());
+        assert!(config.post_commands().is_some());
+
+        config.opt = CommandLineArgs::parse_from(["topgrade", "--only", "node"]);
+        config.allowed_steps = Config::allowed_steps(&config.opt, &config.config_file);
+        assert_eq!(config.allowed_steps, [Step::Node]);
+        assert!(config.pre_commands().is_none());
+        assert!(config.post_commands().is_none());
     }
 
     #[test]

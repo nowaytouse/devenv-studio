@@ -43,6 +43,10 @@ class JpegXlTransaction
     ["jpeg-xl"]
   end
 
+  def provider_upgrades?
+    providers == ["jpeg-xl"]
+  end
+
   def protected?(short)
     %w[llvm llvm-head rust topgrade ggml llama.cpp].include?(short) || short.start_with?("llvm@")
   end
@@ -58,7 +62,7 @@ class JpegXlTransaction
   end
 
   def interrupted!
-    raise "JPEG XL upgrade interrupted by #{@signal}" if @signal && !@recovering
+    raise "#{linkage_group} upgrade interrupted by #{@signal}" if @signal && !@recovering
   end
 
   def run_command(*args)
@@ -125,11 +129,11 @@ class JpegXlTransaction
     raise "Homebrew installation failed for #{owner.fetch('full')}" if Homebrew.failed?
   end
 
-  def capture(*args)
+  def capture(*args, quiet: false)
     interrupted!
     output, status = Open3.capture2e(BREW_ENV, *args.map(&:to_s))
     interrupted!
-    puts output unless output.empty?
+    puts output unless output.empty? || (quiet && status.success?)
     raise "Failed: #{args.join(' ')}" unless status.success?
 
     output
@@ -565,10 +569,7 @@ class JpegXlTransaction
     expected = row.fetch("manifest")
     FormulaLock.new(short).with_lock do
       installed = versions(short)
-      if (replacement = row["replacement"])
-        unexpected = installed - row.fetch("versions") - [replacement, "#{replacement}.tmp"]
-        raise "Unexpected dependency kegs during recovery for #{short}: #{unexpected.join(', ')}" unless unexpected.empty?
-      end
+      validate_recovery_versions(row, installed)
       missing = row.fetch("versions") - installed - [row.fetch("version")]
       raise "Inactive Homebrew kegs disappeared during JPEG XL recovery: #{short}" unless missing.empty?
 
@@ -593,6 +594,13 @@ class JpegXlTransaction
       raise "JPEG XL rollback verification failed for #{short}" unless opt(short).realpath == prior &&
         keg.linked? == row.fetch("linked") && manifest(prior) == expected && versions(short) == row.fetch("versions")
     end
+  end
+
+  def validate_recovery_versions(row, installed)
+    return unless (replacement = row["replacement"])
+
+    unexpected = installed - row.fetch("versions") - [replacement, "#{replacement}.tmp"]
+    raise "Unexpected dependency kegs during recovery for #{row.fetch('name')}: #{unexpected.join(', ')}" unless unexpected.empty?
   end
 
   def restore_tool(short, version)
@@ -668,7 +676,7 @@ class JpegXlTransaction
       tools.is_a?(Hash) && (tools.keys - BUILD_TOOLS).empty? && tools.values.all? { |version| NAME.match?(version) } &&
       (tools.keys & names).empty? && (touched - names).empty? && touched.uniq == touched &&
       [true, false].include?(@record.fetch("committed")) &&
-      [true, false].include?(repair) && (providers == ["jpeg-xl"] || repair) &&
+      [true, false].include?(repair) && (provider_upgrades? || repair) &&
       (!repair || (touched & providers).empty?)
 
     return unless @record.key?("touched_tools")
@@ -942,9 +950,223 @@ class GgmlLlamaRepair < JpegXlTransaction
   end
 end
 
+# The formula journal pins both builds. This journal separately protects the
+# installed provider kegs, which restoring formula source cannot roll back.
+class GgmlLlamaUpgrade < GgmlLlamaRepair
+  REVISION = /\A[0-9a-f]{40}\z/
+  BACKEND_SYMBOL = "ggml_backend_sched_set_copy_callback"
+
+  def transaction_name
+    "ggml-llama-upgrade"
+  end
+
+  def provider_upgrades?
+    true
+  end
+
+  def head_revision(keg)
+    tab = receipt(keg)
+    revision = tab.fetch("source")["scm_revision"]
+    raise "Expected a full homebrew/core HEAD revision in #{keg}" unless
+      source_info(tab).take(2) == ["homebrew/core", "head"] && revision.is_a?(String) && REVISION.match?(revision) &&
+      keg.basename.to_s.match?(/\AHEAD-#{Regexp.escape(revision[0, 7])}(?:_[0-9]+)?\z/)
+
+    revision
+  end
+
+  def target_keg(short, revision)
+    matches = []
+    collisions = []
+    versions(short).each do |version|
+      next unless version.match?(/\AHEAD-#{Regexp.escape(revision[0, 7])}(?:_[0-9]+)?\z/)
+
+      path = keg_directory(rack(short)/version)
+      if head_revision(path) == revision
+        matches << path
+      else
+        collisions << path
+      end
+    end
+    if matches.empty? && collisions.any?
+      raise "Short HEAD collision: #{collisions.join(', ')} has a different full revision; existing kegs were preserved"
+    end
+
+    # Homebrew can retain multiple HEADs and multiple formula revisions. The
+    # receipt, never their enumeration order or seven-character name, selects SHA.
+    matches.max_by { |path| path.basename.to_s[/_([0-9]+)\z/, 1].to_i }
+  end
+
+  def verify_links(short, keg)
+    raise "The exact #{short} keg is not linked: #{keg}" unless
+      record_target(opt(short), short) == keg && record_target(linked(short), short) == keg
+
+    bin = keg/"bin"
+    return unless bin.directory?
+
+    bin.children.reject(&:directory?).each do |source|
+      destination = HOMEBREW_PREFIX/"bin"/source.basename
+      raise "#{destination} does not resolve to #{source}" unless destination.symlink? &&
+        destination.exist? && destination.realpath == source.realpath
+    end
+  end
+
+  def matched_pair(revision = nil)
+    rows = providers.map do |short|
+      row, keg = active_row(short)
+      full_revision = head_revision(keg)
+      raise "#{short} full revision does not match #{revision}" if revision && full_revision != revision
+
+      verify_links(short, keg)
+      row.merge("revision" => full_revision)
+    end
+    raise "ggml and llama.cpp must have the same full revision before upgrading" unless
+      rows.map { |row| row.fetch("revision") }.uniq.one?
+
+    [rows, rows.to_h { |row| [row.fetch("name"), original(row)] }]
+  end
+
+  def verify_runtime(active)
+    ggml = active.fetch("ggml")
+    raise "Missing ggml backend declaration #{BACKEND_SYMBOL}" unless (ggml/"include/ggml-backend.h").read.include?(BACKEND_SYMBOL)
+
+    symbols = capture("nm", "-gU", ggml/"lib/libggml-base.dylib", quiet: true)
+    found = symbols.lines.any? do |line|
+      line.split.last&.delete_prefix("_") == BACKEND_SYMBOL
+    end
+    raise "Missing ggml backend symbol #{BACKEND_SYMBOL}" unless found
+
+    run_command(active.fetch("llama.cpp")/"bin/llama-cli", "--version")
+    unified = active.fetch("llama.cpp")/"bin/llama"
+    run_command(unified, "--version") if present?(unified)
+  end
+
+  def activate(short, candidate, revision)
+    FormulaLock.new(short).with_lock do
+      raise "Selected #{short} receipt changed before linking" unless head_revision(keg_directory(candidate)) == revision
+
+      # Validate record destinations before unlinking. Keg#unlink removes only
+      # links owned by its Pathname; no --overwrite may remove unrelated files.
+      [opt(short), linked(short)].each { |record| record_target(record, short) }
+      versions(short).each { |version| Keg.new(rack(short)/version).unlink }
+      remove_current_links(short)
+      Keg.new(candidate).link
+      verify_links(short, candidate)
+    end
+  end
+
+  def load_record
+    super
+    rows = @record.fetch("rows")
+    valid_rows = rows.all? do |row|
+      revision = row["revision"]
+      target = row["target_revision"]
+      revision.is_a?(String) && REVISION.match?(revision) && target.is_a?(String) && REVISION.match?(target) && row.fetch("linked") &&
+        row.fetch("source").take(2) == ["homebrew/core", "head"] &&
+        row.fetch("version").match?(/\AHEAD-#{Regexp.escape(revision[0, 7])}(?:_[0-9]+)?\z/)
+    end
+    raise "Invalid synchronized provider upgrade journal" unless valid_rows && rows.size == providers.size &&
+      @record.fetch("tools").empty? && !@record.fetch("repair")
+    raise "Provider rollback journal does not contain a matched pair" unless
+      rows.map { |row| row.fetch("revision") }.uniq.one? && rows.map { |row| row.fetch("target_revision") }.uniq.one?
+  end
+
+  def validate_recovery_versions(row, installed)
+    super
+    short = row.fetch("name")
+    target = row.fetch("target_revision")
+    (installed - row.fetch("versions")).each do |version|
+      error = "Unexpected provider keg during recovery: #{rack(short)/version}; preserved in place. " \
+              "Resolve the concurrent Homebrew change before retrying; journal retained at #{@journal}"
+      raise error unless version.match?(/\AHEAD-#{Regexp.escape(target[0, 7])}(?:_[0-9]+)?(?:\.tmp)?\z/)
+
+      path = rack(short)/version
+      next unless present?(path/"INSTALL_RECEIPT.json")
+
+      tab = receipt(path)
+      raise "#{error}; full revision does not match #{target}" unless
+        source_info(tab).take(2) == ["homebrew/core", "head"] && tab.fetch("source")["scm_revision"] == target
+    end
+  end
+
+  def verify_linkage
+    # Called by the inherited recovery after both exact originals are restored.
+    rows, active = matched_pair(@record.fetch("rows").first.fetch("revision"))
+    raise "Recovery selected different provider kegs" unless rows.map { |row| original(row) } ==
+      @record.fetch("rows").map { |row| original(row) }
+
+    verify_runtime(active)
+  end
+
+  def upgrade_pair(revision)
+    raise "Expected one full target HEAD revision" unless revision.is_a?(String) && REVISION.match?(revision)
+    raise "An unfinished provider upgrade exists; recover it first" if present?(@journal)
+
+    %w[INT TERM HUP].each { |signal| Signal.trap(signal) { @signal ||= signal } }
+    ready = providers.to_h { |short| [short, target_keg(short, revision)] }
+    begin
+      rows, active = matched_pair
+      verify_runtime(active)
+    rescue StandardError => error
+      unless ready.values.all?
+        raise "No verified matched ggml/llama.cpp pair is available for rollback: #{error.message}. " \
+              "No provider builds were started; restore a matched installed HEAD pair before retrying"
+      end
+
+      # A previous failed run may already have built both exact kegs but left
+      # opt/bin unlinked. Repair their links without building or removing kegs.
+      warn "Repairing installed target links; no verified prior pair is available for rollback: #{error.message}"
+      begin
+        ready.each { |short, keg| activate(short, keg, revision) }
+        repaired_rows, active = matched_pair(revision)
+        verify_runtime(active)
+        reset_linkage_cache(repaired_rows)
+      rescue StandardError => repair
+        raise "Installed target #{revision} link repair is incomplete: #{repair.message}. " \
+              "All kegs were retained (#{ready.values.join(', ')}); resolve the reported error and rerun HEAD-sync"
+      end
+      puts "Exact installed ggml/llama.cpp target links and runtime verified: #{revision}"
+      return
+    end
+
+    # The target is present in the very first durable checkpoint, including when
+    # the first builder is interrupted before writing an installation receipt.
+    rows = rows.map { |row| row.merge("target_revision" => revision) }
+    transact(rows, {}) do
+      # Mark both before the first builder; neither provider may become an
+      # unjournaled side effect if Homebrew's dependency plan changes.
+      rows.each { |row| mark(row) }
+      rows.each do |row|
+        short = row.fetch("name")
+        verify_original(row)
+        candidate = ready.fetch(short)
+        unless candidate
+          puts "== Upgrade #{short} at #{revision} =="
+          run_command(HOMEBREW_BREW_FILE, "upgrade", "--formula", "--fetch-HEAD", short)
+          candidate = target_keg(short, revision)
+        end
+        raise "Homebrew did not install #{short} at full revision #{revision}" unless candidate
+        raise "Homebrew changed the source or build options for #{short}" unless source_info(receipt(candidate)) == row.fetch("source")
+
+        activate(short, candidate, revision)
+      end
+      _, active = matched_pair(revision)
+      verify_runtime(active)
+      reset_linkage_cache(rows)
+    end
+    puts "ggml and llama.cpp upgraded, linked, and verified at full revision #{revision}"
+  end
+end
+
 if $PROGRAM_NAME == __FILE__
   File.umask(0o077)
   mode, state, full, *users = ARGV
+  if %w[pair-upgrade pair-upgrade-recover].include?(mode)
+    raise "Unexpected provider upgrade arguments" unless users.empty? && (mode == "pair-upgrade" || full.nil?)
+
+    pair = GgmlLlamaUpgrade.new(state)
+    mode == "pair-upgrade" ? pair.upgrade_pair(full) : pair.recover
+    exit
+  end
   if %w[jpeg-xl-install ggml-llama-install].include?(mode)
     klass = mode == "jpeg-xl-install" ? JpegXlTransaction : GgmlLlamaRepair
     klass.new(state).run_install(full, users.fetch(0))

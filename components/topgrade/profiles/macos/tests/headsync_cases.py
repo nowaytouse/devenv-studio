@@ -28,6 +28,11 @@ end
 '''
 llama = '''class LlamaCpp
   head "https://github.com/ggml-org/llama.cpp.git", branch: "master"
+  def fetch
+    cd "tools/ui" do
+      system "npm", "install", *std_npm_args(prefix: false)
+    end
+  end
 end
 '''
 whisper = '''class WhisperCpp < Formula
@@ -39,7 +44,7 @@ end
 '''
 
 brew = r'''#!/usr/bin/python3
-import os, pathlib, sys
+import os, pathlib, signal, subprocess, sys
 args=sys.argv[1:]
 root=pathlib.Path(os.environ["TEST_ROOT"])
 with (root/"events").open("a") as f: f.write("brew " + " ".join(args) + "\n")
@@ -67,18 +72,47 @@ elif args == ["list", "--formula", "--pinned"]:
 elif args == ["list", "--formula", "--full-name"]:
  if os.environ.get("TEST_FAIL_LIST") == "installed": print("simulated installed list error",file=sys.stderr); sys.exit(37)
  print(os.environ.get("TEST_INSTALLED", "llvm\ntopgrade\nz3\natuin"))
+elif len(args) == 4 and args[:2] == ["studio-llvm-worker", "automatic"]:
+ step = args[2]
+ state = root/"state/brew-headsync"
+ journal = pathlib.Path(args[3])
+ assert journal == state/f"{step}-before.json" and not journal.exists()
+ worker = pathlib.Path(os.environ["PATH"].split(os.pathsep,1)[0])
+ assert worker.parent == state and (worker/"brew-studio-llvm-worker.rb").is_file()
+ assert os.environ["HOMEBREW_NO_AUTO_UPDATE"] == "1"
+ if step == "llvm_head":
+  assert pathlib.Path(os.environ["HOMEBREW_CACHE"]).is_relative_to(root/"home")
+ elif os.environ.get("TEST_LLVM_STABLE_FAIL") == "1":
+  print("synthetic stable LLVM failure", file=sys.stderr); sys.exit(48)
+ elif os.environ.get("TEST_LLVM_STABLE_UPGRADE") == "1":
+  keg = root/"Cellar/llvm/23.1.6"
+  keg.mkdir()
+  (keg/"INSTALL_RECEIPT.json").write_text('{"source":{"spec":"stable"}}')
+  for link in (root/"opt/llvm", root/"var/homebrew/pinned/llvm"):
+   link.unlink(); link.symlink_to(keg)
+  journal.write_text("{}"); journal.chmod(0o600)
+  done = journal.with_suffix(".json.done")
+  done.write_text(__import__("json").dumps({"verified":str(keg)})); done.chmod(0o600)
+ else: assert step == "llvm_stable"
 elif args[:1] == ["upgrade"]:
  if os.environ.get("HOMEBREW_NO_INSTALL_CLEANUP") != "1":
   print("missing cleanup protection", file=sys.stderr); sys.exit(31)
  if os.environ.get("HOMEBREW_NO_AUTO_UPDATE") != "1": print("auto-update guard missing",file=sys.stderr); sys.exit(30)
  if "topgrade" in args: print("topgrade must not reach brew upgrade", file=sys.stderr); sys.exit(32)
  target = args[-1] if args[-1] in ("ggml", "llama.cpp") else "bulk"
- if target != "bulk" or "--dry-run" in args or not os.environ.get("TEST_HEADSYNC_NATIVE_CHILD"):
+ if target != "bulk" or not os.environ.get("TEST_HEADSYNC_NATIVE_CHILD"):
   for f in (root/"core/Formula/g/ggml.rb",root/"core/Formula/l/llama.cpp.rb"):
    if os.environ["TEST_SHA"] not in f.read_text(): print("formula revision mismatch",file=sys.stderr); sys.exit(33)
+ if target == "bulk" and os.environ.get("TEST_REQUIRE_UNPIN_FOR_REMAINING") == "1":
+  if (root/"var/homebrew/pinned/llvm").is_symlink():
+   print("Pinned LLVM prevents remaining formula update", file=sys.stderr); sys.exit(44)
  if "--dry-run" in args:
   if os.environ.get("TEST_FAIL_PREFLIGHT") == "1":
    print("Pinned LLVM cannot satisfy llama.cpp",file=sys.stderr); sys.exit(44)
+  if target == "bulk" and os.environ.get("TEST_BULK_PLAN_LLVM") == "1":
+   print("==> Would upgrade dependency: llvm 23.1.5 -> 23.1.6")
+  if target == "bulk" and os.environ.get("TEST_LLVM_STABLE_UPGRADE") == "1":
+   assert (root/"opt/llvm").resolve().name == "23.1.6"
   sys.exit(0)
  if os.environ.get("TEST_PAUSE_UPGRADE") == target:
   (root/"upgrade-paused").touch()
@@ -119,13 +153,37 @@ elif args[:1] == ["uses"]:
  elif args[-1] == "ggml": print(os.environ.get("TEST_GGML_USERS", ""))
  elif args[-1] == "llama.cpp": print(os.environ.get("TEST_LLAMA_USERS", ""))
  else: print("topgrade\natuin")
-elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover", "repair", "pair-plan", "pair-repair", "pair-recover"):
+elif len(args) >= 4 and args[0] == "ruby" and args[2] in ("run", "recover", "repair", "pair-plan", "pair-repair", "pair-recover", "pair-upgrade", "pair-upgrade-recover"):
  state = (root/"state/brew-headsync").resolve()
  assert pathlib.Path(args[1]).parent == state and pathlib.Path(args[1]).is_file()
  assert pathlib.Path(args[3]) == state
  assert os.environ["HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK"] == "1"
  assert os.environ["HOMEBREW_NO_INSTALL_CLEANUP"] == "1"
- if args[2] == "recover":
+ if args[2] == "pair-upgrade":
+  assert args[4:] == [os.environ["TEST_SHA"]]
+  pending = state/"ggml-llama-upgrade-active.json"
+  with pending.open("x") as journal: journal.write("{}")
+  caught = []
+  def defer_signal(number, _frame):
+   if not caught: caught.append(number)
+  for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP): signal.signal(number, defer_signal)
+  # This double checks Rust's subprocess contract; the real Ruby transaction's
+  # exact selection, filesystem rollback and interrupted recovery have their own fixtures.
+  try:
+   for formula in ("ggml", "llama.cpp"):
+    if caught: raise RuntimeError("provider transaction interrupted")
+    result = subprocess.run([sys.executable, __file__, "upgrade", "--formula", "--fetch-HEAD", formula])
+    if result.returncode: raise RuntimeError("provider builder failed")
+    if caught: raise RuntimeError("provider transaction interrupted")
+  except Exception as error:
+   pending.unlink()
+   print(str(error), file=sys.stderr)
+   sys.exit(47)
+  pending.unlink()
+ elif args[2] == "pair-upgrade-recover":
+  assert len(args) == 4
+  (state/"ggml-llama-upgrade-active.json").unlink()
+ elif args[2] == "recover":
   assert len(args) == 4
   if os.environ.get("TEST_JXL_LEAVE_PENDING") != "1":
    (state/"jpeg-xl-active.json").unlink(); print("original kegs restored")
@@ -248,19 +306,22 @@ class Fixture:
         self.bin = root / "bin"
         for directory in (self.core / "Formula/g", self.core / "Formula/l", self.state,
                           self.home / ".local/bin", self.bin, root / "opt", root / "rust-prefix/bin",
-                          root / "Cellar/llvm/23.1.5", root / "var/homebrew/pinned",
+                          root / "Cellar/llvm/23.1.5", root / "var/homebrew/pinned", root / "var/homebrew/linked",
                           root / "Cellar/ggml" / ("HEAD-" + sha[:7]) / "include",
                           root / "Cellar/llama.cpp" / ("HEAD-" + sha[:7]) / "bin"):
             directory.mkdir(parents=True, exist_ok=True)
         (root / "Cellar/llvm/23.1.5/INSTALL_RECEIPT.json").write_text(json.dumps({"source": {"spec": "stable"}}))
         (root / "opt/llvm").symlink_to(root / "Cellar/llvm/23.1.5")
         (root / "var/homebrew/pinned/llvm").symlink_to(root / "Cellar/llvm/23.1.5")
+        (root / "var/homebrew/locks").mkdir()
+        (root / "var/homebrew/locks/update").touch()
         self.original = {self.core / "Formula/g/ggml.rb": ggml,
                          self.core / "Formula/l/llama.cpp.rb": llama}
         for path, content in self.original.items():
             path.write_text(content)
         for name in ("ggml", "llama.cpp"):
             (root / "opt" / name).symlink_to(root / "Cellar" / name / ("HEAD-" + sha[:7]))
+            (root / "var/homebrew/linked" / name).symlink_to(root / "Cellar" / name / ("HEAD-" + sha[:7]))
             (root / "opt" / name / "INSTALL_RECEIPT.json").write_text(
                 json.dumps({"source": {"spec": "head", "scm_revision": sha}})
             )
@@ -271,12 +332,14 @@ class Fixture:
         (root / "rust-prefix/bin/rustc").chmod(0o755)
         for path, content in ((self.bin / "brew", brew), (self.bin / "git", git),
                               (self.bin / "nm", "#!/bin/sh\necho ggml_backend_sched_set_copy_callback\n"),
-                              (self.bin / "llama-cli", "#!/bin/sh\necho llama-synthetic\n"),
                               (self.home / ".local/bin/topgrade-rustup-headsync", helper)):
             if content.startswith("#!/usr/bin/python3"):
                 content = content.replace("#!/usr/bin/python3", f"#!{sys.executable}", 1)
             path.write_text(content)
             path.chmod(0o755)
+        (self.bin / "llama-cli").symlink_to(root / "opt/llama.cpp/bin/llama-cli")
+        if ruby := os.environ.get("TOPGRADE_FIXTURE_RUBY"):
+            (self.bin / "ruby").symlink_to(Path(ruby).resolve(strict=True))
         (self.bin / "python3").symlink_to(sys.executable)
         (self.bin / "python3.15").symlink_to(sys.executable)
         self.env = {"PATH": f"{self.bin}:/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(self.home),
@@ -473,7 +536,7 @@ def dirty_tap_preserves_checkout(f, mode, failed_refresh="", self_remote=False):
         if self_remote:
             assert "Preserving example/local: local-only catalog" in result.stdout, result.stdout
 
-    upgrades = [line for line in events if line.startswith("brew upgrade ")]
+    upgrades = [line for line in events if line.startswith("brew upgrade ") and "--dry-run" not in line]
     if not core_refreshed:
         assert not upgrades and not (f.root / "core-catalog-refreshed").exists(), events
         assert not any(line.startswith(f"git -C {tap} fetch ") for line in events), events
@@ -516,7 +579,7 @@ def jpeg_xl_abi_transaction(f, users, fail=False):
     assert transaction.split(" run ", 1)[1].split()[1:] == [target, *users.splitlines()], events
     upgrades = [line for line in events if line.startswith("brew upgrade ")]
     assert all(target not in line for line in upgrades), events
-    bulk = [line for line in upgrades if line.endswith(" z3")]
+    bulk = [line for line in upgrades if line.endswith(" z3") and "--dry-run" not in line]
     if fail:
         assert result.returncode != 0 and "original kegs restored" in result.stdout, result.stdout
         assert not bulk, events
@@ -725,6 +788,72 @@ def outdated_exit_one_nonempty_is_parsed(f):
     assert "--json=v2" in scan, scan
     assert "brew upgrade --formula --fetch-HEAD atuin" in f.events(), f.events()
     f.assert_restored()
+
+
+def remaining_llvm_pin_is_suspended_for_upgrades(f):
+    # A real Homebrew build may reject a pinned LLVM dependency even when the
+    # current stable LLVM keg is installed alongside a HEAD LLVM keg.
+    result = f.run(TEST_OUTDATED="z3", TEST_REQUIRE_UNPIN_FOR_REMAINING="1")
+    assert result.returncode == 0, result.stdout
+    events = f.events()
+    preview = "brew upgrade --dry-run --formula --fetch-HEAD z3"
+    actual = "brew upgrade --formula --fetch-HEAD z3"
+    assert events.index(preview) < events.index(actual), events
+    pin = f.root / "var/homebrew/pinned/llvm"
+    assert pin.is_symlink() and pin.resolve() == (f.root / "opt/llvm").resolve(), events
+    assert not pin.with_name(".llvm.topgrade-headsync-suspended").exists(), events
+    f.assert_restored()
+
+
+def remaining_upgrade_failure_restores_exact_llvm_pin(f):
+    result = f.run(TEST_OUTDATED="z3", TEST_REQUIRE_UNPIN_FOR_REMAINING="1", TEST_FAIL="bulk")
+    assert result.returncode != 0 and "injected upgrade failure" in result.stdout, result.stdout
+    pin = f.root / "var/homebrew/pinned/llvm"
+    assert pin.is_symlink() and pin.resolve() == (f.root / "opt/llvm").resolve(), f.events()
+    assert not pin.with_name(".llvm.topgrade-headsync-suspended").exists(), f.events()
+    f.assert_restored()
+
+
+def remaining_llvm_dependency_plan_fails_closed(f):
+    result = f.run(TEST_OUTDATED="z3", TEST_BULK_PLAN_LLVM="1")
+    assert result.returncode != 0 and "would modify LLVM" in result.stdout, result.stdout
+    events = f.events()
+    assert "brew upgrade --dry-run --formula --fetch-HEAD z3" in events, events
+    assert "brew upgrade --formula --fetch-HEAD z3" not in events, events
+    pin = f.root / "var/homebrew/pinned/llvm"
+    assert pin.is_symlink() and pin.resolve() == (f.root / "opt/llvm").resolve(), events
+    assert not pin.with_name(".llvm.topgrade-headsync-suspended").exists(), events
+    f.assert_restored()
+
+
+def llvm_channels_run_in_order(f):
+    result = f.run(TEST_INSTALLED="llvm\nnyamiiko/tools/llvm-head\nz3",
+                   TEST_OUTDATED="z3", TEST_LLVM_STABLE_UPGRADE="1")
+    assert result.returncode == 0, result.stdout
+    events = f.events()
+    stable = next(i for i, line in enumerate(events) if "automatic llvm_stable " in line)
+    head = next(i for i, line in enumerate(events) if "automatic llvm_head " in line)
+    bulk = events.index("brew upgrade --formula --fetch-HEAD z3")
+    pin = f.root / "var/homebrew/pinned/llvm"
+    assert stable < bulk < head and pin.resolve().name == "23.1.6", events
+    assert not list(f.state.glob("llvm_*-before.json*"))
+    f.assert_restored()
+
+
+def llvm_stable_failure_stops_before_dependants(f):
+    result = f.run(TEST_OUTDATED="z3", TEST_LLVM_STABLE_FAIL="1")
+    assert result.returncode != 0 and "synthetic stable LLVM failure" in result.stdout, result.stdout
+    assert not any(line.startswith("brew upgrade ") for line in f.events())
+    assert (f.root / "var/homebrew/pinned/llvm").resolve().name == "23.1.5"
+
+
+def incomplete_llvm_update_preserves_journal(f):
+    journal = f.state / "llvm_head-before.json"
+    journal.write_text('{"earlier":"transaction"}')
+    result = f.run(TEST_OUTDATED="z3")
+    assert result.returncode != 0 and "LLVM restoration was incomplete" in result.stdout, result.stdout
+    assert not any(line == "brew update" or line.startswith("brew upgrade ") for line in f.events())
+    assert journal.read_text() == '{"earlier":"transaction"}'
 
 
 def successful_bulk_upgrade_leaves_outdated_formula(f):
@@ -1028,6 +1157,12 @@ if native:
         ("pair repair failure recovers before reporting failure", pair_consumer_repair_failure_recovers),
         ("Whisper compatibility overlay is scoped and restored", whisper_compat_overlay_is_restored),
         ("interrupted Whisper overlay is restored before pair kegs", whisper_overlay_recovers_before_pair_kegs),
+        ("remaining LLVM pin is suspended while ordinary formulae upgrade", remaining_llvm_pin_is_suspended_for_upgrades),
+        ("remaining formula failure restores exact stable LLVM pin", remaining_upgrade_failure_restores_exact_llvm_pin),
+        ("remaining formula preflight refuses an unjournaled LLVM upgrade", remaining_llvm_dependency_plan_fails_closed),
+        ("stable LLVM runs before its consumers and preview runs after", llvm_channels_run_in_order),
+        ("stable LLVM failure stops dependency upgrades", llvm_stable_failure_stops_before_dependants),
+        ("an incomplete LLVM update preserves its journal", incomplete_llvm_update_preserves_journal),
         ("bulk upgrade exit 0 with a remaining outdated formula is incomplete", successful_bulk_upgrade_leaves_outdated_formula),
         ("JPEG XL transaction exit 0 with an outdated target is incomplete", successful_jpeg_xl_upgrade_leaves_outdated_formula),
         ("current dirty tap checks the tracker and preserves its local files", lambda f: dirty_tap_preserves_checkout(f, "current")),

@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- *(macos-headsync)* Update official Homebrew LLVM in its installed stable series before dependent formulae, and update the separately installed LLVM preview from upstream main by default.
 - *(vim)* Add opt-in `vim.show_output` for successful Vim/Neovim plugin upgrade output, following upstream [#2415](https://github.com/topgrade-rs/topgrade/pull/2415).
 
 ### Fixed
+- *(cli)* Keep explicit `--only` runs scoped to their selected steps and skip global pre/post hooks.
+- *(macos-headsync)* Adapt llama.cpp UI fetches to the old and current source layouts; transact ggml/llama.cpp provider upgrades, activate exact full-revision kegs, verify executable links, and restore the prior matched pair on failure.
+- *(tourbox)* Verify the installed signed application against the authenticated installer payload, preserve separate release and bundle versions, and avoid reinstalling identical content.
 - *(windows)* Preserve nested Scoop PowerShell failures and verify unresolved packages after updates, respecting held packages and dry runs.
 - *(winget)* Verify remaining candidates separately for each implicit source instead of treating a zero aggregate exit status as complete coverage.
 - *(wsl)* On an HTTP 403/429 rejection, allow the exact Microsoft.WSL stable package from WinGet as a verified fallback; preserve the prerelease channel and unrelated errors.

@@ -37,11 +37,11 @@ GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来�
 
 「更新任务」的审核视图显示每项的命令或运行方式。任务结束后进入「执行记录」，可查看结果和本地输出，也可以独立刷新历史。
 
-在 Apple Silicon 的「更新任务」中，打开「LLVM 手动更新」并一次审核一个渠道。稳定版使用 Homebrew 官方 LLVM 23.1 瓶装，成功回读 LLVM 版本和 Homebrew Rust 后才切换 pin。HEAD 从官方 LLVM main 核对完整提交，构建 `nyamiiko/tools/llvm-head` 并只切换该渠道的 `opt`。审核后的公式、版本或链接发生变化会停止。构建可能耗时数小时，两个入口都保留原 keg；缺少依赖时停止并列出受影响的公式。
+在 Apple Silicon 的「更新任务」中，打开「LLVM 手动更新」并一次审核一个渠道。稳定版使用当前已安装系列的 Homebrew 官方 LLVM 瓶装，成功回读 LLVM 版本和 Homebrew Rust 后才切换 pin。HEAD 从官方 LLVM main 核对完整提交，构建 `nyamiiko/tools/llvm-head` 并只切换该渠道的 `opt`。审核后的公式、版本或链接发生变化会停止。构建可能耗时数小时，两个入口都保留原 keg；缺少依赖时停止并列出受影响的公式。
 
 首次构建 LLVM HEAD 时，Studio 使用私有 Git 缓存。首次下载只获取官方 main 的提交历史和当前提交的文件，完整提交匹配后才写入缓存。后续构建会复用缓存，Homebrew 仍会在安装前核验实际取到的完整提交。
 
-普通 `topgrade -y` 和 Homebrew HEAD-sync 的范围不含这两个手动入口。LLVM 更新中断时，可从对应 Studio 运行目录的 `llvm-before.json` 核对原 `opt` 和 pin。确认本机状态后，再按下方的中断流程恢复维护。
+普通 `topgrade -y` 会在 Homebrew HEAD-sync 内默认更新两个 LLVM 渠道。刷新目录后先核验并升级 Homebrew 的 `llvm`，确认 Homebrew Rust 仍能运行后才推进 pin，然后升级其他配方。最后检查已安装的 `nyamiiko/tools/llvm-head`，按 LLVM 官方 main 的完整提交构建到独立 keg。新 ABI 系列需要单独核验。自动更新中断后，HEAD-sync 会保留 `brew-headsync` 状态目录中的 `llvm_stable-before.json` 或 `llvm_head-before.json`，并提示检查原 `opt` 和 pin。GUI 单渠道更新仍可使用其运行目录中的 `llvm-before.json`。
 
 检查后，「当前更新引擎」显示实际运行版本、组件树短标识及 profile 清单版本和摘要。展开来源可查看二进制路径、Studio 构建提交、完整组件树和两份 SHA-256。组件树区分同一个 Topgrade 版本下的不同源码，二进制摘要进一步区分产物。执行记录保留当时的引擎身份及可用回退候选。旧记录保留已写入的组件树，缺失字段保持未知。
 
@@ -55,7 +55,7 @@ Studio 使用绝对路径启动独立的 Topgrade。审核绑定二进制、受�
 | Homebrew 链接审计、CLI 版本报告 | Rust 审计与版本探测 | 可审核执行 |
 | GitHub CLI 扩展、TLDR | Topgrade 自身步骤 | 可审核执行 |
 | gcloud、MAS、Xcode Beta 选择 | Rust 保留重试、核验或回退边界 | 终端入口 |
-| Homebrew HEAD-sync | Rust 保留兼容事务日志、固定 LLVM、成对完整 SHA 校验和恢复 | 终端入口 |
+| Homebrew HEAD-sync | Rust 保留双渠道 LLVM 更新、成对完整 SHA 校验和事务恢复 | 终端入口 |
 | SQLite CLI、Python 3.15 SQLite | Rust 共享源码版本与更新锁，保留事务和运行时验证 | 终端入口 |
 | Gradle Nightly | Rust 核对下载和安全解包，验证运行时后切换启动器 | 终端入口 |
 | Krita Next、BetterDisplay、TourBox Beta、Xcode Beta 安装 | Rust 核对来源、包身份和安装回读，保留备份或厂商安装机制 | 终端入口 |
