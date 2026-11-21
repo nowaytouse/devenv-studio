@@ -249,12 +249,13 @@ with (root/"events").open("a") as f: f.write("git " + " ".join(args) + "\n")
 if len(args)>=3 and args[0] == "-C" and pathlib.Path(args[1]).name == "tap" and os.environ.get("TEST_REAL_TAP") == "1":
  os.execv("/usr/bin/git", ["/usr/bin/git", *args])
 if len(args)>=4 and args[0] == "-C" and args[2] == "status":
+ if "--porcelain=v2" in args: print("# branch.ab +0 -0")
  if pathlib.Path(args[1]).resolve() == (root/"tap").resolve():
   state = os.environ.get("TEST_TAP_STATUS", "clean")
   if "brew update" in (root/"events").read_text().splitlines():
    state = os.environ.get("TEST_TAP_AFTER", state)
   if state == "dirty": print(" M Formula/example.rb")
-  if state == "unmerged": print("UU Formula/example.rb")
+  if state == "unmerged": print("u UU Formula/example.rb" if "--porcelain=v2" in args else "UU Formula/example.rb")
   sys.exit(0)
  state=os.environ.get("TEST_GIT_STATUS", "clean")
  if state == "fail": print("simulated git error",file=sys.stderr); sys.exit(41)
@@ -493,6 +494,9 @@ def dirty_tap_preserves_checkout(f, mode, failed_refresh="", self_remote=False):
         (upstream / ignored).write_text("tracked upstream\n")
         run_git(upstream, "add", "-f", "--", ignored)
         run_git(upstream, "commit", "-m", "track ignored file")
+    if mode == "ahead":
+        run_git(tap, "add", "--", staged, unstaged, untracked)
+        run_git(tap, "commit", "-m", "locally maintained tap")
     if mode == "diverged":
         (tap / "fork.rb").write_text("fork-only committed file\n")
         run_git(tap, "add", "--", "fork.rb")
@@ -1253,6 +1257,7 @@ if native:
         ("staged path overlap leaves local edits and tracking separate", lambda f: dirty_tap_preserves_checkout(f, "overlap", self_remote=True)),
         ("diverged dirty tap is deferred without creating a merge", lambda f: dirty_tap_preserves_checkout(f, "diverged", self_remote=True)),
         ("ignored file is protected when upstream starts tracking it", lambda f: dirty_tap_preserves_checkout(f, "ignored-overlap", self_remote=True)),
+        ("clean tap with local commits uses guarded refresh", lambda f: dirty_tap_preserves_checkout(f, "ahead", self_remote=True)),
         ("core catalog fetch failure prevents formula upgrades", lambda f: dirty_tap_preserves_checkout(f, "current", "fetch-core")),
         ("clean tap merge failure still upgrades from the refreshed core catalog", lambda f: dirty_tap_preserves_checkout(f, "current", "merge-clean-tap")),
         ("existing tap conflict stops before either mutation", lambda f: tap_conflict_stops_before_pair(f, False)),

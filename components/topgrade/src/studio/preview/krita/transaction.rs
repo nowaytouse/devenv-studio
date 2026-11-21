@@ -2,9 +2,12 @@ use color_eyre::eyre::{Context, ContextCompat, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
     ffi::CString,
-    fs::{self, File},
+    fs::{self, File, OpenOptions, Permissions},
     io::{Read, Seek, Write},
-    os::unix::ffi::OsStrExt,
+    os::unix::{
+        ffi::OsStrExt,
+        fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+    },
     path::{Path, PathBuf},
 };
 
@@ -96,6 +99,33 @@ fn sync_app_dirs(app: &Path, staged: &Path) -> Result<()> {
     Ok(())
 }
 
+fn secure_recovery_stage(root: &Path) -> Result<()> {
+    let dir = OpenOptions::new()
+        .read(true)
+        .custom_flags(nix::libc::O_DIRECTORY | nix::libc::O_NOFOLLOW)
+        .open(root)?;
+    let metadata = dir.metadata()?;
+    ensure!(
+        metadata.uid() == nix::unistd::getuid().as_raw()
+            && metadata.mode() & 0o022 == 0
+            && root.canonicalize()? == root,
+        "Unsafe Krita recovery stage: {}",
+        root.display()
+    );
+    // Older transactions used the temporary directory builder's non-private default.
+    if metadata.mode() & 0o077 != 0 {
+        dir.set_permissions(Permissions::from_mode(0o700))?;
+        dir.sync_all()?;
+    }
+    let current = fs::symlink_metadata(root)?;
+    ensure!(
+        current.dev() == metadata.dev() && current.ino() == metadata.ino() && current.mode() & 0o077 == 0,
+        "Krita recovery stage changed: {}",
+        root.display()
+    );
+    Ok(())
+}
+
 pub(super) fn recover(app: &Path, state: &Path, journal_path: &Path) -> Result<()> {
     let Some(bytes) = read_private(journal_path, 64 * 1024)? else {
         return Ok(());
@@ -111,8 +141,7 @@ pub(super) fn recover(app: &Path, state: &Path, journal_path: &Path) -> Result<(
             && journal.staged.file_name().is_some_and(|name| name == "Krita.app"),
         "Unsafe Krita stage in recovery journal"
     );
-    super::super::super::check_dir(root, true)?;
-    ensure!(root.canonicalize()? == root, "Unsafe Krita stage directory");
+    secure_recovery_stage(root)?;
     let before_state = read_private(state, super::MAX_STATE)?.context("Krita recovery receipt is missing")?;
     let current = fingerprint(app)?;
     let staged = fingerprint(&journal.staged)?;
@@ -135,6 +164,28 @@ pub(super) fn recover(app: &Path, state: &Path, journal_path: &Path) -> Result<(
     );
     fs::remove_file(journal_path).wrap_err("Retire Krita recovery journal")?;
     File::open(journal_path.parent().context("Missing Krita journal directory")?)?.sync_all()?;
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn legacy_user_owned_stage_becomes_private_without_following_links() -> Result<()> {
+    let scratch = tempfile::tempdir()?;
+    let stage = scratch.path().canonicalize()?.join(".krita.preview-legacy");
+    fs::create_dir(&stage)?;
+    fs::set_permissions(&stage, Permissions::from_mode(0o755))?;
+    let payload = stage.join("Krita.app");
+    fs::create_dir(&payload)?;
+    secure_recovery_stage(&stage)?;
+    assert_eq!(fs::metadata(&stage)?.mode() & 0o777, 0o700);
+    assert!(payload.is_dir());
+
+    let alias = stage.with_file_name(".krita.preview-alias");
+    std::os::unix::fs::symlink(&stage, &alias)?;
+    assert!(secure_recovery_stage(&alias).is_err());
+    fs::set_permissions(&stage, Permissions::from_mode(0o775))?;
+    assert!(secure_recovery_stage(&stage).is_err());
+    assert_eq!(fs::metadata(&stage)?.mode() & 0o777, 0o775);
     Ok(())
 }
 

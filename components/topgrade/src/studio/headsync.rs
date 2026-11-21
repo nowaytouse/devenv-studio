@@ -81,7 +81,7 @@ struct CatalogRefresh {
 struct TapCheckout {
     name: String,
     path: PathBuf,
-    dirty: bool,
+    needs_guarded_refresh: bool,
 }
 
 impl Headsync {
@@ -404,7 +404,7 @@ impl Headsync {
             deferred: Vec::new(),
             errors: Vec::new(),
         };
-        if taps.iter().all(|tap| !tap.dirty) {
+        if taps.iter().all(|tap| !tap.needs_guarded_refresh) {
             println!("\n== Homebrew update ==");
             status(&mut self.brew(&["update"]))?;
             self.core_clean(core, "after Homebrew update")?;
@@ -412,7 +412,7 @@ impl Headsync {
             return Ok(refresh);
         }
 
-        // A regular brew update may reset and stash the index of every tap.
+        // Homebrew may stash worktree changes or rebase local tap commits.
         println!("\n== Refresh Homebrew catalogs (Git fast-forward only) ==");
         ensure!(
             self.refresh_checkout("homebrew/core", core, false)?,
@@ -589,19 +589,21 @@ impl Headsync {
                 continue;
             }
             let path = command_path(self.brew(&["--repo", &tap]))?;
-            let changes = self
-                .worktree_changes(&path)
-                .wrap_err_with(|| format!("Cannot inspect Homebrew tap {tap}"))?;
+            let mut command = self.git(
+                &path,
+                &["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
+            );
+            command.env("GIT_OPTIONAL_LOCKS", "0");
+            let status = command_text(command).wrap_err_with(|| format!("Cannot inspect Homebrew tap {tap}"))?;
             ensure!(
-                !changes
-                    .lines()
-                    .any(|line| matches!(line.get(..2), Some("DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU"))),
+                !status.lines().any(|line| line.starts_with("u ")),
                 "Homebrew tap {tap} has unresolved Git conflicts. Resolve them before HEAD-sync"
             );
             taps.push(TapCheckout {
                 name: tap,
                 path,
-                dirty: !changes.is_empty(),
+                needs_guarded_refresh: status.lines().any(|line| !line.starts_with("# "))
+                    || !status.lines().any(|line| line.starts_with("# branch.ab +0 ")),
             });
         }
         Ok(taps)

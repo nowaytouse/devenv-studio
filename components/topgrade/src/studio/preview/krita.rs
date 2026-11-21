@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
     fs::{self, File, OpenOptions},
-    os::unix::fs::{MetadataExt, OpenOptionsExt},
+    os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -399,6 +399,7 @@ fn publish(activation: Activation<'_>, release: &Release, image: &Path) -> Resul
     let applications = app.parent().context("Krita has no application parent")?;
     let staging = tempfile::Builder::new()
         .prefix(".krita.preview-")
+        .permissions(fs::Permissions::from_mode(0o700))
         .tempdir_in(applications)?;
     let staged = staging.path().join("Krita.app");
     let (candidate, trust_mode, candidate_qt) = with_mounted(image, |mount| {
