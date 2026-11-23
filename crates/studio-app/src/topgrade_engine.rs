@@ -388,13 +388,7 @@ mod mac {
         })
     }
 
-    fn prepare(
-        checkout: &Path,
-        revision: &str,
-        tree: &str,
-        stage: &Path,
-        home: &Path,
-    ) -> Result<Prepared> {
+    fn export_tracked_source(checkout: &Path, revision: &str, stage: &Path) -> Result<PathBuf> {
         let source = stage.join("source");
         fs::create_dir(&source)?;
         let archive = stage.join("source.tar");
@@ -402,14 +396,7 @@ mod mac {
             git_command(checkout)
                 .args(["archive", "--format=tar", "--output"])
                 .arg(&archive)
-                .args([
-                    revision,
-                    "Cargo.toml",
-                    "Cargo.lock",
-                    "crates",
-                    "components/topgrade",
-                    "scripts/test_jpeg_xl_transaction.rb",
-                ]),
+                .arg(revision),
             "Export tested objects from the exact Studio commit",
         )?;
         status(
@@ -420,6 +407,17 @@ mod mac {
                 .arg(&source),
             "Extract the tracked Studio source",
         )?;
+        Ok(source)
+    }
+
+    fn prepare(
+        checkout: &Path,
+        revision: &str,
+        tree: &str,
+        stage: &Path,
+        home: &Path,
+    ) -> Result<Prepared> {
+        let source = export_tracked_source(checkout, revision, stage)?;
         status(
             Command::new("/opt/homebrew/bin/brew")
                 .current_dir(&source)

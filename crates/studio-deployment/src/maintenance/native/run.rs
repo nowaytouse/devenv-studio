@@ -25,7 +25,7 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use studio_core::maintenance::{REQUEST_SCHEMA, Step as EngineStep, valid_hex, valid_run_id};
+use studio_maintenance_protocol::{REQUEST_SCHEMA, Step as EngineStep, valid_hex, valid_run_id};
 
 const RECORD_LIMIT: u64 = 16 * 1024;
 const LOG_LIMIT: usize = 8 * 1024 * 1024;

@@ -16,7 +16,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
-use studio_core::maintenance::{Step as EngineStep, valid_hex};
+use studio_maintenance_protocol::{Step as EngineStep, valid_hex};
 
 mod run;
 pub(super) use run::{history, output_excerpt, run};

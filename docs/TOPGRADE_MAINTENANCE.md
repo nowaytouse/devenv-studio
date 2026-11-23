@@ -97,7 +97,7 @@ Studio 桌面端与 Topgrade 引擎共用一个 Cargo 工作区、锁文件和 C
 
 从旧结构首次升级时，先在本仓库构建新版 `devenv-studio`，再使用该版本运行 `topgrade-engine update`。旧版安装器只会导出旧的独立引擎目录，无法读取共用锁文件。
 
-更新器读取 Studio checkout 已配置的跟踪分支。工作区干净且能快进时，使用 Rust nightly 校验并构建实际跟踪的 HEAD。通过验证的候选文件与默认入口位于同一文件系统，最后一次重命名会将候选启用为 `~/.local/bin/topgrade` 普通文件。构建产物和验证目录只用于本次更新，引擎身份和摘要保存在当前文件的扩展属性中。
+更新器读取 Studio checkout 已配置的跟踪分支。工作区干净且能快进时，更新器从跟踪的提交导出完整源码，在临时目录使用 Rust nightly 校验和构建。新增工作区模块和编译所需的数据文件会随提交一起导出。通过验证的候选文件与默认入口位于同一文件系统，最后一次重命名会将候选启用为 `~/.local/bin/topgrade` 普通文件。构建产物和验证目录只用于本次更新，引擎身份和摘要保存在当前文件的扩展属性中。
 
 ```sh
 devenv-studio topgrade-engine plan /absolute/studio-checkout
@@ -105,7 +105,7 @@ devenv-studio topgrade-engine update /absolute/studio-checkout
 devenv-studio topgrade-engine verify-current /absolute/studio-checkout
 ```
 
-Studio 更新中心和 Topgrade 引擎共同使用 `studio-core::maintenance` 定义的维护请求、步骤标识和工具清单。引擎会核对请求中的运行编号与实际证据目录名称；平台适配器继续负责授权和执行。
+Studio 更新中心和 Topgrade 引擎共同使用 `studio-maintenance-protocol` 定义的维护请求、步骤标识和工具清单。引擎会核对请求中的运行编号与实际证据目录名称；平台适配器继续负责授权和执行。
 
 已部署的 `~/.local/bin/topgrade-rustup-headsync update /absolute/studio-checkout` 调用同一个更新入口。它需要 `~/.local/bin/devenv-studio` 可执行。profile 仍按已记录的前镜像和原子文件替换流程部署。更新器识别现有的默认符号链接和普通文件，保留配置与现有事务记录。
 

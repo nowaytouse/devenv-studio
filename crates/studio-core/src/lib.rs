@@ -9,8 +9,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-pub mod maintenance;
-
 pub const SCHEMA_VERSION: u32 = 1;
 pub const MAX_INPUT_BYTES: u64 = 1_048_576;
 

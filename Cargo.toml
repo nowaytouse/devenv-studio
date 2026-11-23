@@ -2,6 +2,7 @@
 members = [
     "components/topgrade",
     "crates/studio-core",
+    "crates/studio-maintenance-protocol",
     "crates/studio-platform",
     "crates/studio-deployment",
     "crates/studio-legacy",
@@ -22,6 +23,7 @@ anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 studio-core = { path = "crates/studio-core" }
+studio-maintenance-protocol = { path = "crates/studio-maintenance-protocol" }
 studio-platform = { path = "crates/studio-platform" }
 studio-deployment = { path = "crates/studio-deployment" }
 studio-legacy = { path = "crates/studio-legacy" }

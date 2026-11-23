@@ -196,6 +196,25 @@ fn commit_fixture(checkout: &Path, contents: &str) -> Result<String> {
 }
 
 #[test]
+fn source_export_includes_workspace_inputs_at_the_reviewed_revision() -> Result<()> {
+    let checkout = tempfile::tempdir()?;
+    let stage = tempfile::tempdir()?;
+    let root = checkout.path();
+    git(root, &["init", "-b", "main"])?;
+    fs::create_dir(root.join("data"))?;
+    let catalog = root.join("data/catalog.json");
+    fs::write(&catalog, b"reviewed")?;
+    git(root, &["add", "data/catalog.json"])?;
+    let revision = commit_fixture(root, "initial")?;
+    fs::write(&catalog, b"local draft")?;
+    fs::write(root.join("local-only"), b"private")?;
+    let source = export_tracked_source(root, &revision, stage.path())?;
+    assert_eq!(fs::read(source.join("data/catalog.json"))?, b"reviewed");
+    assert!(!source.join("local-only").exists());
+    Ok(())
+}
+
+#[test]
 fn fetch_and_fast_forward_preserve_dirty_or_diverged_checkouts() -> Result<()> {
     let fixture = tempfile::tempdir()?;
     let root = fixture.path().canonicalize()?;

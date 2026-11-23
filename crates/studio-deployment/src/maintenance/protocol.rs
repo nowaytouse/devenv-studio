@@ -2,7 +2,7 @@ use super::{RunStatus, StepReport, StepStatus};
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 
-pub(super) use studio_core::maintenance::Request;
+pub(super) use studio_maintenance_protocol::Request;
 
 pub(super) const EVENT_LIMIT: u64 = 16 * 1024;
 
@@ -120,7 +120,7 @@ pub(super) fn parse_events(bytes: &[u8], request: &Request, complete: bool) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use studio_core::maintenance::Step;
+    use studio_maintenance_protocol::Step;
     const IDS: [&str; 2] = ["brew_linkage_audit", "cli_versions"];
 
     fn request() -> Request {
