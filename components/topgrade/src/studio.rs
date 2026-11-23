@@ -12,7 +12,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use color_eyre::eyre::{Context, Result, bail, ensure};
+use color_eyre::eyre::{Context, ContextCompat, Result, bail, ensure};
 use nix::errno::Errno;
 use nix::libc::{self, F_GETFD, F_SETFD, FD_CLOEXEC, O_NOFOLLOW, O_NONBLOCK};
 use nix::sys::signal::{Signal, killpg};

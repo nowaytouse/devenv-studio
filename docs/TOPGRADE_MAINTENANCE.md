@@ -25,7 +25,7 @@ GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来�
 
 ## macOS Topgrade
 
-当前组件已同步上游 [v17.16.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) 与随后官方 main 提交 [`b7ae844e64fb3bd32cd06c00859884f8b916635d`](https://github.com/topgrade-rs/topgrade/commit/b7ae844e64fb3bd32cd06c00859884f8b916635d)。在原同步点 `77eef190429850607c41cedfec904f43d66c8394` 之后，继续纳入 Vim／Neovim 的可选 `vim.show_output` 配置与官方发布证明工作流更新；程序版本仍为 17.16.0，官方发布跟踪文件继续记录已审核的稳定版本标签。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。滚动依赖维护会跳过有未提交改动的工作区。
+当前组件已同步上游 [v17.17.0](https://github.com/topgrade-rs/topgrade/releases/tag/v17.17.0)，提交 `e8fbc3b95dbf58ef62788503f265b600ac84522c`。新增 Lerd、CrowdSec Hub 和 Linux DMS 插件更新，并跳过已删除项目的 Claude Code 插件。Studio 的 macOS 受管步骤和本机 profile 随组件继续维护。滚动依赖维护会跳过有未提交改动的工作区。
 
 `Project Source Indexes` 使用 Repomix 和 LeanCTX 为 `~/Downloads/GitHub` 下的 Git 项目更新私有索引。直接运行 `~/.local/bin/topgrade-project-indexes.py /path/to/checkout` 可单独刷新项目。索引只读取已提交的普通源码文件，先排除私有目录、再执行秘密扫描，最终仅保存相对路径和 token 计数。`${XDG_STATE_HOME:-$HOME/.local/state}/project-indexes/<checkout-name>/latest.json` 记录完整提交、工具版本、UTC 生成时间及检出目录的摘要。刷新时会将过时的已知索引移入 `history/`，将格式、路径或内容边界校验失败的普通私有索引移入 `quarantine/`。原文件保留以备核对。生成失败会报告错误，此时没有已核验的新索引，历史文件仍可查阅。
 
