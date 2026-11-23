@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS 技能更新核对 LeanCTX 的 Git 目录哈希，已验证的宿主副本共用一份安装。相同的 NPX 锁文件只备份一次。
+
 - Studio 桌面端和 Topgrade 引擎共用 Cargo 工作区、锁文件和 CI。滚动安装器按同一提交构建引擎。
 - macOS 技能更新核对私有审核副本，并从可信 Cursor 原生目录恢复缺失的共享镜像。
 - LLVM 维护以官方 main 的滚动版为编译器。Homebrew 兼容依赖只在已安装且仍受其依赖约束时参与原有验证。

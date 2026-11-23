@@ -1,6 +1,7 @@
 //! Managed global skill maintenance and coverage.
 pub(super) mod cursor;
 mod design;
+mod lean_ctx;
 mod npx;
 
 use color_eyre::eyre::{Context, ContextCompat, Result, ensure};

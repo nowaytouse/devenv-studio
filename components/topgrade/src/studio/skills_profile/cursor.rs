@@ -1,10 +1,7 @@
 use super::*;
-use crate::studio::{
-    github_skills::ownership::{
-        CURSOR_NAMES, REVIEWED_REX_SHA, USER_CONFIG, lean_ctx_mirror, lean_ctx_mirror_path, name_matches, repository,
-        reviewed_local, reviewed_local_rex,
-    },
-    is_hex,
+use crate::studio::github_skills::ownership::{
+    CURSOR_NAMES, REVIEWED_REX_SHA, USER_CONFIG, lean_ctx_mirror, lean_ctx_mirror_path, name_matches, repository,
+    reviewed_local, reviewed_local_rex,
 };
 use chrono::Utc;
 use regex::Regex;
@@ -246,13 +243,7 @@ fn npx_owned(home: &Path, row: &Row, entry: &Value) -> bool {
 fn npx_lean_ctx_mirror(home: &Path, row: &Row, entry: &Value) -> Result<bool> {
     if row.skill_name != "lean-ctx"
         || !lean_ctx_mirror_path(home, &row.path)
-        || entry["sourceType"] != "github"
-        || entry["source"] != "yvgude/lean-ctx"
-        || entry["skillPath"] != "skills/lean-ctx/SKILL.md"
-        || !entry["sourceUrl"]
-            .as_str()
-            .is_some_and(|url| repository(url).is_ok_and(|repo| repo == "yvgude/lean-ctx"))
-        || !entry["skillFolderHash"].as_str().is_some_and(|hash| is_hex(hash, 40))
+        || super::lean_ctx::locked_hash(entry).is_none()
     {
         return Ok(false);
     }
@@ -285,6 +276,8 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
     let lock = bytes(&lock_path, DATA_LIMIT)?;
     let data = super::json(&lock)?;
     let entries = lock_entries(&data)?;
+    // Native discovery can collapse several host links into their shared target.
+    let lean_hosts = super::lean_ctx::audit(home, &data["skills"]["lean-ctx"])?;
     let dry = capture(
         command(home, "gh", None)?.args(["skill", "update", "--all", "--dry-run"]),
         Duration::from_secs(600),
@@ -411,6 +404,7 @@ fn audit(home: &Path, native: &Path, shared: &Path) -> Result<()> {
         &serde_json::to_vec_pretty(&json!({
             "checked_at": Utc::now().to_rfc3339(),
             "installed_entries": rows.len(),
+            "verified_lean_ctx_hosts": lean_hosts,
             "gh_missing_source_warnings": missing.len(),
             "gh_skipped_source_warnings": SKIPPED.captures_iter(&plain).count(),
             "gh_exit_code": dry.status.code(),

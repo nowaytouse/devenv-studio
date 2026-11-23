@@ -231,17 +231,42 @@ fn cursor_equivalent(native: &Path, shared: &Path, name: &str) -> Result<bool> {
         && name_matches(native, name)?)
 }
 
+pub(in crate::studio) const LEAN_CTX_HOSTS: &[&str] = &[
+    ".cursor/skills/lean-ctx",
+    ".copilot/skills/lean-ctx",
+    ".config/opencode/skills/lean-ctx",
+];
+
 pub(in crate::studio) fn lean_ctx_mirror_path(home: &Path, path: &Path) -> bool {
-    [
-        ".cursor/skills/lean-ctx",
-        ".copilot/skills/lean-ctx",
-        ".config/opencode/skills/lean-ctx",
-    ]
-    .iter()
-    .any(|relative| path == home.join(relative))
+    LEAN_CTX_HOSTS.iter().any(|relative| path == home.join(relative))
+}
+
+pub(in crate::studio) fn lean_ctx_owner(kind: &str, source: &str, url: &str, path: Option<&str>, hash: &str) -> bool {
+    kind == "github"
+        && source == "yvgude/lean-ctx"
+        && repository(url).is_ok_and(|repo| repo == source)
+        && path == Some("skills/lean-ctx/SKILL.md")
+        && hex(hash, 40)
+}
+
+pub(in crate::studio) fn lean_ctx_link(canonical: &Path, mirror: &Path) -> Result<bool> {
+    regular_directory(mirror.parent().context("Missing LeanCTX host directory")?)?;
+    regular_directory(canonical)?;
+    // Only the leaf may be a link. Reject a redirected parent or another intermediate link.
+    let destination = fs::read_link(mirror)?;
+    let mut base = mirror.parent().context("Missing LeanCTX host directory")?;
+    let mut tail = destination.as_path();
+    while let Ok(rest) = tail.strip_prefix("..") {
+        base = base.parent().context("Invalid LeanCTX host link")?;
+        tail = rest;
+    }
+    Ok(base.join(tail) == canonical)
 }
 
 pub(in crate::studio) fn lean_ctx_mirror(canonical: &Path, mirror: &Path) -> Result<bool> {
+    if fs::symlink_metadata(mirror)?.is_symlink() {
+        return Ok(lean_ctx_link(canonical, mirror)? && name_matches(canonical, "lean-ctx")?);
+    }
     let reviewed = |path: &Path| -> Result<_> {
         let mut files = tree(path)?;
         files.remove(Path::new("SKILL.md.bak"));
@@ -330,6 +355,16 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
             "Ambiguous, pinned or unsupported skill entry: {}",
             row.path.display()
         );
+        let canonical = home.join(".agents/skills").join(name);
+        if row.source_url.is_empty() && lean_ctx_mirror_path(home, &row.path) {
+            ensure!(
+                lock.lean_ctx_registered() && lean_ctx_mirror(&canonical, &row.path)?,
+                "Registered LeanCTX copy differs from its canonical owner: {}",
+                row.path.display()
+            );
+            delegated.npx += 1;
+            continue;
+        }
         regular_directory(&row.path)?;
         super::super::open_file(&row.path.join("SKILL.md"), false, SKILL_LIMIT)?;
         if !row.source_url.is_empty() {
@@ -350,16 +385,8 @@ pub(super) fn preflight(rows: Vec<Row>, home: &Path, lock: &Lock) -> Result<(Vec
             });
             continue;
         }
-        let canonical = home.join(".agents/skills").join(name);
         let registered = lock.npx_registered(name);
         if row.path == canonical && registered && name_matches(&row.path, name)? {
-            delegated.npx += 1;
-        } else if name == "lean-ctx" && registered && lean_ctx_mirror_path(home, &row.path) {
-            ensure!(
-                lean_ctx_mirror(&canonical, &row.path)?,
-                "Registered LeanCTX copy differs from its canonical owner: {}",
-                row.path.display()
-            );
             delegated.npx += 1;
         } else if row.path == canonical && CURSOR_NAMES.contains(&name) {
             ensure!(

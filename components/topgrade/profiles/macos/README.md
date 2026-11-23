@@ -60,7 +60,9 @@ The shared lock can also contain NPX's `lastSelectedAgents` and `pluginName` fie
 
 An exact previously installed Gemini copy of Google's retired `discovering-gcp-data-assets` can migrate to the official `discover-assets`. The replacement is staged and verified before publication. The old copy moves to a private recovery directory, and the shared NPX lock is left intact. Changed copies and ambiguous owners require review.
 
-The LeanCTX host and canonical trees may each have a local `SKILL.md.bak` and an empty migration lock. The installer and all other skill file contents must still match.
+The unattended NPX step checks the installed LeanCTX directory against the Git tree ID in the global lock, including executable bits. Existing Cursor, Copilot and OpenCode copies that match the same tree are atomically linked to the canonical NPX directory before updating. The original host directories, including any local `SKILL.md.bak` and empty migration lock, are retained once in the private skill-lock state directory. A local edit, foreign source, pin or redirected link stops adoption. The updater verifies the links and the new locked tree after NPX finishes. Coverage independently checks the host paths even when GitHub CLI reports only the canonical directory.
+
+NPX retains one private backup per distinct pre-update lock. Repeated runs reuse the verified bytes. Earlier recovery directories remain available.
 
 ## Per-repository dependency compatibility
 

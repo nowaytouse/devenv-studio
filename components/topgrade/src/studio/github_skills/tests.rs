@@ -187,7 +187,10 @@ fn verifies_native_change_and_delegates_known_owners() {
         row(&lean_copy, "lean-ctx", ""),
         row(&shared, "automate", ""),
     ]);
-    let baseline = json!({"version":3,"skills":{"lean-ctx":entry(OLD,"SKILL.md")},"dismissed":{"old":true}});
+    let mut owner = entry(OLD, "skills/lean-ctx/SKILL.md");
+    owner["source"] = "yvgude/lean-ctx".into();
+    owner["sourceUrl"] = "https://github.com/yvgude/lean-ctx.git".into();
+    let baseline = json!({"version":3,"skills":{"lean-ctx":owner},"dismissed":{"old":true}});
     fixture.lock(&baseline);
     let mut mutations = 0;
     let result = update(&fixture.home, &mut |args| {

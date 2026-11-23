@@ -144,6 +144,18 @@ impl Lock {
         })
     }
 
+    pub(super) fn lean_ctx_registered(&self) -> bool {
+        self.skills.get("lean-ctx").is_some_and(|entry| {
+            super::ownership::lean_ctx_owner(
+                &entry.source_type,
+                &entry.source,
+                &entry.source_url,
+                entry.skill_path.as_deref(),
+                &entry.skill_folder_hash,
+            ) && entry.pinned_ref.is_none()
+        })
+    }
+
     pub(super) fn protected(&self) -> bool {
         self.last_selected_agents.is_some() || self.skills.values().any(|entry| entry.plugin_name.is_some())
     }

@@ -373,12 +373,35 @@ fn verify_lock(before: &Value, after: &Value) -> Result<()> {
     Ok(())
 }
 
+// A byte-identical preimage is sufficient for every run that starts from the same lock.
+fn archive_lock(root: &Path, original: &[u8]) -> Result<PathBuf> {
+    let path = root.join(format!("npx-{}.json", digest(original)));
+    if !exists(&path)? {
+        let mut temp = tempfile::NamedTempFile::new_in(root)?;
+        temp.write_all(original)?;
+        temp.as_file().sync_all()?;
+        if let Err(error) = temp.persist_noclobber(&path)
+            && error.error.kind() != io::ErrorKind::AlreadyExists
+        {
+            return Err(error.into());
+        }
+        sync_directory(root)?;
+    }
+    ensure!(
+        bounded(open_file(&path, true, DATA_LIMIT)?, DATA_LIMIT)? == original,
+        "NPX lock backup differs from its content address: {}",
+        path.display()
+    );
+    Ok(path)
+}
+
 pub(super) fn run(home: &Path) -> Result<()> {
     let route = Route::detect();
     normalize(home, &route)?;
     let lock_path = lock_path(home)?;
     let original = bytes(&lock_path, DATA_LIMIT)?;
     let before = super::json(&original)?;
+    let lean_hosts = super::lean_ctx::prepare(home, &before["skills"]["lean-ctx"])?;
     let old = lock_entries(&before)?.get(RETIRED_DISCOVERY).unwrap_or(&Value::Null);
     let retired_paths = discovery_paths(home, old, DISCOVERY_SHA256)?;
     let mut command = command(home, "npx", Some(&route))?;
@@ -418,12 +441,7 @@ pub(super) fn run(home: &Path) -> Result<()> {
     fs::write(&launcher, include_str!("skills-1.7.6.mjs"))?;
     let node = resolve_tool("node")?;
     let archive_root = directory(home, Path::new(".local/state/topgrade-skill-lock"), true)?;
-    let archive = tempfile::Builder::new()
-        .prefix("npx-")
-        .tempdir_in(&archive_root)?
-        .keep();
-    atomic_write(&archive.join("original.skill-lock.json"), &original, 0o600)?;
-    sync_directory(&archive_root)?;
+    let archive = archive_lock(&archive_root, &original)?;
     ensure!(
         bytes(&lock_path, DATA_LIMIT)? == original,
         "Shared skill lock changed before NPX execution"
@@ -471,6 +489,7 @@ pub(super) fn run(home: &Path) -> Result<()> {
             archive.display()
         )
     })?;
+    super::lean_ctx::verify(home, &after["skills"]["lean-ctx"], &lean_hosts)?;
     if output.lines().any(|line| line == DISCOVERY_MARKER) {
         let paths = retired_paths.context("Unexpected proof for an unverified retired skill")?;
         let record = &after["skills"][RETIRED_DISCOVERY];
@@ -492,6 +511,26 @@ pub(super) fn run(home: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lock_backups_are_idempotent_and_refuse_replaced_evidence() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let old = archive_lock(&root, b"old")?;
+        let ino = fs::metadata(&old)?.ino();
+        assert_eq!(archive_lock(&root, b"old")?, old);
+        assert_eq!(fs::metadata(&old)?.ino(), ino);
+        let new = archive_lock(&root, b"new")?;
+        assert_ne!(old, new);
+        assert_eq!(fs::read_dir(&root)?.count(), 2);
+        fs::write(&old, b"local edit")?;
+        assert!(archive_lock(&root, b"old").is_err());
+        assert_eq!(fs::read(&old)?, b"local edit");
+        fs::remove_file(&old)?;
+        std::os::unix::fs::symlink(&new, &old)?;
+        assert!(archive_lock(&root, b"old").is_err());
+        Ok(())
+    }
 
     #[test]
     fn live_output_arrives_before_exit_and_hidden_failure_still_fails() -> Result<()> {
