@@ -3101,18 +3101,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.31.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bc81ce8148d3b4f3274da811f11cdd824ae661ee4ef732cdb229825cf5be7f7"
-dependencies = [
- "bitflags 2.13.2",
- "cfg-if",
- "cfg_aliases",
- "libc",
-]
-
-[[package]]
-name = "nix"
 version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77730ed34f01f4990cb2ea67fec715ecebc6fab9a6396cf83c5529b13f581bdc"
@@ -5414,7 +5402,7 @@ checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "topgrade"
-version = "17.16.0"
+version = "17.17.0"
 dependencies = [
  "chrono",
  "clap",
@@ -5433,7 +5421,7 @@ dependencies = [
  "itertools 0.15.0",
  "jetbrains-toolbox-updater",
  "merge2",
- "nix 0.31.4",
+ "nix",
  "nodejs-semver",
  "notify-rust",
  "parse-changelog",
@@ -7107,7 +7095,7 @@ dependencies = [
  "indexmap",
  "libc",
  "memchr",
- "nix 0.32.0",
+ "nix",
  "time",
  "typed-path",
  "windows-sys 0.61.2",
