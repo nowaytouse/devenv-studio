@@ -1,4 +1,5 @@
 use crate::{
+    command::display_output,
     error::{NoAutomaticRetry, SkipStep},
     execution_context::RunType,
     executor::ExecutorOutput,
@@ -6,11 +7,7 @@ use crate::{
     utils::require,
 };
 use color_eyre::eyre::{Result, WrapErr, bail};
-use std::{
-    io::{self, Write},
-    thread,
-    time::Duration,
-};
+use std::{thread, time::Duration};
 
 const GCLOUD_WORKAROUND: &str = "WARNING: Known issue encountered updating Python modules.";
 const START: &str = "Beginning update. This process may take several minutes.";
@@ -45,22 +42,26 @@ fn manifest_transport_failure(output: &str) -> bool {
 }
 
 pub(super) fn update(mode: RunType) -> Result<()> {
-    let gcloud = require("gcloud")?;
+    update_at(mode, &require("gcloud")?)
+}
+
+fn update_at(mode: RunType, gcloud: &std::path::Path) -> Result<()> {
     if gcloud.starts_with("/snap") {
         return Err(SkipStep("gcloud is managed by Snap".into()).into());
     }
     print_separator("gcloud");
     for attempt in 1..=2 {
         let ExecutorOutput::Wet(output) = mode
-            .execute(&gcloud)
+            .execute(gcloud)
             .args(["components", "update", "--quiet"])
             .output()
             .wrap_err(NoAutomaticRetry("Could not capture the gcloud component update".into()))?
         else {
             return Ok(());
         };
-        io::stdout().write_all(&output.stdout)?;
-        io::stderr().write_all(&output.stderr)?;
+        display_output(&output).wrap_err(NoAutomaticRetry(
+            "Could not display the gcloud component update result".into(),
+        ))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         if stdout.contains(GCLOUD_WORKAROUND) || stderr.contains(GCLOUD_WORKAROUND) {
@@ -91,6 +92,69 @@ pub(super) fn update(mode: RunType) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn safe_retry_budget_survives_the_outer_runner() {
+        use crate::{
+            config::{CommandLineArgs, Config},
+            execution_context::ExecutionContext,
+            runner::{Runner, StepResult},
+            step::Step,
+        };
+        use clap::Parser;
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        let directory = tempfile::tempdir().unwrap();
+        let config_path = directory.path().join("config.toml");
+        fs::write(&config_path, "[misc]\nask_retry = false\nauto_retry = 3\n").unwrap();
+        let args = CommandLineArgs::parse_from([
+            "topgrade",
+            "--config",
+            config_path.to_str().unwrap(),
+            "--only",
+            "gcloud",
+        ]);
+        let config = Config::load(args).unwrap();
+        #[cfg(target_os = "linux")]
+        let distribution = crate::steps::linux::Distribution::detect();
+        let ctx = ExecutionContext::new(
+            RunType::Wet,
+            None,
+            &config,
+            #[cfg(target_os = "linux")]
+            &distribution,
+        );
+        let manifest = "ERROR: gcloud crashed (SSLError): HTTPSConnectionPool(host='dl.google.com', port=443): Max retries exceeded with url: /dl/cloudsdk/channels/rapid/components-2.json (SSLEOFError: UNEXPECTED_EOF_WHILE_READING)";
+        for (stderr, status, expected_calls) in [
+            (manifest, 1, 2),
+            (GCLOUD_WORKAROUND, 0, 1),
+            (
+                "ERROR: (gcloud.components.update) The component [gsutil] failed to download.",
+                1,
+                1,
+            ),
+        ] {
+            let executable = directory.path().join("gcloud");
+            let counter = executable.with_extension("calls");
+            fs::write(&counter, "").unwrap();
+            let script = format!(
+                "#!/bin/sh\necho call >> \"$0.calls\"\necho '{START}'\ncat >&2 <<'ERROR'\n{stderr}\nERROR\nexit {status}\n"
+            );
+            fs::write(&executable, script).unwrap();
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+            let mut runner = Runner::new(&ctx);
+            runner
+                .execute(Step::Gcloud, "gcloud", || update_at(ctx.run_type(), &executable))
+                .unwrap();
+            assert!(matches!(runner.report().as_slice(), [(_, StepResult::Failure)]));
+            assert_eq!(
+                fs::read_to_string(counter).unwrap().lines().count(),
+                expected_calls,
+                "{stderr}"
+            );
+        }
+    }
 
     #[test]
     fn gcloud_retries_only_the_official_pre_operation_envelope() {

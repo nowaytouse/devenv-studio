@@ -1,14 +1,10 @@
-use std::{
-    collections::HashSet,
-    io::{self, Write as _},
-    path::Path,
-};
+use std::{collections::HashSet, path::Path};
 
 use color_eyre::eyre::{Result, WrapErr, ensure};
 use serde::Deserialize;
 
 use crate::{
-    command::CommandExt as _,
+    command::{CommandExt as _, display_output},
     error::{NoAutomaticRetry, PartialStep},
     execution_context::ExecutionContext,
     executor::ExecutorOutput,
@@ -78,13 +74,17 @@ fn verified_target(stdout: &str, target: &str) -> bool {
 }
 
 pub(super) fn refresh(ctx: &ExecutionContext, claude: &Path, configured: &HashSet<String>) -> Result<()> {
-    let ExecutorOutput::Wet(output) = ctx.execute(claude).args(["plugin", "marketplace", "update"]).output()? else {
+    let ExecutorOutput::Wet(output) = ctx
+        .execute(claude)
+        .args(["plugin", "marketplace", "update"])
+        .output()
+        .wrap_err(NoAutomaticRetry("Could not capture the marketplace refresh".into()))?
+    else {
         return Ok(());
     };
-    io::stdout().write_all(&output.stdout)?;
-    io::stdout().flush()?;
-    io::stderr().write_all(&output.stderr)?;
-    io::stderr().flush()?;
+    display_output(&output).wrap_err(NoAutomaticRetry(
+        "Could not display the marketplace refresh result".into(),
+    ))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     if output.status.success() {

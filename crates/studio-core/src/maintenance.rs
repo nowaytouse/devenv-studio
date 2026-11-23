@@ -2,7 +2,7 @@
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA: u32 = 1;
+pub const REQUEST_SCHEMA: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -103,7 +103,7 @@ pub fn valid_run_id(value: &str) -> bool {
 impl Request {
     pub fn validate(&self, run_id: &str) -> Result<()> {
         ensure!(
-            self.schema_version == SCHEMA && self.run_id == run_id && valid_run_id(run_id),
+            self.schema_version == REQUEST_SCHEMA && self.run_id == run_id && valid_run_id(run_id),
             "Invalid Studio request identity"
         );
         ensure!(
@@ -127,5 +127,44 @@ impl Request {
             "LLVM changes require a single reviewed candidate"
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reviewed_request_is_the_same_wire_contract_on_every_platform() {
+        let mut request = Request {
+            schema_version: REQUEST_SCHEMA,
+            run_id: "run-42".into(),
+            steps: vec![Step::GithubCliSkills, Step::Helm],
+            review_digest: "b".repeat(64),
+            llvm_plan_digest: None,
+        };
+        let wire = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            wire["steps"],
+            serde_json::json!(["github_cli_skills", "helm"])
+        );
+        assert!(wire.get("llvm_plan_digest").is_none());
+        assert!(request.validate("run-42").is_ok());
+        assert!(request.validate("another-run").is_err());
+        for selection in [
+            vec![Step::Helm, Step::Helm],
+            vec![Step::Helm, Step::CliVersions],
+            vec![Step::LlvmHead],
+        ] {
+            request.steps = selection;
+            assert!(request.validate("run-42").is_err());
+        }
+        request.llvm_plan_digest = Some("c".repeat(64));
+        assert!(request.validate("run-42").is_ok());
+        assert!(
+            Step::ALL
+                .iter()
+                .all(|step| Step::find(step.id()) == Some(*step))
+        );
     }
 }

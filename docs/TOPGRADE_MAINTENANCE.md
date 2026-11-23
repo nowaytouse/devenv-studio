@@ -105,6 +105,8 @@ devenv-studio topgrade-engine update /absolute/studio-checkout
 devenv-studio topgrade-engine verify-current /absolute/studio-checkout
 ```
 
+Studio 更新中心和 Topgrade 引擎共同使用 `studio-core::maintenance` 定义的维护请求、步骤标识和工具清单。引擎会核对请求中的运行编号与实际证据目录名称；平台适配器继续负责授权和执行。
+
 已部署的 `~/.local/bin/topgrade-rustup-headsync update /absolute/studio-checkout` 调用同一个更新入口。它需要 `~/.local/bin/devenv-studio` 可执行。profile 仍按已记录的前镜像和原子文件替换流程部署。更新器识别现有的默认符号链接和普通文件，保留配置与现有事务记录。
 
 ### 跟进 Topgrade 官方版本

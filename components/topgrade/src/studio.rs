@@ -43,6 +43,7 @@ mod terminal_profile;
 mod tests;
 mod xcode;
 
+const SCHEMA: u32 = 1;
 const STATE: &str = "Library/Application Support/LTSC Studio";
 const MARKER: &str = "maintenance-active.json";
 const ENGINE_BIN: &str = ".local/bin/topgrade";
@@ -62,7 +63,7 @@ const GRACE: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(100);
 const WORKER_START: u8 = 1;
 
-use studio_core::maintenance::{Request, SCHEMA, Step, valid_hex as is_hex, valid_run_id};
+use studio_core::maintenance::{Request, Step, valid_hex as is_hex, valid_run_id};
 
 trait ExecuteStep {
     fn run(self) -> Result<()>;

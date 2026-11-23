@@ -1,6 +1,7 @@
 //! Utilities for running commands and providing user-friendly error messages.
 
 use std::fmt::Display;
+use std::io::{self, Write as _};
 use std::process::Child;
 use std::process::{Command, ExitStatus, Output};
 
@@ -11,6 +12,16 @@ use color_eyre::eyre::eyre;
 use crate::error::TopgradeError;
 
 use tracing::debug;
+
+/// Show the captured output before interpreting a command's update result.
+pub fn display_output(output: &Output) -> io::Result<()> {
+    let mut stdout = io::stdout().lock();
+    stdout.write_all(&output.stdout)?;
+    stdout.flush()?;
+    let mut stderr = io::stderr().lock();
+    stderr.write_all(&output.stderr)?;
+    stderr.flush()
+}
 
 /// Like [`Output`], but UTF-8 decoded.
 #[derive(Clone, Debug, PartialEq, Eq)]

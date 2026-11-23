@@ -3361,7 +3361,14 @@ pub fn run_claude_code_plugins(ctx: &ExecutionContext) -> Result<()> {
         }
     }
 
-    if success { Ok(()) } else { Err(eyre!(StepFailed)) }
+    if success {
+        Ok(())
+    } else {
+        Err(crate::error::NoAutomaticRetry(
+            "One or more Claude plugins failed to update after the marketplaces were refreshed".into(),
+        )
+        .into())
+    }
 }
 
 pub fn run_codex(ctx: &ExecutionContext) -> Result<()> {

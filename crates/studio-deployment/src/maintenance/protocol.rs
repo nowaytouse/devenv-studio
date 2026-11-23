@@ -177,7 +177,7 @@ mod tests {
     fn cancellation_and_partial_or_foreign_events_are_distinct() {
         let request = request();
         request.validate("test-123").unwrap();
-        assert!(validate_request(&request, "../test-123").is_err());
+        assert!(request.validate("../test-123").is_err());
         let cancelled = event(1, "finished", None, Some("cancelled"));
         assert_eq!(
             parse_events(cancelled.as_bytes(), &request, true)

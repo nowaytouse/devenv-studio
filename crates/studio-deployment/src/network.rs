@@ -421,7 +421,16 @@ fn apply_at(
     })?;
     Ok(history)
 }
-fn lock_directory(directory: &Path) -> Result<File> {
+struct WriterLock(File);
+
+impl Drop for WriterLock {
+    fn drop(&mut self) {
+        // A concurrent fork can briefly retain a duplicate descriptor after this writer finishes.
+        let _ = self.0.unlock();
+    }
+}
+
+fn lock_directory(directory: &Path) -> Result<WriterLock> {
     ensure!(
         directory.is_absolute(),
         "Application data directory must be absolute"
@@ -469,7 +478,7 @@ fn lock_directory(directory: &Path) -> Result<File> {
     }
     file.try_lock()
         .map_err(|error| anyhow::anyhow!("Cannot acquire network profile writer lock: {error}"))?;
-    Ok(file)
+    Ok(WriterLock(file))
 }
 fn verify_written(path: &Path, bytes: &[u8], profile: &NetworkProfile) -> Result<()> {
     ensure!(
@@ -786,7 +795,9 @@ mod tests {
     #[test]
     fn another_writer_or_linked_lock_stops_before_replacing_profile() {
         let directory = Directory::new();
-        let _writer = lock_directory(&directory.0).unwrap();
+        let writer = lock_directory(&directory.0).unwrap();
+        #[cfg(unix)]
+        let _inherited_descriptor = writer.0.try_clone().unwrap();
         assert!(
             apply_at(
                 &directory.file(),
@@ -796,7 +807,7 @@ mod tests {
             .is_err()
         );
         assert!(!directory.file().exists());
-        drop(_writer);
+        drop(writer);
         apply_at(
             &directory.file(),
             &NetworkProfile::default(),

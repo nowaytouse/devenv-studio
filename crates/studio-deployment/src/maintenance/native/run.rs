@@ -25,7 +25,7 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use studio_core::maintenance::{Step as EngineStep, valid_hex, valid_run_id};
+use studio_core::maintenance::{REQUEST_SCHEMA, Step as EngineStep, valid_hex, valid_run_id};
 
 const RECORD_LIMIT: u64 = 16 * 1024;
 const LOG_LIMIT: usize = 8 * 1024 * 1024;
@@ -441,7 +441,7 @@ pub(in crate::maintenance) fn run(
     require_running(cancel)?;
     let (run_id, path) = new_run(&proof.home)?;
     let request = Request {
-        schema_version: 1,
+        schema_version: REQUEST_SCHEMA,
         run_id: run_id.clone(),
         steps: review
             .selected
