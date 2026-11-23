@@ -5452,6 +5452,7 @@ dependencies = [
  "shell-words",
  "shellexpand",
  "strum",
+ "studio-core",
  "sys-locale",
  "sysinfo 0.40.4",
  "system_shutdown",

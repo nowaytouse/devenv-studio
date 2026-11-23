@@ -1,7 +1,4 @@
-use super::{
-    Check, EngineIdentity, Review, Step,
-    protocol::{IDS, manual_llvm, valid_hex},
-};
+use super::{Check, EngineIdentity, Review, Step};
 use crate::process::{Invocation, run_configured};
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
@@ -19,6 +16,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
+use studio_core::maintenance::{Step as EngineStep, valid_hex};
 
 mod run;
 pub(super) use run::{history, output_excerpt, run};
@@ -580,13 +578,7 @@ fn tool(name: &str) -> Result<Tool> {
 }
 
 fn required_tools(id: &str) -> &'static [&'static str] {
-    match id {
-        "github_cli_skills" | "github_cli_extensions" => &["gh"],
-        "helm" => &["helm", "curl"],
-        "brew_linkage_audit" | "llvm_head" | "llvm_stable" => &["brew"],
-        "tldr" => &["tldr"],
-        _ => &[],
-    }
+    EngineStep::find(id).map_or(&[], EngineStep::tools)
 }
 
 #[derive(Deserialize)]
@@ -638,9 +630,9 @@ fn parse_inventory(bytes: &[u8]) -> Result<Vec<Step>> {
         );
         let terminal = row.mode == InventoryMode::Terminal;
         ensure!(
-            terminal && row.tools.is_empty() && !IDS.contains(&row.id.as_str())
+            terminal && row.tools.is_empty() && EngineStep::find(&row.id).is_none()
                 || !terminal
-                    && IDS.contains(&row.id.as_str())
+                    && EngineStep::find(&row.id).is_some()
                     && row.tools == required_tools(&row.id),
             "Unrecognized Topgrade execution route"
         );
@@ -653,9 +645,10 @@ fn parse_inventory(bytes: &[u8]) -> Result<Vec<Step>> {
         });
     }
     ensure!(
-        IDS.iter()
-            .filter(|id| !manual_llvm(id))
-            .all(|id| seen.contains(*id)),
+        EngineStep::ALL
+            .iter()
+            .filter(|step| !step.manual_llvm())
+            .all(|step| seen.contains(step.id())),
         "Topgrade engine lacks expected native steps"
     );
     Ok(steps)
@@ -726,7 +719,10 @@ fn review_proof(selected: &[String], cancel: &AtomicBool) -> Result<Proof> {
             }
         }
     }
-    if let Some(id) = selected.iter().find(|id| manual_llvm(id)) {
+    if let Some(id) = selected
+        .iter()
+        .find(|id| EngineStep::find(id).is_some_and(EngineStep::manual_llvm))
+    {
         ensure!(selected.len() == 1, "Review each LLVM channel on its own");
         let output = run_configured(
             &Invocation {
@@ -772,7 +768,7 @@ fn review_proof(selected: &[String], cancel: &AtomicBool) -> Result<Proof> {
 
 pub(super) fn review(selected: &BTreeSet<String>, cancel: &AtomicBool) -> Result<Review> {
     ensure!(
-        !selected.is_empty() && selected.iter().all(|id| IDS.contains(&id.as_str())),
+        !selected.is_empty() && selected.iter().all(|id| EngineStep::find(id).is_some()),
         "Select only known macOS maintenance steps"
     );
     let selected = selected.iter().cloned().collect::<Vec<_>>();
@@ -802,8 +798,9 @@ mod tests {
 
     #[test]
     fn catalog_cannot_grant_execution_to_a_terminal_step() {
-        let mut rows = IDS
-            .iter()
+        let mut rows = EngineStep::ALL
+            .into_iter()
+            .map(EngineStep::id)
             .map(|id| {
                 serde_json::json!({
                     "id": id, "label": id, "mode": "controlled", "tools": required_tools(id)

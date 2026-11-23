@@ -1,17 +1,20 @@
 use std::{
+    collections::HashSet,
     io::{self, Write as _},
     path::Path,
 };
 
-use color_eyre::eyre::{Result, ensure};
+use color_eyre::eyre::{Result, WrapErr, ensure};
 use serde::Deserialize;
 
 use crate::{
-    command::CommandExt as _, error::PartialStep, execution_context::ExecutionContext, executor::ExecutorOutput,
+    command::CommandExt as _,
+    error::{NoAutomaticRetry, PartialStep},
+    execution_context::ExecutionContext,
+    executor::ExecutorOutput,
 };
 
-const TARGET: &str = "claude-code-plugins-plus";
-const SINGLE_FAILURE: &str = "1 marketplace could not be refreshed (see --debug): claude-code-plugins-plus";
+const SINGLE_FAILURE: &str = "1 marketplace could not be refreshed (see --debug): ";
 
 fn reports_incomplete(stdout: &str, stderr: &str) -> bool {
     stdout.lines().chain(stderr.lines()).any(|line| {
@@ -21,17 +24,43 @@ fn reports_incomplete(stdout: &str, stderr: &str) -> bool {
     })
 }
 
-fn recoverable(stdout: &str, stderr: &str, code: Option<i32>) -> bool {
-    let mut failures = stdout
-        .lines()
-        .chain(stderr.lines())
-        .map(str::trim)
-        .map(|line| line.strip_prefix("Updating marketplaces...").unwrap_or(line).trim())
-        .filter(|line| line.contains("could not be refreshed"));
-    code == Some(1) && failures.next() == Some(SINGLE_FAILURE) && failures.next().is_none()
+fn retry_target<'a>(
+    stdout: &'a str,
+    stderr: &'a str,
+    code: Option<i32>,
+    configured: &HashSet<String>,
+) -> Option<&'a str> {
+    if code != Some(1) {
+        return None;
+    }
+    let mut target = None;
+    for line in stdout.lines().chain(stderr.lines()).map(str::trim) {
+        let line = line.strip_prefix("Updating marketplaces...").unwrap_or(line).trim();
+        if line.is_empty()
+            || line
+                .strip_prefix("✘ Updated ")
+                .and_then(|s| s.strip_suffix(" marketplaces, but not all"))
+                .is_some_and(|n| n.parse::<u32>().is_ok())
+        {
+            continue;
+        }
+        let name = line.strip_prefix(SINGLE_FAILURE)?;
+        if name.is_empty()
+            || name.len() > 128
+            || !name.as_bytes()[0].is_ascii_alphanumeric()
+            || !name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+            || !configured.contains(name)
+            || target.replace(name).is_some()
+        {
+            return None;
+        }
+    }
+    target
 }
 
-fn verified_target(stdout: &str) -> bool {
+fn verified_target(stdout: &str, target: &str) -> bool {
     #[derive(Deserialize)]
     struct RefreshResult<'a> {
         command: &'a str,
@@ -44,11 +73,11 @@ fn verified_target(stdout: &str) -> bool {
         .rfind(|line| !line.trim().is_empty())
         .and_then(|line| serde_json::from_str::<RefreshResult<'_>>(line).ok())
         .is_some_and(|report| {
-            report.command == "marketplace-update" && report.outcome == "ok" && report.marketplace == TARGET
+            report.command == "marketplace-update" && report.outcome == "ok" && report.marketplace == target
         })
 }
 
-pub(super) fn refresh(ctx: &ExecutionContext, claude: &Path) -> Result<()> {
+pub(super) fn refresh(ctx: &ExecutionContext, claude: &Path, configured: &HashSet<String>) -> Result<()> {
     let ExecutorOutput::Wet(output) = ctx.execute(claude).args(["plugin", "marketplace", "update"]).output()? else {
         return Ok(());
     };
@@ -65,22 +94,19 @@ pub(super) fn refresh(ctx: &ExecutionContext, claude: &Path) -> Result<()> {
         return Ok(());
     }
 
-    ensure!(
-        recoverable(&stdout, &stderr, output.status.code()),
-        "Claude marketplace refresh failed ({})",
-        output.status
-    );
-    // Claude's bulk command has no JSON mode. Recover only the single known diagnostic.
-    println!("Retrying Claude marketplace {TARGET} individually");
+    let target = retry_target(&stdout, &stderr, output.status.code(), configured)
+        .ok_or_else(|| NoAutomaticRetry(format!("Claude marketplace refresh failed ({})", output.status)))?;
+    println!("Retrying Claude marketplace {target} individually");
     let retry = ctx
         .execute(claude)
-        .args(["plugin", "marketplace", "update", TARGET, "--json"])
-        .output_checked_utf8()?;
+        .args(["plugin", "marketplace", "update", target, "--json"])
+        .output_checked_utf8()
+        .wrap_err_with(|| NoAutomaticRetry(format!("Targeted refresh failed for {target}")))?;
     ensure!(
-        verified_target(&retry.stdout) && !reports_incomplete(&retry.stdout, &retry.stderr),
-        "Claude did not verify refresh of {TARGET}"
+        verified_target(&retry.stdout, target) && !reports_incomplete(&retry.stdout, &retry.stderr),
+        NoAutomaticRetry(format!("Claude did not verify refresh of {target}"))
     );
-    println!("Refreshed Claude marketplace {TARGET}");
+    println!("Refreshed Claude marketplace {target}");
     Ok(())
 }
 
@@ -103,30 +129,32 @@ mod tests {
     }
 
     #[test]
-    fn retries_only_the_known_singular_failure() {
-        assert!(recoverable("", SINGLE_FAILURE, Some(1)));
-        assert!(recoverable(
-            &format!("Updating marketplaces...{SINGLE_FAILURE}"),
-            "",
-            Some(1)
-        ));
-        assert!(!recoverable("", SINGLE_FAILURE, Some(0)));
-        assert!(!recoverable("", SINGLE_FAILURE, None));
-        assert!(!recoverable("", &SINGLE_FAILURE.replace(TARGET, "unrelated"), Some(1)));
-        assert!(!recoverable(SINGLE_FAILURE, SINGLE_FAILURE, Some(1)));
-        assert!(!recoverable(
-            "",
-            &format!("{SINGLE_FAILURE}, another-marketplace"),
-            Some(1)
-        ));
+    fn retries_only_one_known_configured_name_from_a_complete_diagnostic() {
+        let configured = HashSet::from([String::from("second.market"), String::from("--flag")]);
+        let message = format!("Updating marketplaces...{SINGLE_FAILURE}second.market");
+        assert_eq!(
+            retry_target(&message, "✘ Updated 12 marketplaces, but not all", Some(1), &configured),
+            Some("second.market")
+        );
+        for (out, err, code) in [
+            (message.clone(), message.as_str(), Some(1)),
+            (message.clone(), "other error", Some(1)),
+            (message.clone(), "", Some(0)),
+            (message.clone(), "", None),
+            (message.replace("second.market", "unknown"), "", Some(1)),
+            (message.replace("second.market", "--flag"), "", Some(1)),
+            (message.replace("second.market", "a, b"), "", Some(1)),
+        ] {
+            assert!(retry_target(&out, err, code, &configured).is_none());
+        }
     }
 
     #[test]
     fn needs_success_for_the_exact_marketplace_in_the_final_json_line() {
-        let report = r#"{"command":"marketplace-update","outcome":"ok","marketplace":"claude-code-plugins-plus"}"#;
-        assert!(verified_target(&format!("Refreshing…\n{report}\n")));
-        assert!(!verified_target(&report.replace("ok", "failed")));
-        assert!(!verified_target(&report.replace(TARGET, "unrelated")));
-        assert!(!verified_target(&format!("{report}\nnot a JSON result")));
+        let report = r#"{"command":"marketplace-update","outcome":"ok","marketplace":"fixture"}"#;
+        assert!(verified_target(&format!("Refreshing…\n{report}\n"), "fixture"));
+        assert!(!verified_target(&report.replace("ok", "failed"), "fixture"));
+        assert!(!verified_target(report, "other"));
+        assert!(!verified_target(&format!("{report}\nnot a JSON result"), "fixture"));
     }
 }

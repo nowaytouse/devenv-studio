@@ -53,7 +53,8 @@ fn studio_pending_activation_blocks_admission() {
 #[test]
 fn studio_request_requires_private_directory_and_distinct_known_steps() {
     let temp = tempfile::tempdir().unwrap();
-    let dir = temp.path().canonicalize().unwrap();
+    let dir = temp.path().canonicalize().unwrap().join("run-42");
+    fs::create_dir(&dir).unwrap();
     fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
     let path = dir.join("request.json");
     let mut data = serde_json::json!({
@@ -64,6 +65,11 @@ fn studio_request_requires_private_directory_and_distinct_known_steps() {
     });
     private_file(&path, &serde_json::to_vec(&data).unwrap());
     assert_eq!(request(&dir).unwrap().steps, [Step::GithubCliSkills, Step::Helm]);
+
+    data["run_id"] = "another-run".into();
+    fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+    assert!(request(&dir).is_err());
+    data["run_id"] = "run-42".into();
 
     let routine: Vec<_> = Step::ALL.into_iter().filter(|step| !step.manual_llvm()).collect();
     data["steps"] = serde_json::json!(routine);
@@ -89,7 +95,8 @@ fn studio_request_requires_private_directory_and_distinct_known_steps() {
 #[test]
 fn studio_llvm_requires_an_exclusive_candidate_and_manual_entry() {
     let temp = tempfile::tempdir().unwrap();
-    let dir = temp.path().canonicalize().unwrap();
+    let dir = temp.path().canonicalize().unwrap().join("reviewed-llvm");
+    fs::create_dir(&dir).unwrap();
     fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
     let path = dir.join("request.json");
     let mut data = serde_json::json!({

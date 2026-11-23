@@ -108,6 +108,11 @@ impl Display for DryRun {
     }
 }
 
+/// The step has exhausted its safe retries or may already have made changes.
+#[derive(Error, Debug)]
+#[error("{0}")]
+pub struct NoAutomaticRetry(pub String);
+
 #[derive(Error, Debug)]
 #[error("{0}")]
 pub struct PartialStep(pub String);

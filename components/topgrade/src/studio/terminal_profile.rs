@@ -1,19 +1,15 @@
 //! Native managed-profile operations that keep terminal authorization semantics.
 use super::{gradle, headsync, npm_guard, preview, rolling, skills_profile, sqlite, xcode};
-use crate::{command::CommandExt, execution_context::RunType, executor::ExecutorOutput, utils::require};
+use crate::{command::CommandExt, execution_context::RunType};
 use color_eyre::eyre::{Result, WrapErr, bail, ensure};
 use serde::Deserialize;
 use std::{collections::BTreeSet, io::Write, path::Path, thread, time::Duration};
 
 const MAS: &str = "/opt/homebrew/bin/mas";
-const GCLOUD_WORKAROUND: &str = "WARNING: Known issue encountered updating Python modules.";
-const START: &str = "Beginning update. This process may take several minutes.";
-
 pub(super) fn run(id: &str, mode: RunType) -> Result<()> {
     let action: fn() -> Result<()> = match id {
         "betterdisplay_preview" => preview::betterdisplay,
         "brew_headsync" => headsync::run,
-        "gcloud_verified" => gcloud,
         "gradle_nightly" => gradle::run,
         "krita_next" => preview::krita_next,
         "mas_verified" => mas,
@@ -37,68 +33,6 @@ pub(super) fn run(id: &str, mode: RunType) -> Result<()> {
         return Ok(());
     }
     action()
-}
-
-fn manifest_transport_failure(output: &str) -> bool {
-    let mut starts = 0;
-    let mut errors = 0;
-    for line in output.lines() {
-        match line {
-            ""
-            | "If you would like to report this issue, please run the following command:"
-            | "  gcloud feedback"
-            | "To check gcloud for common problems, please run the following command:"
-            | "  gcloud info --run-diagnostics" => {}
-            START => starts += 1,
-            _ => {
-                let reason = ["SSLError", "ConnectionError"].iter().any(|kind| {
-                    line.starts_with(&format!(
-                        "ERROR: gcloud crashed ({kind}): HTTPSConnectionPool(host='dl.google.com', port=443): Max retries exceeded with url: /dl/cloudsdk/channels/rapid/components-2.json "
-                    ))
-                });
-                let known_failure = (line.contains("SSLEOFError") && line.contains("UNEXPECTED_EOF_WHILE_READING"))
-                    || (line.contains("ConnectionResetError") && line.contains("Connection reset by peer"));
-                if !reason || !known_failure {
-                    return false;
-                }
-                errors += 1;
-            }
-        }
-    }
-    starts == 1 && errors == 1
-}
-
-fn gcloud() -> Result<()> {
-    let executable = require("gcloud")?;
-    for attempt in 0..2 {
-        let ExecutorOutput::Wet(output) = RunType::Wet
-            .execute(&executable)
-            .args(["components", "update", "--quiet"])
-            .output()?
-        else {
-            bail!("Unexpected dry result for gcloud");
-        };
-        std::io::stdout().write_all(&output.stdout)?;
-        std::io::stderr().write_all(&output.stderr)?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        ensure!(
-            !stdout.contains(GCLOUD_WORKAROUND) && !stderr.contains(GCLOUD_WORKAROUND),
-            "gcloud reported its Python workaround; component update may not have run"
-        );
-        if output.status.success() {
-            return Ok(());
-        }
-        let combined = format!("{stdout}\n{stderr}");
-        ensure!(
-            attempt == 0 && manifest_transport_failure(&combined),
-            "gcloud component update failed ({})",
-            output.status
-        );
-        eprintln!("Official gcloud manifest transport failed before component operations; retrying once");
-        thread::sleep(Duration::from_secs(2));
-    }
-    bail!("gcloud did not finish");
 }
 
 #[derive(Deserialize)]
@@ -209,19 +143,6 @@ fn mas() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn gcloud_retries_only_the_official_pre_operation_envelope() {
-        let error = "ERROR: gcloud crashed (SSLError): HTTPSConnectionPool(host='dl.google.com', port=443): Max retries exceeded with url: /dl/cloudsdk/channels/rapid/components-2.json (SSLEOFError: UNEXPECTED_EOF_WHILE_READING)";
-        assert!(manifest_transport_failure(&format!("{START}\n{error}\n")));
-        assert!(!manifest_transport_failure(&format!(
-            "{START}\n{error}\nInstalling component"
-        )));
-        assert!(!manifest_transport_failure(&format!(
-            "{START}\n{}",
-            error.replace("dl.google.com", "example.test")
-        )));
-    }
 
     #[test]
     fn mas_rejects_duplicate_equal_and_unselected_candidates() {

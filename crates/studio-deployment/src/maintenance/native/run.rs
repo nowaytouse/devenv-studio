@@ -7,9 +7,7 @@ use crate::{
     DeploymentEvent,
     maintenance::{
         EngineIdentity, Report, Review, RunStatus, StepReport,
-        protocol::{
-            EVENT_LIMIT, Request, Trace, parse_events, valid_hex, valid_run_id, validate_request,
-        },
+        protocol::{EVENT_LIMIT, Request, Trace, parse_events},
     },
 };
 use anyhow::{Context, Result, ensure};
@@ -27,6 +25,7 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use studio_core::maintenance::{Step as EngineStep, valid_hex, valid_run_id};
 
 const RECORD_LIMIT: u64 = 16 * 1024;
 const LOG_LIMIT: usize = 8 * 1024 * 1024;
@@ -289,7 +288,7 @@ impl Supervisor<'_> {
                     .steps
                     .iter()
                     .map(|step| {
-                        if step == "llvm_head" {
+                        if *step == EngineStep::LlvmHead {
                             4 * 60 * 60
                         } else {
                             15 * 60
@@ -444,11 +443,15 @@ pub(in crate::maintenance) fn run(
     let request = Request {
         schema_version: 1,
         run_id: run_id.clone(),
-        steps: review.selected,
+        steps: review
+            .selected
+            .iter()
+            .map(|id| EngineStep::find(id).context("Unrecognized reviewed step"))
+            .collect::<Result<_>>()?,
         review_digest: proof.digest,
         llvm_plan_digest: proof.llvm.map(|plan| plan.digest),
     };
-    validate_request(&request, &run_id)?;
+    request.validate(&run_id)?;
     persist(&path.join("request.json"), &serde_json::to_vec(&request)?)
         .context("Persist the reviewed request before starting Topgrade")?;
     let mut command = Command::new(&proof.engine.binary);
@@ -504,7 +507,7 @@ fn read_run(home: &Path, path: PathBuf, run_id: &str) -> Result<Report> {
         let bytes = read_regular(&request_path, RECORD_LIMIT)?;
         let request: Request = serde_json::from_slice(&bytes)
             .map_err(|_| anyhow::anyhow!("Invalid maintenance history request"))?;
-        validate_request(&request, run_id)?;
+        request.validate(run_id)?;
         Some(request)
     } else {
         None
@@ -573,7 +576,7 @@ fn read_run(home: &Path, path: PathBuf, run_id: &str) -> Result<Report> {
                 .steps
                 .iter()
                 .zip(&request.steps)
-                .all(|(result, id)| &result.id == id)
+                .all(|(result, id)| result.id == id.id())
                 && record.steps.len() <= request.steps.len(),
             "Invalid incomplete maintenance result"
         );
@@ -696,7 +699,7 @@ mod tests {
         Request {
             schema_version: 1,
             run_id: "fixture".into(),
-            steps: vec!["helm".into()],
+            steps: vec![EngineStep::Helm],
             review_digest: "a".repeat(64),
             llvm_plan_digest: None,
         }

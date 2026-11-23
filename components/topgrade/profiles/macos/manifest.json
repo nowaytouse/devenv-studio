@@ -74,7 +74,7 @@
     {
       "source": "bin/topgrade-gcloud-verified",
       "destination": ".local/bin/topgrade-gcloud-verified",
-      "sha256": "37c0b0e084430c106b23164b9438550299d5fa96735ff2f61aee8e8fc8e057b9",
+      "sha256": "a74b06ffe65bcb311a36dfc8644b39f58f6fdb8c78de38a29a6dff53d158aba6",
       "mode": 493,
       "adoptSha256": "37c0b0e084430c106b23164b9438550299d5fa96735ff2f61aee8e8fc8e057b9"
     },
@@ -228,7 +228,7 @@
     {
       "source": "config/topgrade.toml",
       "destination": ".config/topgrade.toml",
-      "sha256": "b3ea9e9bea173e4fc1fd4258a6c84aa5b746c2cd686bb6864e721a997c4d496c",
+      "sha256": "a65fb376440460950340c1198dc3f00a38df4ad4719c64b4e1adb6f73356e045",
       "mode": 384,
       "adoptSha256": "27bdb0f36bd9172ac626e2f96ca19051e6327206e6e13fd734513262608d58ba"
     },

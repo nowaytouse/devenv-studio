@@ -99,7 +99,12 @@ fn fake_read(args: &[&str], rows: &[Value], expected: &str) -> Result<Output> {
         return Ok(output(serde_json::to_string(rows).unwrap(), 0));
     }
     assert_eq!(&args[..4], ["api", "--hostname", "github.com", "--include"]);
-    let route = args[4].strip_prefix("repos/demo/repo").unwrap();
+    let route = args.last().unwrap().strip_prefix("repos/demo/repo").unwrap();
+    if route.starts_with("/git/trees/") || route.starts_with("/git/tags/") {
+        assert_eq!(&args[4..args.len() - 1], ["--cache", "24h"]);
+    } else {
+        assert_eq!(args.len(), 5);
+    }
     let body = match route {
         "/releases/latest" => json!({"tag_name":"release/v2"}),
         "/git/ref/tags/release%2Fv2" => json!({"object":{"type":"tag","sha":TAG}}),

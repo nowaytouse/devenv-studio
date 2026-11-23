@@ -40,7 +40,7 @@ This is a profile for the already maintained Mac, not a bootstrap of every tool 
 
 Generated runtime files stay with their existing state directories. Studio installs the standard `~/.config/topgrade.toml` and its fragments. Tool paths target Apple Silicon Homebrew's `/opt/homebrew`.
 
-Skills remain updated by their existing owners and independent coverage checks. A literal empty disable list would duplicate owners for HEAD-sync, Skills, MAS, gcloud and Conda. There is no `ignore_failures` setting.
+Skills remain updated by their existing owners and independent coverage checks. A literal empty disable list would duplicate owners for HEAD-sync, Skills, MAS and Conda. There is no `ignore_failures` setting.
 
 ## Upstream maintenance and Helm
 
@@ -63,6 +63,10 @@ An exact previously installed Gemini copy of Google's retired `discovering-gcp-d
 The unattended NPX step checks the installed LeanCTX directory against the Git tree ID in the global lock, including executable bits. Existing Cursor, Copilot and OpenCode copies that match the same tree are atomically linked to the canonical NPX directory before updating. The original host directories, including any local `SKILL.md.bak` and empty migration lock, are retained once in the private skill-lock state directory. A local edit, foreign source, pin or redirected link stops adoption. The updater verifies the links and the new locked tree after NPX finishes. Coverage independently checks the host paths even when GitHub CLI reports only the canonical directory.
 
 NPX retains one private backup per distinct pre-update lock. Repeated runs reuse the verified bytes. Earlier recovery directories remain available.
+
+The built-in gcloud step uses the same component-manager checks on every platform. It retries a recognized transport failure once while reading the official manifest. A failure after component changes begin requires review. The legacy macOS launcher delegates to this step.
+
+GitHub skill verification resolves releases and branches live on each run. Only Git trees and annotated tag objects addressed by a full SHA use the GitHub CLI’s 24-hour cache.
 
 ## Per-repository dependency compatibility
 

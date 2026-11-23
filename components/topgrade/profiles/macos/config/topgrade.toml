@@ -6,11 +6,10 @@ pre_sudo = false
 cleanup = false
 display_time = true
 notify_end = "never"
-disable = ["mamba", "conda", "gcloud", "mas"]
+disable = ["mamba", "conda", "mas"]
 
 [commands]
 "Mac App Store (verified)" = "@studio:mas_verified"
-"gcloud (verified)" = "@studio:gcloud_verified"
 "SQLite Python trunk" = "@studio:sqlite_python_trunk"
 "SQLite trunk" = "@studio:sqlite_trunk"
 "TourBox Beta Update" = "@studio:tourbox_beta"

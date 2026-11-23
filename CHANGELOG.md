@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Studio 与 Topgrade 共用维护请求和工具清单。各平台的 gcloud 与 Claude 市场更新采用有界、可核验的重试。GitHub 技能检查复用不可变的 Git 对象。
+
 - macOS 技能更新核对 LeanCTX 的 Git 目录哈希，已验证的宿主副本共用一份安装。相同的 NPX 锁文件只备份一次。
 
 - Studio 桌面端和 Topgrade 引擎共用 Cargo 工作区、锁文件和 CI。滚动安装器按同一提交构建引擎。

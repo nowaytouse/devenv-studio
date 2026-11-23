@@ -459,44 +459,10 @@ pub fn run_krew_upgrade(ctx: &ExecutionContext) -> Result<()> {
     ctx.execute(krew).args(["upgrade"]).status_checked()
 }
 
+mod gcloud;
+
 pub fn run_gcloud_components_update(ctx: &ExecutionContext) -> Result<()> {
-    let gcloud = require("gcloud")?;
-
-    if gcloud.starts_with("/snap") {
-        return Ok(());
-    }
-
-    print_separator("gcloud");
-
-    let output = ctx
-        .execute(&gcloud)
-        .args(["components", "update", "--quiet"])
-        .output()?;
-
-    let output = match output {
-        ExecutorOutput::Wet(wet) => wet,
-        ExecutorOutput::Dry => return Ok(()),
-    };
-
-    // When `gcloud` is installed via `apt`, the components update via `apt` as well
-    let stderr = String::from_utf8(output.stderr)?;
-    if stderr.contains("You cannot perform this action because the Google Cloud CLI component manager")
-        && stderr.contains("is disabled for this installation")
-    {
-        return Err(
-            SkipStep("The Google Cloud CLI component manager is disabled for this installation".to_string()).into(),
-        );
-    }
-
-    // Flush captured output
-    std::io::stdout().write_all(&output.stdout)?;
-    std::io::stderr().write_all(stderr.as_bytes())?;
-
-    if !output.status.success() {
-        bail!("gcloud component update failed");
-    }
-
-    Ok(())
+    gcloud::update(ctx.run_type())
 }
 
 pub fn run_jetpack(ctx: &ExecutionContext) -> Result<()> {
@@ -1632,6 +1598,9 @@ pub fn run_myrepos_update(ctx: &ExecutionContext) -> Result<()> {
 pub fn run_custom_command(name: &str, command: &str, ctx: &ExecutionContext) -> Result<()> {
     print_separator(name);
 
+    if command == "@studio:gcloud_verified" {
+        return run_gcloud_components_update(ctx);
+    }
     if let Some(id) = command.strip_prefix("@studio:") {
         #[cfg(target_os = "macos")]
         return crate::studio::run_native_profile(id, ctx.run_type());
@@ -3296,7 +3265,6 @@ pub fn run_claude_code(ctx: &ExecutionContext) -> Result<()> {
     ctx.execute(&claude).arg("update").status_checked()
 }
 
-#[cfg(target_os = "macos")]
 mod claude_marketplace;
 
 pub fn run_claude_code_plugins(ctx: &ExecutionContext) -> Result<()> {
@@ -3318,13 +3286,6 @@ pub fn run_claude_code_plugins(ctx: &ExecutionContext) -> Result<()> {
 
     print_separator("Claude Code Plugins");
 
-    #[cfg(target_os = "macos")]
-    claude_marketplace::refresh(ctx, &claude)?;
-    #[cfg(not(target_os = "macos"))]
-    ctx.execute(&claude)
-        .args(["plugin", "marketplace", "update"])
-        .status_checked()?;
-
     let output = ctx
         .execute(&claude)
         .args(["plugin", "marketplace", "list", "--json"])
@@ -3336,6 +3297,7 @@ pub fn run_claude_code_plugins(ctx: &ExecutionContext) -> Result<()> {
         )
     })?;
     let marketplaces: HashSet<String> = marketplaces.into_iter().map(|m| m.name).collect();
+    claude_marketplace::refresh(ctx, &claude, &marketplaces)?;
 
     // The list was reported cut at 64 KiB when read from a pipe, so it goes through a file:
     // https://github.com/topgrade-rs/topgrade/pull/2062#issuecomment-4703754240

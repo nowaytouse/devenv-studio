@@ -1116,7 +1116,7 @@ fn terminal_catalog(
                 "These tasks use the local profile's checks and recovery. Preview each task in Terminal.",
             ));
             for name in [
-                "Mac App Store (verified)", "gcloud (verified)",
+                "Mac App Store (verified)",
                 "SQLite Python trunk", "SQLite trunk", "TourBox Beta Update", "Xcode Beta Update",
                 "Preview macOS Apps", "Conda frozen base",
                 "Conda default", "Gradle Nightly Toolchain", "Rolling Project Dependencies",

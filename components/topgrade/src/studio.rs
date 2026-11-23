@@ -43,7 +43,6 @@ mod terminal_profile;
 mod tests;
 mod xcode;
 
-const SCHEMA: u32 = 1;
 const STATE: &str = "Library/Application Support/LTSC Studio";
 const MARKER: &str = "maintenance-active.json";
 const ENGINE_BIN: &str = ".local/bin/topgrade";
@@ -63,75 +62,13 @@ const GRACE: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(100);
 const WORKER_START: u8 = 1;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum Step {
-    BrewLinkageAudit,
-    CliVersions,
-    GithubCliExtensions,
-    GithubCliSkills,
-    Helm,
-    LlvmHead,
-    LlvmStable,
-    Tldr,
+use studio_core::maintenance::{Request, SCHEMA, Step, valid_hex as is_hex, valid_run_id};
+
+trait ExecuteStep {
+    fn run(self) -> Result<()>;
 }
 
-impl Step {
-    const ALL: [Self; 8] = [
-        Self::BrewLinkageAudit,
-        Self::CliVersions,
-        Self::GithubCliExtensions,
-        Self::GithubCliSkills,
-        Self::Helm,
-        Self::LlvmHead,
-        Self::LlvmStable,
-        Self::Tldr,
-    ];
-
-    fn id(self) -> &'static str {
-        match self {
-            Self::BrewLinkageAudit => "brew_linkage_audit",
-            Self::CliVersions => "cli_versions",
-            Self::GithubCliExtensions => "github_cli_extensions",
-            Self::GithubCliSkills => "github_cli_skills",
-            Self::Helm => "helm",
-            Self::LlvmHead => "llvm_head",
-            Self::LlvmStable => "llvm_stable",
-            Self::Tldr => "tldr",
-        }
-    }
-
-    fn find(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|step| step.id() == id)
-    }
-
-    fn manual_llvm(self) -> bool {
-        matches!(self, Self::LlvmHead | Self::LlvmStable)
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::BrewLinkageAudit => "Homebrew Linkage Audit",
-            Self::CliVersions => "CLI Tool Versions",
-            Self::GithubCliExtensions => "GitHub CLI Extensions",
-            Self::GithubCliSkills => "GitHub CLI Skills",
-            Self::Helm => "Helm Repositories",
-            Self::LlvmHead => "LLVM HEAD",
-            Self::LlvmStable => "LLVM Stable",
-            Self::Tldr => "tldr Cache",
-        }
-    }
-
-    fn tools(self) -> &'static [&'static str] {
-        match self {
-            Self::BrewLinkageAudit | Self::LlvmHead | Self::LlvmStable => &["brew"],
-            Self::CliVersions => &[],
-            Self::GithubCliExtensions | Self::GithubCliSkills => &["gh"],
-            Self::Helm => &["helm", "curl"],
-            Self::Tldr => &["tldr"],
-        }
-    }
-
+impl ExecuteStep for Step {
     fn run(self) -> Result<()> {
         match self {
             Self::BrewLinkageAudit => diagnostics::run_linkage(),
@@ -163,16 +100,6 @@ pub(crate) fn run_native_profile(id: &str, run_type: RunType) -> Result<()> {
             step.run()
         }
     }
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Request {
-    schema_version: u32,
-    run_id: String,
-    steps: Vec<Step>,
-    review_digest: String,
-    llvm_plan_digest: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -402,18 +329,6 @@ fn read_json_bytes(file: &mut File) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn is_hex(value: &str, length: usize) -> bool {
-    value.len() == length && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
-
-fn valid_run_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
-}
-
 fn request(dir: &Path) -> Result<Request> {
     ensure!(
         dir.is_absolute() && dir.canonicalize()? == dir,
@@ -425,24 +340,11 @@ fn request(dir: &Path) -> Result<Request> {
         true,
         MAX_JSON,
     )?)?)?;
-    ensure!(
-        request.schema_version == SCHEMA && valid_run_id(&request.run_id),
-        "Invalid Studio request identity"
-    );
-    ensure!(is_hex(&request.review_digest, 64), "Invalid reviewed receipt digest");
-    ensure!(
-        (1..=Step::ALL.len()).contains(&request.steps.len())
-            && request.steps.windows(2).all(|pair| pair[0].id() < pair[1].id()),
-        "Select distinct supported Studio steps"
-    );
-    let manual = request.steps.iter().any(|step| step.manual_llvm());
-    ensure!(
-        match &request.llvm_plan_digest {
-            Some(digest) => manual && request.steps.len() == 1 && is_hex(digest, 64),
-            None => !manual,
-        },
-        "LLVM changes require a single reviewed candidate"
-    );
+    let run_id = dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .context("Missing Studio run ID")?;
+    request.validate(run_id).map_err(|err| color_eyre::eyre::eyre!(err))?;
     Ok(request)
 }
 

@@ -6,7 +6,7 @@ use std::io;
 use tracing::debug;
 
 use crate::ctrlc;
-use crate::error::{DryRun, MissingSudo, PartialStep, SkipStep};
+use crate::error::{DryRun, MissingSudo, NoAutomaticRetry, PartialStep, SkipStep};
 use crate::execution_context::ExecutionContext;
 use crate::step::Step;
 use crate::terminal::{ShouldRetry, print_error, print_warning, should_retry};
@@ -136,7 +136,8 @@ impl<'a> Runner<'a> {
                     let ignore_failure = self.ctx.config().ignore_failure(step);
 
                     // Decide whether to prompt the user
-                    let has_auto_retries_left = attempt < max_attempts;
+                    let has_auto_retries_left =
+                        attempt < max_attempts && e.downcast_ref::<NoAutomaticRetry>().is_none();
                     let should_prompt = if interrupted {
                         // If interrupted, always prompt
                         true

@@ -14,7 +14,17 @@ fn github_json(
     allow_missing: bool,
 ) -> Result<Option<Value>> {
     let endpoint = format!("repos/{repo}{route}");
-    let output = run(&["api", "--hostname", "github.com", "--include", &endpoint])?;
+    // A moving branch or latest release must be resolved live on every run. Git
+    // trees and annotated tags addressed by a full SHA are immutable.
+    let immutable = ["/git/trees/", "/git/tags/"]
+        .iter()
+        .any(|prefix| route.strip_prefix(prefix).is_some_and(|id| hex(id, 40)));
+    let mut args = vec!["api", "--hostname", "github.com", "--include"];
+    if immutable {
+        args.extend(["--cache", "24h"]);
+    }
+    args.push(&endpoint);
+    let output = run(&args)?;
     let response = output.stdout.replace("\r\n", "\n");
     let (headers, body) = response
         .split_once("\n\n")

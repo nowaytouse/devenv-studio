@@ -1,71 +1,10 @@
 use super::{RunStatus, StepReport, StepStatus};
 use anyhow::{Context, Result, ensure};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-pub(super) const IDS: [&str; 8] = [
-    "brew_linkage_audit",
-    "cli_versions",
-    "github_cli_extensions",
-    "github_cli_skills",
-    "helm",
-    "tldr",
-    "llvm_head",
-    "llvm_stable",
-];
+pub(super) use studio_core::maintenance::Request;
+
 pub(super) const EVENT_LIMIT: u64 = 16 * 1024;
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct Request {
-    pub schema_version: u8,
-    pub run_id: String,
-    pub steps: Vec<String>,
-    pub review_digest: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub llvm_plan_digest: Option<String>,
-}
-
-pub(super) fn manual_llvm(id: &str) -> bool {
-    matches!(id, "llvm_head" | "llvm_stable")
-}
-
-pub(super) fn valid_hex(value: &str, length: usize) -> bool {
-    value.len() == length
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
-
-pub(super) fn valid_run_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-}
-
-pub(super) fn validate_request(request: &Request, run_id: &str) -> Result<()> {
-    ensure!(
-        request.schema_version == 1
-            && request.run_id == run_id
-            && valid_run_id(run_id)
-            && valid_hex(&request.review_digest, 64)
-            && !request.steps.is_empty()
-            && request.steps.len() <= IDS.len()
-            && request.steps.iter().all(|id| IDS.contains(&id.as_str()))
-            && request.steps.windows(2).all(|pair| pair[0] < pair[1]),
-        "Invalid Topgrade maintenance request"
-    );
-    let llvm = request.steps.iter().any(|id| manual_llvm(id));
-    ensure!(
-        match &request.llvm_plan_digest {
-            Some(digest) => llvm && request.steps.len() == 1 && valid_hex(digest, 64),
-            None => !llvm,
-        },
-        "LLVM changes require a single reviewed candidate"
-    );
-    Ok(())
-}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -125,7 +64,8 @@ pub(super) fn parse_events(bytes: &[u8], request: &Request, complete: bool) -> R
                         && matches!(last, None | Some(StepStatus::Success))
                         && event.status.is_none()
                         && event.step.is_some()
-                        && event.step.as_ref() == request.steps.get(trace.results.len()),
+                        && event.step.as_deref()
+                            == request.steps.get(trace.results.len()).map(|step| step.id()),
                     "Maintenance step started outside the reviewed order"
                 );
                 trace.running = event.step;
@@ -180,12 +120,14 @@ pub(super) fn parse_events(bytes: &[u8], request: &Request, complete: bool) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+    use studio_core::maintenance::Step;
+    const IDS: [&str; 2] = ["brew_linkage_audit", "cli_versions"];
 
     fn request() -> Request {
         Request {
             schema_version: 1,
             run_id: "test-123".into(),
-            steps: IDS[..2].iter().map(|s| (*s).into()).collect(),
+            steps: vec![Step::BrewLinkageAudit, Step::CliVersions],
             llvm_plan_digest: None,
             review_digest: "a".repeat(64),
         }
@@ -194,14 +136,14 @@ mod tests {
     #[test]
     fn llvm_approval_binds_exactly_one_manual_channel() {
         let mut request = request();
-        request.steps = vec!["llvm_head".into()];
-        assert!(validate_request(&request, "test-123").is_err());
+        request.steps = vec![Step::LlvmHead];
+        assert!(request.validate("test-123").is_err());
         request.llvm_plan_digest = Some("b".repeat(64));
-        assert!(validate_request(&request, "test-123").is_ok());
-        request.steps.push("llvm_stable".into());
-        assert!(validate_request(&request, "test-123").is_err());
-        request.steps = vec!["helm".into()];
-        assert!(validate_request(&request, "test-123").is_err());
+        assert!(request.validate("test-123").is_ok());
+        request.steps.push(Step::LlvmStable);
+        assert!(request.validate("test-123").is_err());
+        request.steps = vec![Step::Helm];
+        assert!(request.validate("test-123").is_err());
     }
 
     fn event(seq: usize, kind: &str, step: Option<&str>, status: Option<&str>) -> String {
@@ -234,7 +176,7 @@ mod tests {
     #[test]
     fn cancellation_and_partial_or_foreign_events_are_distinct() {
         let request = request();
-        validate_request(&request, "test-123").unwrap();
+        request.validate("test-123").unwrap();
         assert!(validate_request(&request, "../test-123").is_err());
         let cancelled = event(1, "finished", None, Some("cancelled"));
         assert_eq!(
