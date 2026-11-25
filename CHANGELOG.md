@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS 的 LLVM 更新会在 Homebrew 尚未创建更新锁时初始化锁文件，并继续使用 Homebrew 的独占锁执行升级。
+
 - Studio 与 Topgrade 共用维护请求和工具清单。各平台的 gcloud 与 Claude 市场更新采用有界、可核验的重试。GitHub 技能检查复用不可变的 Git 对象。
 - 导入 Topgrade 官方 v17.17.0，保留 Studio 扩展和受管 profile；新增 Lerd、CrowdSec Hub、Linux DMS 插件步骤及 Claude Code 已删除项目处理。
 

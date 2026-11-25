@@ -321,7 +321,6 @@ class Fixture:
         (root / "opt/llvm").symlink_to(root / "Cellar/llvm/23.1.5")
         (root / "var/homebrew/pinned/llvm").symlink_to(root / "Cellar/llvm/23.1.5")
         (root / "var/homebrew/locks").mkdir()
-        (root / "var/homebrew/locks/update").touch()
         self.original = {self.core / "Formula/g/ggml.rb": ggml,
                          self.core / "Formula/l/llama.cpp.rb": llama}
         for path, content in self.original.items():
@@ -837,6 +836,8 @@ def remaining_llvm_dependency_plan_fails_closed(f):
 
 
 def llvm_channels_run_in_order(f):
+    lock_dir = f.root / "var/homebrew/locks"
+    lock_dir.rmdir()  # Homebrew has not created its lock directory yet.
     result = f.run(TEST_INSTALLED="llvm\nnyamiiko/tools/llvm-head\nz3",
                    TEST_OUTDATED="z3", TEST_LLVM_STABLE_UPGRADE="1")
     assert result.returncode == 0, result.stdout
@@ -846,8 +847,32 @@ def llvm_channels_run_in_order(f):
     bulk = events.index("brew upgrade --formula --fetch-HEAD z3")
     pin = f.root / "var/homebrew/pinned/llvm"
     assert stable < bulk < head and pin.resolve().name == "23.1.6", events
+    assert (lock_dir / "update").is_file()
     assert not list(f.state.glob("llvm_*-before.json*"))
     f.assert_restored()
+
+
+def llvm_update_lock_guard(f, kind):
+    lock = f.root / "var/homebrew/locks/update"
+    protected = f.root / "existing-lock"
+    protected.write_text("keep lock contents")
+    if kind == "held":
+        lock = protected.rename(lock)
+        with lock.open() as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = f.run()
+            assert os.fstat(handle.fileno()).st_ino == lock.stat().st_ino
+        assert "already locked" in result.stdout, result.stdout
+    else:
+        if kind == "symlink":
+            lock.symlink_to(protected)
+        else:
+            os.link(protected, lock)
+        result = f.run()
+        assert "Unexpected Homebrew update lock" in result.stdout, result.stdout
+    assert result.returncode != 0, result.stdout
+    assert not any("automatic llvm_" in line for line in f.events()), f.events()
+    assert lock.read_text() == "keep lock contents"
 
 
 def rolling_llvm_without_compatibility_keg(f, missing=False, implicit=False):
@@ -1240,6 +1265,9 @@ if native:
         ("remaining formula failure restores exact stable LLVM pin", remaining_upgrade_failure_restores_exact_llvm_pin),
         ("remaining formula preflight refuses an unjournaled LLVM upgrade", remaining_llvm_dependency_plan_fails_closed),
         ("stable LLVM runs before its consumers and preview runs after", llvm_channels_run_in_order),
+        ("held Homebrew update lock prevents LLVM writes", lambda f: llvm_update_lock_guard(f, "held")),
+        ("symlinked Homebrew update lock is refused", lambda f: llvm_update_lock_guard(f, "symlink")),
+        ("hardlinked Homebrew update lock is refused", lambda f: llvm_update_lock_guard(f, "hardlink")),
         ("rolling LLVM alone runs without installing stable LLVM", rolling_llvm_without_compatibility_keg),
         ("missing compatibility ABI stops rolling-only maintenance", lambda f: rolling_llvm_without_compatibility_keg(f, missing=True)),
         ("rolling-only maintenance rejects an implicit LLVM install", lambda f: rolling_llvm_without_compatibility_keg(f, implicit=True)),

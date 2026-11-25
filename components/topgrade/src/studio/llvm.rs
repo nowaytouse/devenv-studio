@@ -6,7 +6,7 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsE
 use std::path::Path;
 use std::process::Command;
 
-use color_eyre::eyre::{Result, ensure};
+use color_eyre::eyre::{Result, WrapErr, ensure};
 
 use super::{Step, account_home, check_dir, exists, open_file, resolve_tool, state_dir, tool_command, user_only};
 use crate::{command::CommandExt as _, error::PartialStep};
@@ -31,6 +31,39 @@ fn worker_script(state: &Path) -> Result<tempfile::TempDir> {
     Ok(directory)
 }
 
+fn homebrew_update_lock(prefix: &Path) -> Result<std::path::PathBuf> {
+    let parent = prefix.join("var/homebrew");
+    let path = parent.join("locks/update");
+    ensure!(
+        parent.canonicalize()? == parent,
+        "Non-canonical Homebrew state directory"
+    );
+    let directory = parent.join("locks");
+    if let Err(error) = DirBuilder::new().mode(0o755).create(&directory)
+        && error.kind() != ErrorKind::AlreadyExists
+    {
+        return Err(error.into());
+    }
+    check_dir(&directory, false)?;
+    // Homebrew creates this file on demand. Keep an existing lock inode intact.
+    if let Err(error) = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path)
+        && error.kind() != ErrorKind::AlreadyExists
+    {
+        return Err(error.into());
+    }
+    let metadata = fs::symlink_metadata(&path)?;
+    ensure!(
+        path.canonicalize()? == path
+            && metadata.is_file()
+            && metadata.uid() == nix::unistd::getuid().as_raw()
+            && metadata.mode() & 0o022 == 0
+            && metadata.nlink() == 1,
+        "Unexpected Homebrew update lock: {}",
+        path.display()
+    );
+    Ok(path)
+}
+
 fn command(
     action: &str,
     step: Step,
@@ -42,16 +75,8 @@ fn command(
     ensure!(step.manual_llvm(), "Invalid reviewed LLVM operation");
     user_only()?;
     let mut command = if action != "plan" {
-        let path = prefix.join("var/homebrew/locks/update");
-        let metadata = fs::symlink_metadata(&path)?;
-        ensure!(
-            path.canonicalize()? == path
-                && metadata.is_file()
-                && metadata.uid() == nix::unistd::getuid().as_raw()
-                && metadata.mode() & 0o022 == 0
-                && metadata.nlink() == 1,
-            "Unexpected Homebrew update lock"
-        );
+        let path = homebrew_update_lock(prefix)
+            .wrap_err_with(|| format!("Could not prepare Homebrew update lock under {}", prefix.display()))?;
         let mut command = make(Path::new("/usr/bin/lockf"))?;
         command.args(["-kn", "-t", "0"]).arg(path).arg(brew);
         command
