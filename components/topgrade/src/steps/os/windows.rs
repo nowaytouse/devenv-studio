@@ -15,6 +15,7 @@ use crate::terminal::{print_separator, print_warning};
 use crate::utils::{require, which};
 use crate::{error::SkipStep, steps::git::RepoStep};
 
+pub(crate) mod dotnetup;
 mod scoop;
 mod winget;
 mod wsl_update;

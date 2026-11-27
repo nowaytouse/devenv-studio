@@ -45,6 +45,9 @@ macro_rules! str_value {
     };
 }
 
+#[cfg(any(windows, test))]
+mod windows_dotnetup;
+
 pub type Commands = IndexMap<String, String>;
 
 #[derive(Deserialize, Default, Debug, Merge)]
@@ -110,6 +113,8 @@ pub enum UpdatesAutoReboot {
 #[derive(Deserialize, Default, Debug, Merge)]
 #[serde(deny_unknown_fields)]
 pub struct Windows {
+    dotnet_daily: Option<bool>,
+    dotnetup_preview: Option<bool>,
     accept_all_updates: Option<bool>,
     updates_exclude_drivers: Option<bool>,
     clamav_user_config: Option<bool>,
@@ -938,6 +943,11 @@ pub struct CommandLineArgs {
     #[arg(long = "only", value_name = "STEP", value_enum, num_args = 1..)]
     only: Vec<Step>,
 
+    /// Verify the installed daily SDK without contacting its update feed (use with --only dotnet_daily)
+    #[cfg(windows)]
+    #[arg(long, requires = "only")]
+    dotnet_daily_check_only: bool,
+
     /// Run only specific custom commands
     #[arg(long = "custom-commands", value_name = "NAME", num_args = 1..)]
     custom_commands: Vec<String>,
@@ -1256,7 +1266,25 @@ impl Config {
 
         // All steps that are disabled are not enabled, except ones that are passed to `--only`
         enabled_steps.retain(|e| !disabled_steps.contains(e) || opt.only.contains(e));
+        #[cfg(windows)]
+        windows_dotnetup::select(
+            &mut enabled_steps,
+            &disabled_steps,
+            opt,
+            config_file,
+            &config_directory(),
+        );
         enabled_steps
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn native_dotnetup_command(&self, command: &str) -> bool {
+        windows_dotnetup::launcher(command, &config_directory()).is_some()
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn dotnet_daily_check_only(&self) -> bool {
+        self.opt.dotnet_daily_check_only
     }
 
     /// Tell whether we should run a self-update.
@@ -1313,6 +1341,9 @@ impl Config {
 
     /// Get the auto retry count for failed steps
     pub fn auto_retry(&self, step: Step, name: &str) -> u16 {
+        if matches!(step, Step::DotnetDaily | Step::DotnetupPreview) {
+            return 0;
+        }
         if step == Step::CustomCommands
             && self
                 .config_file
@@ -2670,6 +2701,8 @@ mod test {
         assert_eq!(config.auto_retry(Step::CustomCommands, "self-managed"), 0);
         assert_eq!(config.auto_retry(Step::CustomCommands, "other"), 2);
         assert_eq!(config.auto_retry(Step::Gcloud, "self-managed"), 2);
+        assert_eq!(config.auto_retry(Step::DotnetDaily, "daily"), 0);
+        assert_eq!(config.auto_retry(Step::DotnetupPreview, "preview"), 0);
     }
 
     /// Ensure that custom commands are stored in insertion order.

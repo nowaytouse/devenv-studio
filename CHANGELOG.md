@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Windows 版内置隔离的 .NET daily SDK 更新与 dotnetup preview 自更新，保留签名、清单、运行版本和渠道恢复检查。原有标准启动命令自动迁移，无需另行部署 PowerShell 脚本。
+
 - WSL 使用 WinGet 备用来源时会核对已安装版本。GitHub Skills 会列出缺少来源的技能。gcloud 获取官方清单时遇到连接中断会按间隔重试，组件安装出错会保留失败。自定义更新命令可单独关闭外层自动重试。
 
 - macOS 的受管技能更新进入常规 Skills 步骤。单个来源出错后，其他维护步骤继续运行，结束时统一报告结果。

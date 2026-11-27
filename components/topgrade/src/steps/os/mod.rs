@@ -22,3 +22,11 @@ pub use windows::{reboot, shutdown};
 
 #[cfg(unix)]
 pub use unix::{reboot, shutdown};
+
+// Exercise Windows manifest and retry decisions in the macOS test suite as well.
+#[cfg(all(test, target_os = "macos"))]
+#[path = "windows/dotnetup/recovery.rs"]
+mod dotnetup_recovery;
+#[cfg(all(test, target_os = "macos"))]
+#[path = "windows/dotnetup/inventory.rs"]
+mod inventory;

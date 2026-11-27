@@ -67,6 +67,8 @@ pub enum Step {
     DkpPacman,
     DmsPlugins,
     Dotnet,
+    DotnetDaily,
+    DotnetupPreview,
     Elan,
     Emacs,
     Falconf,
@@ -347,6 +349,10 @@ impl Step {
                         .iter()
                         .filter(|(n, _)| ctx.config().should_run_custom_command(n))
                     {
+                        #[cfg(windows)]
+                        if ctx.config().native_dotnetup_command(command) {
+                            continue;
+                        }
                         runner.execute(*self, name.clone(), || generic::run_custom_command(name, command, ctx))?;
                     }
                 }
@@ -373,6 +379,18 @@ impl Step {
                 runner.execute(*self, "DMS Plugins", || linux::run_dms_plugins(ctx))?
             }
             Dotnet => runner.execute(*self, ".NET", || generic::run_dotnet_upgrade(ctx))?,
+            DotnetDaily =>
+            {
+                #[cfg(windows)]
+                runner.execute(*self, ".NET SDK (daily)", || {
+                    windows::dotnetup::daily(ctx, ctx.config().dotnet_daily_check_only())
+                })?
+            }
+            DotnetupPreview =>
+            {
+                #[cfg(windows)]
+                runner.execute(*self, "dotnetup (preview)", || windows::dotnetup::preview(ctx))?
+            }
             Elan => runner.execute(*self, "elan", || generic::run_elan(ctx))?,
             Emacs => runner.execute(*self, "Emacs", || emacs::Emacs::new().upgrade(ctx))?,
             Falconf => runner.execute(*self, "falconf sync", || generic::run_falconf(ctx))?,
@@ -901,6 +919,8 @@ pub(crate) fn default_steps() -> Vec<Step> {
         Rustup,
         Juliaup,
         Dotnet,
+        DotnetDaily,
+        DotnetupPreview,
         Choosenim,
         Cargo,
         Antigravity,

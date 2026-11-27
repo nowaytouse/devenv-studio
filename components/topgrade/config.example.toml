@@ -320,6 +320,9 @@
 # fallback_to_fetch_default = false
 
 [windows]
+# Update the isolated daily SDK and its preview manager with dotnetup
+# dotnet_daily = true
+# dotnetup_preview = true
 # Manually select Windows updates
 # Requires an interactive terminal; unattended runs skip when this is false.
 # accept_all_updates = false

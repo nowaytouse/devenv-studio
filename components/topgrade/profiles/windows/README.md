@@ -1,15 +1,27 @@
-# Windows .NET rolling updates
+# Windows dotnetup updates
 
-Use the existing daily SDK and preview manager scripts with the Studio build of Topgrade. Put `bin/Dotnetup-NetworkRecovery.ps1` beside the two scripts, in their existing directory. In each script load the helper before its update call:
+The Studio build of Topgrade can update the isolated x64 daily SDK and the dotnetup preview manager directly. Enable the steps in the existing Windows configuration:
 
-```powershell
-. (Join-Path $PSScriptRoot 'Dotnetup-NetworkRecovery.ps1')
-```
+~~~toml
+[windows]
+dotnet_daily = true
+dotnetup_preview = true
+~~~
 
-In the daily script use `$update = Invoke-DotnetupUpdate -Manager $manager -InstallPath $install -ManifestPath $manifest` for the SDK update. In the preview script use `Invoke-DotnetupUpdate -Manager $manager -Preview` for self-update. Keep the existing signature, inventory, executable version and record checks.
+A one-time run also works without these settings:
 
-For the normal Windows configuration search, copy `topgrade.d/dotnetup.toml` into `%APPDATA%\topgrade.d\`. When starting Topgrade with an explicit `--config`, merge the file's key into that configuration's existing `[misc]` table. The two entries must match the names in `[commands]` exactly. This gives each script sole control over automatic retries.
+~~~powershell
+topgrade --only dotnet_daily dotnetup_preview -y
+~~~
 
-On a failure confined to resolving the official daily or preview URL, the helper checks the public HTTPS redirect chain with HEAD, normal certificate validation and the process's default proxy. Two probes are allowed. If connectivity returns and the manager executable is unchanged, the helper retries that same command once. A daily retry also requires an unchanged manifest with one root and one explicitly requested daily SDK. Other failures retain the original error. PowerShell and dotnetup can use different networking runtimes. The final result comes from dotnetup and the calling script's installation checks.
+To check the installed SDK and save its report without updating the SDK or querying its release feed:
 
-Run `pwsh -NoProfile -File tests/Dotnetup-NetworkRecovery.Tests.ps1` to exercise the recovery decisions with a temporary manifest and a simulated manager.
+~~~powershell
+topgrade --only dotnet_daily --dotnet-daily-check-only
+~~~
+
+The steps expect the existing Microsoft manager at `%USERPROFILE%\.local\bin\dotnetup.exe`. The daily SDK uses `D:\DevTools\DotnetDaily\managed` and the adjacent `dotnetup-manifest.json` in its parent directory. Topgrade verifies the manager's Authenticode signature and publisher. The daily check compares the resolved SDK version to the manager's inventory and atomically writes `DotnetDaily-latest.json` under the existing desktop folder `设备维护与记录\软件更新日志`. Preview self-update verifies the updated manager and runs its version command.
+
+When migrating from the supplied scripts, updating `topgrade.exe` is sufficient for the standard `pwsh.exe -NoProfile -File "..."` entries pointing to `%APPDATA%\topgrade\Update-DotnetDaily.ps1` and `Update-DotnetupPreview.ps1`. Topgrade recognizes these entries even when the scripts are absent and honors the existing custom-command name filter. After enabling the two native settings you can remove the old launcher entries and their matching `no_auto_retry_commands` entries. Customized commands with additional arguments continue to run as written.
+
+Only an exact dotnetup TLS error resolving the Microsoft x64 daily or preview channel qualifies for recovery. Topgrade probes the public HTTPS redirect with HEAD at most twice. It retries the same update once if connectivity has returned, the manager is unchanged and, for the SDK, the unchanged manifest has one explicitly requested daily SDK in one root. The outer step does not automatically retry. A failed verification or second update is reported as a failure.

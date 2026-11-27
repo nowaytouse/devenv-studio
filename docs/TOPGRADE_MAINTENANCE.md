@@ -17,7 +17,7 @@ WSL 原生更新遇到不随界面语言变化的 HTTP 403／429 错误码时，
 
 GitHub CLI 技能更新先读取原生 JSON 跟踪状态；未 pin 且缺少来源的副本及原生警告会报告未完成，即使原命令最后输出已是最新并返回 0。没有符合条件的 GitHub 跟踪项时，直接返回盘点结果。其他安装器管理的副本保留原有文件和元数据。自定义更新器与 macOS 原生验证器保持各自的责任范围。
 
-Windows 的 .NET daily SDK 和 dotnetup preview 脚本可对 Microsoft 渠道连接失败提供诊断，并按命令关闭自动重试。[Windows 配置与部署](../components/topgrade/profiles/windows/README.md)
+Windows 的 .NET daily SDK 和 dotnetup preview 由内置 Rust 步骤更新。旧配置中的标准启动命令会自动转入内置步骤。[Windows 配置与部署](../components/topgrade/profiles/windows/README.md)
 
 ## Windows ClamAV 病毒库更新
 
