@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS 的受管技能更新进入常规 Skills 步骤。单个来源出错后，其他维护步骤继续运行，结束时统一报告结果。
+
 - macOS 的 LLVM 更新会在 Homebrew 尚未创建更新锁时初始化锁文件，并继续使用 Homebrew 的独占锁执行升级。
 
 - Studio 与 Topgrade 共用维护请求和工具清单。各平台的 gcloud 与 Claude 市场更新采用有界、可核验的重试。GitHub 技能检查复用不可变的 Git 对象。

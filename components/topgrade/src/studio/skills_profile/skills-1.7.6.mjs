@@ -140,7 +140,8 @@ wellKnown = replaceOnce(wellKnown,
   "\t\tif (result.status === \"error\") {",
   "\t\tif (isGlobal && (result.status === 'error' || result.removedSkills?.length)) {\n" +
   "\t\t\twarningCount++;\n" +
-  "\t\t\tconsole.warn('Warning: ' + sanitizeMetadata(baseUrl) + ' — index unavailable or paths missing; local skills kept');\n" +
+  "\t\t\toptions.defer(baseUrl, items.map(({ name }) => name));\n" +
+  "\t\t\tconsole.warn('Warning: ' + sanitizeMetadata(baseUrl) + ' — index unavailable or paths missing; local state requires verification');\n" +
   "\t\t\tcontinue;\n\t\t}\n\t\tif (result.status === \"error\") {");
 wellKnown = replaceOnce(wellKnown, "\t\tchanged\n", "\t\tchanged,\n\t\twarningCount\n");
 source = source.slice(0, wellKnownStart) + wellKnown + source.slice(wellKnownEnd);
@@ -172,7 +173,8 @@ global = global.slice(0, fetchStart) + [
   "\t\tconst progress = '[' + (++completed) + '/' + groups.length + '] ';",
   "\t\tif ('error' in checkout) {",
   "\t\t\twarningCount++;",
-  "\t\t\tconsole.warn(progress + 'Warning: ' + source + ' — source unavailable; local skills kept');",
+  "\t\t\tconsole.warn(progress + 'Warning: ' + source + ' — source unavailable; update deferred');",
+  "\t\t\toptions.defer(first.source, itemsForSource.map(({ name }) => name));",
   "\t\t\treturn { error: true, deferred: true };",
   "\t\t}",
   "\t\tif ('tree' in checkout) {",
@@ -200,6 +202,12 @@ global = global.slice(0, fetchStart) + [
   "\t\tif ('pending' in checkout) { updates.push(...checkout.pending); continue; }",
   "",
 ].join("\n") + global.slice(cloneStart);
+global = replaceOnce(global, "\t\tawait releaseSource(source);\n\t\tif (outcome.installed.length > 0)",
+  "\t\tawait releaseSource(source);\n" +
+  "\t\tif (!outcome.installed.length && !outcome.failed.length && outcome.error === 'No matching skills found') {\n" +
+  "\t\t\tconsole.warn('Warning: ' + sanitizeMetadata(entry.source) + ' — no matching skill for ' + sanitizeMetadata(name) + '; update deferred');\n" +
+  "\t\t\toptions.defer(entry.source, [name]);\n" +
+  "\t\t\tcontinue;\n\t\t}\n\t\tif (outcome.installed.length > 0)");
 global = replaceOnce(global, "\t\t} catch (error) {\n\t\t\tconsole.log(", "\t\t} catch (error) {\n\t\t\tfailCount++;\n\t\t\tconsole.log(");
 global = replaceOnce(global, "\t\tconst { tempDir, note } = checkout;",
   "\t\tconst { tempDir, note } = checkout;\n\t\tconst beforeSource = updates.length;");
@@ -224,7 +232,8 @@ global = replaceOnce(global,
     "\t\t\tconst unresolved = [...resolution.deletedSkills, ...resolution.ambiguousSkills];",
     "\t\t\tif (unresolved.length) {",
     "\t\t\t\twarningCount++;",
-    "\t\t\t\tconsole.warn('Warning: ' + sanitizeMetadata(source) + ' — missing or ambiguous paths for ' + unresolved.map(sanitizeMetadata).join(', ') + '; local skills kept');",
+    "\t\t\t\tconsole.warn('Warning: ' + sanitizeMetadata(source) + ' — missing or ambiguous paths for ' + unresolved.map(sanitizeMetadata).join(', ') + '; update deferred');",
+    "\t\t\t\toptions.defer(source, itemsForSource.map(({ name }) => name));",
     "\t\t\t\tcontinue;",
     "\t\t\t}",
     "\t\t\tfor (const { name: skillName, entry } of itemsForSource) {",
@@ -239,6 +248,15 @@ global = replaceOnce(global,
   "\tif (checkable.length === 0 && skipped.length === 0 && wellKnownCount === 0) {");
 global = global.replaceAll("if (!wkChanged) console.log", "if (!wkChanged && warningCount === 0) console.log");
 source = source.slice(0, globalStart) + global + source.slice(globalEnd);
+
+// Record deferred entries only after the complete global updater returns.
+source = replaceOnce(source, "const { successCount, failCount, checkedCount } = await updateGlobalSkills(options);", [
+  "const deferred = [];",
+  "const defer = (source, names) => { for (const name of names) deferred.push({ source, name }); };",
+  "const { successCount, failCount, checkedCount } = await updateGlobalSkills({ ...options, defer });",
+  "await (await import('node:fs/promises')).writeFile(process.env.DEVENV_STUDIO_SKILLS_REPORT,",
+  "  JSON.stringify(deferred), { flag: 'wx', mode: 0o600 });",
+].join("\n"));
 
 // Keep original module URLs for dependency resolution and leave the NPX cache untouched.
 const url = pathToFileURL(file).href;

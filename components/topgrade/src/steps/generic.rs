@@ -3432,6 +3432,15 @@ pub fn run_cursor_agent(ctx: &ExecutionContext) -> Result<()> {
 }
 
 pub fn run_skills(ctx: &ExecutionContext) -> Result<()> {
+    if ctx.config().skills_native() {
+        #[cfg(target_os = "macos")]
+        {
+            print_separator("Skills");
+            return crate::studio::run_native_profile("skills_unattended", ctx.run_type());
+        }
+        #[cfg(not(target_os = "macos"))]
+        bail!("Native Skills updates require macOS");
+    }
     // Can't use XDG_DIRS since its `state_dir()` falls back to `~/.local/state` instead
     // of `~/.agents` and it'd also break on non-unix systems
     let skill_lock = match env::var_os("XDG_STATE_HOME")

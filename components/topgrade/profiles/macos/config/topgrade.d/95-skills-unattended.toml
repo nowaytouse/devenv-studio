@@ -1,6 +1,2 @@
-[misc]
-disable = ["skills"]
-ask_retry = false
-
-[pre_commands]
-"Skills (unattended)" = "@studio:skills_unattended"
+[skills]
+native = true

@@ -29,7 +29,7 @@ static FAILURE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("static failure pattern")
 });
 static SUCCESS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)All global skills are up to date|Updated [0-9]+ skill\(s\)|No global skills (?:to check|tracked in lock file)|^Skill source checks finished with warnings: [1-9][0-9]* source\(s\) skipped$")
+    Regex::new(r"(?m)All global skills are up to date|Updated [0-9]+ skill\(s\)|No global skills (?:to check|tracked in lock file)")
         .expect("static success pattern")
 });
 
@@ -305,9 +305,46 @@ fn normalize(home: &Path, route: &Route) -> Result<()> {
     Ok(())
 }
 
-fn accepted(output: &str, success: bool) -> bool {
+fn installed(home: &Path, name: &str) -> Result<Vec<(PathBuf, Option<cursor::Tree>)>> {
+    ensure!(exact_segment(name), "Unsafe skill name: {name}");
+    let owner = directory(home, &Path::new(ROOTS[0]).join(name), false)?;
+    ensure!(
+        ownership::name_matches(&owner, name)?,
+        "Installed skill identity mismatch: {name}"
+    );
+    let mut result = vec![(owner.clone(), Some(cursor::tree(&owner)?))];
+    for root in &ROOTS[1..] {
+        let path = home.join(root).join(name);
+        if exists(&path)? {
+            directory(home, Path::new(root), false)?;
+            if fs::symlink_metadata(&path)?.is_symlink() {
+                ensure!(
+                    path.canonicalize()? == owner,
+                    "Unexpected skill link: {}",
+                    path.display()
+                );
+                result.push((path, None));
+            } else {
+                let path = directory(home, &Path::new(root).join(name), false)?;
+                result.push((path.clone(), Some(cursor::tree(&path)?)));
+            }
+        }
+    }
+    Ok(result)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeferredSkill {
+    source: String,
+    name: String,
+}
+
+fn accepted(output: &str, has_deferred: bool) -> bool {
     let plain = ANSI.replace_all(output, "").replace('\r', "\n");
-    success && !FAILURE.is_match(&plain) && SUCCESS.is_match(&plain)
+    !FAILURE.is_match(&plain)
+        && (has_deferred
+            || (SUCCESS.is_match(&plain) && !plain.contains("Skill source checks finished with warnings:")))
 }
 
 fn tee(reader: &mut dyn Read, mut sink: impl Write, secrets: &[String], mut remaining: u64) -> Result<Vec<u8>> {
@@ -395,13 +432,17 @@ fn archive_lock(root: &Path, original: &[u8]) -> Result<PathBuf> {
     Ok(path)
 }
 
-pub(super) fn run(home: &Path) -> Result<()> {
+pub(super) fn run(home: &Path) -> Result<Option<crate::error::PartialStep>> {
     let route = Route::detect();
     normalize(home, &route)?;
     let lock_path = lock_path(home)?;
     let original = bytes(&lock_path, DATA_LIMIT)?;
     let before = super::json(&original)?;
     let lean_hosts = super::lean_ctx::prepare(home, &before["skills"]["lean-ctx"])?;
+    let snapshots: std::collections::BTreeMap<_, _> = lock_entries(&before)?
+        .keys()
+        .map(|name| (name.clone(), installed(home, name)))
+        .collect();
     let old = lock_entries(&before)?.get(RETIRED_DISCOVERY).unwrap_or(&Value::Null);
     let retired_paths = discovery_paths(home, old, DISCOVERY_SHA256)?;
     let mut command = command(home, "npx", Some(&route))?;
@@ -437,6 +478,8 @@ pub(super) fn run(home: &Path) -> Result<()> {
     }
     let work = tempfile::tempdir()?;
     npm_config(&mut command, work.path())?;
+    let report_path = work.path().canonicalize()?.join("deferred.json");
+    command.env("DEVENV_STUDIO_SKILLS_REPORT", &report_path);
     let launcher = work.path().join("skills.mjs");
     fs::write(&launcher, include_str!("skills-1.7.6.mjs"))?;
     let node = resolve_tool("node")?;
@@ -475,12 +518,6 @@ pub(super) fn run(home: &Path) -> Result<()> {
         String::from_utf8_lossy(&out.out),
         String::from_utf8_lossy(&out.err)
     );
-    ensure!(
-        accepted(&output, out.status.success()),
-        "Skills update or integrity verification failed ({}). Pre-update lock saved at {}",
-        out.status,
-        archive.display()
-    );
     let after_bytes = bytes(&lock_path, DATA_LIMIT)?;
     let mut after = super::json(&after_bytes)?;
     verify_lock(&before, &after).wrap_err_with(|| {
@@ -490,6 +527,44 @@ pub(super) fn run(home: &Path) -> Result<()> {
         )
     })?;
     super::lean_ctx::verify(home, &after["skills"]["lean-ctx"], &lean_hosts)?;
+    ensure!(
+        out.status.success(),
+        "NPX skill update failed ({}). Pre-update lock saved at {}",
+        out.status,
+        archive.display()
+    );
+    let reports: Vec<DeferredSkill> = serde_json::from_value(super::json(
+        &bytes(&report_path, DATA_LIMIT).wrap_err("Missing or unreadable NPX completion report")?,
+    )?)?;
+    ensure!(
+        accepted(&output, !reports.is_empty()),
+        "Skills update or integrity verification failed ({}). Pre-update lock saved at {}",
+        out.status,
+        archive.display()
+    );
+    let mut deferred = Vec::new();
+    for DeferredSkill { source, name } in reports {
+        let record = &before["skills"][&name];
+        let owner = if record["sourceType"] == "well-known" {
+            &record["sourceBaseUrl"]
+        } else {
+            &record["source"]
+        };
+        ensure!(
+            owner.as_str() == Some(source.as_str()) && record == &after["skills"][&name],
+            "Deferred skill lock changed or source mismatch: {name}"
+        );
+        let snapshot = snapshots
+            .get(&name)
+            .context("Unknown skill in NPX completion report")?
+            .as_ref()
+            .map_err(|err| color_eyre::eyre::eyre!("Could not verify {name} before update: {err:#}"))?;
+        ensure!(
+            &installed(home, &name)? == snapshot,
+            "Deferred skill installation changed: {name}"
+        );
+        deferred.push(format!("{name} ({source})"));
+    }
     if output.lines().any(|line| line == DISCOVERY_MARKER) {
         let paths = retired_paths.context("Unexpected proof for an unverified retired skill")?;
         let record = &after["skills"][RETIRED_DISCOVERY];
@@ -505,12 +580,36 @@ pub(super) fn run(home: &Path) -> Result<()> {
             )
         })?;
     }
-    Ok(())
+    Ok((!deferred.is_empty()).then(|| {
+        crate::error::PartialStep(format!(
+            "Deferred after verifying local installation: {}",
+            deferred.join(", ")
+        ))
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deferred_snapshot_detects_changed_content_and_links() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let home = temp.path().canonicalize()?;
+        let owner = directory(&home, Path::new(".agents/skills/example"), true)?;
+        fs::write(owner.join("SKILL.md"), "---\nname: example\n---\nfixture\n")?;
+        let host = directory(&home, Path::new(".codex/skills"), true)?.join("example");
+        std::os::unix::fs::symlink(&owner, &host)?;
+        let before = installed(&home, "example")?;
+        assert!(installed(&home, "example")? == before);
+        fs::write(owner.join("extra"), "changed")?;
+        assert!(installed(&home, "example")? != before);
+        fs::remove_file(owner.join("extra"))?;
+        fs::remove_file(&host)?;
+        assert!(installed(&home, "example")? != before);
+        assert!(installed(&home, "../example").is_err());
+        Ok(())
+    }
 
     #[test]
     fn lock_backups_are_idempotent_and_refuse_replaced_evidence() -> Result<()> {
@@ -584,18 +683,18 @@ mod tests {
         assert_eq!(tail, "[REDACTED]\nAll global skills are up to date");
         assert!(stdout.ends_with(&tail));
         assert!(captured.status.success());
-        assert!(!accepted(&format!("{stdout}\n{stderr}"), captured.status.success()));
+        assert!(!accepted(&format!("{stdout}\n{stderr}"), false));
         Ok(())
     }
 
     #[test]
     fn output_requires_success_evidence_and_rejects_hidden_failure() {
-        assert!(accepted("All global skills are up to date", true));
-        assert!(accepted("No global skills tracked in lock file.", true));
-        assert!(accepted("Updated 12 skill(s)", true));
+        assert!(accepted("All global skills are up to date", false));
+        assert!(accepted("No global skills tracked in lock file.", false));
+        assert!(accepted("Updated 12 skill(s)", false));
         let warning = "Warning: example/unavailable — source unavailable; local skills kept";
         let summary = format!("{warning}\nSkill source checks finished with warnings: 1 source(s) skipped");
-        assert!(!accepted(warning, true));
+        assert!(!accepted(warning, false));
         assert!(accepted(&summary, true));
         assert!(!accepted(&summary, false));
         assert!(!accepted(&format!("{summary}\nError: lock write failed"), true));
@@ -604,8 +703,8 @@ mod tests {
             true
         ));
         assert!(!accepted("Updated 1 skill(s)\nError: source failed", true));
-        assert!(!accepted("Updated 1 skill(s)", false));
-        assert!(!accepted("", true));
+        assert!(!accepted("DEVENV_DEFERRED fake", false));
+        assert!(!accepted("", false));
     }
 
     #[test]

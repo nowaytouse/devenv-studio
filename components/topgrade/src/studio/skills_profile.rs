@@ -30,8 +30,14 @@ const DATA_LIMIT: u64 = 16 * 1024 * 1024;
 pub(super) fn update() -> Result<()> {
     user_only()?;
     let home = account_home()?;
-    npx::run(&home)?;
-    design::sync(&home)
+    let deferred = npx::run(&home).wrap_err(crate::error::NoAutomaticRetry(
+        "Skills update failed; inspect per-source results before retrying".into(),
+    ))?;
+    design::sync(&home).wrap_err(crate::error::NoAutomaticRetry("Design kit sync failed".into()))?;
+    match deferred {
+        Some(partial) => Err(partial.into()),
+        None => Ok(()),
+    }
 }
 
 pub(super) fn coverage() -> Result<()> {

@@ -558,6 +558,9 @@
 # channels = ["stable"]
 
 [skills]
+# Use the managed macOS skill updater for this step (default: false).
+# native = false
+
 # Package runner to use to run the `skills` CLI when no local `skills`
 # binary is present in PATH.
 # Allowed values:

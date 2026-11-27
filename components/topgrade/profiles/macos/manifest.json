@@ -221,7 +221,7 @@
     {
       "source": "config/topgrade.d/95-skills-unattended.toml",
       "destination": ".config/topgrade.d/95-skills-unattended.toml",
-      "sha256": "9fc48beb065c25c5f52935375df398e6f92e64016d5f338c7384a704f8c27038",
+      "sha256": "9d762a79edf81e7b6c14f5f7f05ca17e3df1135ecdde24c0fa0cb72a803a6a24",
       "mode": 420,
       "adoptSha256": "cb4cc30a112cfb0091b3514019450897be14c2ee69b94d52b7da8cf8ecbd05ec"
     },

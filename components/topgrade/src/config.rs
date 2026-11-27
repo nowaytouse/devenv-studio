@@ -172,6 +172,7 @@ pub struct Npm {
 #[derive(Deserialize, Default, Debug, Merge)]
 #[serde(deny_unknown_fields)]
 pub struct Skills {
+    native: Option<bool>,
     package_manager: Option<SkillsPackageManager>,
 }
 
@@ -2118,6 +2119,14 @@ impl Config {
             .unwrap_or(false)
     }
 
+    pub fn skills_native(&self) -> bool {
+        self.config_file
+            .skills
+            .as_ref()
+            .and_then(|skills| skills.native)
+            .unwrap_or(false)
+    }
+
     /// Package runner to use to run the `skills` CLI (npx / pnpx / bunx / yarn dlx)
     pub fn skills_package_manager(&self) -> SkillsPackageManager {
         self.config_file
@@ -2495,6 +2504,13 @@ mod test {
     fn managed_profile_selects_native_hooks_without_changing_upstream_defaults() {
         let default = config_from_toml("");
         assert!(!default.github_cli_skills_native());
+        assert!(!default.skills_native());
+        let skills = config_from_toml(include_str!(
+            "../profiles/macos/config/topgrade.d/95-skills-unattended.toml"
+        ));
+        assert!(skills.skills_native());
+        assert!(Config::allowed_steps(&skills.opt, &skills.config_file).contains(&Step::Skills));
+        assert!(skills.pre_commands().is_none());
         assert!(!default.helm_repository_native());
         let managed = config_from_toml(include_str!("../profiles/macos/config/topgrade.toml"));
         assert!(managed.github_cli_skills_native());
