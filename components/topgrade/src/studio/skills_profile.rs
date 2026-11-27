@@ -29,11 +29,14 @@ const DATA_LIMIT: u64 = 16 * 1024 * 1024;
 
 pub(super) fn update() -> Result<()> {
     user_only()?;
-    let home = account_home()?;
-    let deferred = npx::run(&home).wrap_err(crate::error::NoAutomaticRetry(
+    update_at(&account_home()?)
+}
+
+fn update_at(home: &Path) -> Result<()> {
+    let deferred = npx::run(home).wrap_err(crate::error::NoAutomaticRetry(
         "Skills update failed; inspect per-source results before retrying".into(),
     ))?;
-    design::sync(&home).wrap_err(crate::error::NoAutomaticRetry("Design kit sync failed".into()))?;
+    design::sync(home).wrap_err(crate::error::NoAutomaticRetry("Design kit sync failed".into()))?;
     match deferred {
         Some(partial) => Err(partial.into()),
         None => Ok(()),
@@ -259,6 +262,44 @@ fn lock_path(home: &Path) -> Result<PathBuf> {
         "Non-default XDG_STATE_HOME changes the skill lock owner"
     );
     Ok(home.join(LOCK_PATH))
+}
+
+#[cfg(test)]
+#[test]
+fn failed_skill_update_runs_once_and_allows_the_next_step() -> Result<()> {
+    use crate::{
+        config::{CommandLineArgs, Config},
+        execution_context::{ExecutionContext, RunType},
+        runner::{Runner, StepResult},
+        step::Step,
+    };
+    use clap::Parser;
+    use std::cell::Cell;
+
+    let temp = tempfile::tempdir()?;
+    let config_file = temp.path().join("config.toml");
+    fs::write(
+        &config_file,
+        "[misc]\nask_retry = false\nauto_retry = 1\n[commands]\nprobe = 'true'\n",
+    )?;
+    let config = Config::load(CommandLineArgs::parse_from([
+        "topgrade",
+        "--config",
+        config_file.to_str().unwrap(),
+    ]))?;
+    let ctx = ExecutionContext::new(RunType::Wet, None, &config);
+    let mut runner = Runner::new(&ctx);
+    let attempts = Cell::new(0);
+    runner.execute(Step::Skills, "Skills", || {
+        attempts.set(attempts.get() + 1);
+        update_at(temp.path())
+    })?;
+    Step::CustomCommands.run(&mut runner, &ctx)?;
+    assert_eq!(attempts.get(), 1);
+    assert!(
+        matches!(runner.report().as_slice(), [(_, StepResult::Failure), (name, StepResult::Success)] if name == "probe")
+    );
+    Ok(())
 }
 
 #[cfg(test)]
