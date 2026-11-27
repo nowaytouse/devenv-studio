@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Windows profiles can update Krita Next, PowerToys preview, Scoop rolling runtimes, bundled Nushell plugins, local Ollama models and uv preview Python, and maintain owned Python launcher registrations natively.
+
 - Import upstream v17.17.0: Lerd, CrowdSec Hub and DMS plugins; skip Claude Code plugins for removed projects.
 
 ### Added

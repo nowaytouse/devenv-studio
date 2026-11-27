@@ -69,6 +69,13 @@ pub enum Step {
     Dotnet,
     DotnetDaily,
     DotnetupPreview,
+    WindowsKritaNext,
+    WindowsPowerToysPreview,
+    WindowsScoopRolling,
+    WindowsNushellPlugins,
+    WindowsOllamaModels,
+    WindowsPythonPreview,
+    WindowsPythonLauncher,
     Elan,
     Emacs,
     Falconf,
@@ -216,6 +223,19 @@ pub enum Step {
 }
 
 impl Step {
+    pub(crate) fn is_windows_profile(self) -> bool {
+        matches!(
+            self,
+            Self::WindowsKritaNext
+                | Self::WindowsPowerToysPreview
+                | Self::WindowsScoopRolling
+                | Self::WindowsNushellPlugins
+                | Self::WindowsOllamaModels
+                | Self::WindowsPythonPreview
+                | Self::WindowsPythonLauncher
+        )
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn run(&self, runner: &mut Runner, ctx: &ExecutionContext) -> Result<()> {
         use Step::*;
@@ -377,6 +397,19 @@ impl Step {
             {
                 #[cfg(target_os = "linux")]
                 runner.execute(*self, "DMS Plugins", || linux::run_dms_plugins(ctx))?
+            }
+            WindowsKritaNext
+            | WindowsPowerToysPreview
+            | WindowsScoopRolling
+            | WindowsNushellPlugins
+            | WindowsOllamaModels
+            | WindowsPythonPreview
+            | WindowsPythonLauncher =>
+            {
+                #[cfg(windows)]
+                runner.execute(*self, windows::profile::name(*self), || {
+                    windows::profile::run(*self, ctx)
+                })?
             }
             Dotnet => runner.execute(*self, ".NET", || generic::run_dotnet_upgrade(ctx))?,
             DotnetDaily =>
@@ -1051,8 +1084,15 @@ pub(crate) fn default_steps() -> Vec<Step> {
         //  It should run before custom commands, since they might rely on programs/scripts installed
         //  by falconf.
         Falconf,
+        WindowsKritaNext,
+        WindowsPowerToysPreview,
+        WindowsScoopRolling,
+        WindowsNushellPlugins,
+        WindowsOllamaModels,
+        WindowsPythonPreview,
         // Last out of convention
         CustomCommands,
+        WindowsPythonLauncher,
         // Last because it prompts for restart
         Restarts,
     ]

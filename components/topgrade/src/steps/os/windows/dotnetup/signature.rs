@@ -34,7 +34,7 @@ impl Drop for TrustState {
     }
 }
 
-fn verify(path: &Path, require_microsoft: bool) -> Result<()> {
+fn verify(path: &Path, publisher: Option<&str>) -> Result<()> {
     let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
     if wide.contains(&0) {
         bail!("Signature path contains a NUL character");
@@ -70,9 +70,7 @@ fn verify(path: &Path, require_microsoft: bool) -> Result<()> {
         };
         bail!("{kind} (Authenticode 0x{:08X})", status as u32);
     }
-    if !require_microsoft {
-        return Ok(());
-    }
+    let Some(expected) = publisher else { return Ok(()) };
     unsafe {
         let provider = WTHelperProvDataFromStateData(state.0.hWVTStateData);
         if provider.is_null() {
@@ -98,23 +96,27 @@ fn verify(path: &Path, require_microsoft: bool) -> Result<()> {
         }
         let organization = String::from_utf16(&name[..name.len() - 1])
             .map_err(|_| eyre!("Invalid signer certificate organization"))?;
-        if !is_microsoft_organization(&organization) {
-            bail!("Signer organization is {organization:?}, expected Microsoft Corporation");
+        if !matches_organization(&organization, expected) {
+            bail!("Signer organization is {organization:?}, expected {expected}");
         }
     }
     Ok(())
 }
 
-fn is_microsoft_organization(organization: &str) -> bool {
-    organization == "Microsoft Corporation"
+fn matches_organization(organization: &str, expected: &str) -> bool {
+    organization == expected
+}
+
+pub(in crate::steps::os::windows) fn verify_publisher(path: &Path, publisher: &str) -> Result<()> {
+    verify(path, Some(publisher))
 }
 
 pub(super) fn verify_microsoft(path: &Path) -> Result<()> {
-    verify(path, true)
+    verify_publisher(path, "Microsoft Corporation")
 }
 
 pub(super) fn signature_status(path: &Path) -> String {
-    match verify(path, false) {
+    match verify(path, None) {
         Ok(()) => "Valid".to_owned(),
         Err(err) => err.to_string(),
     }
@@ -126,9 +128,12 @@ mod tests {
 
     #[test]
     fn organization_must_match_exactly() {
-        assert!(is_microsoft_organization("Microsoft Corporation"));
-        assert!(!is_microsoft_organization("Microsoft Corporation Evil"));
-        assert!(!is_microsoft_organization("microsoft corporation"));
+        assert!(matches_organization("Microsoft Corporation", "Microsoft Corporation"));
+        assert!(!matches_organization(
+            "Microsoft Corporation Evil",
+            "Microsoft Corporation"
+        ));
+        assert!(!matches_organization("microsoft corporation", "Microsoft Corporation"));
     }
 
     #[test]

@@ -323,6 +323,8 @@
 # Update the isolated daily SDK and its preview manager with dotnetup
 # dotnet_daily = true
 # dotnetup_preview = true
+# Opt in to existing installations; see profiles/windows/README.md for all seven steps.
+# profile_steps = ["windows_scoop_rolling", "windows_python_preview", "windows_python_launcher"]
 # Manually select Windows updates
 # Requires an interactive terminal; unattended runs skip when this is false.
 # accept_all_updates = false

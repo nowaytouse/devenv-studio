@@ -16,7 +16,7 @@ use inventory::{validate_inventory, validate_manifest};
 
 mod inventory;
 mod recovery;
-mod signature;
+pub(super) mod signature;
 
 const ROOT: &str = r"D:\DevTools\DotnetDaily";
 const INSTALL: &str = r"D:\DevTools\DotnetDaily\managed";
@@ -69,7 +69,7 @@ fn safe_path(path: &Path, directory: bool) -> Result<()> {
     Ok(())
 }
 
-fn desktop() -> Result<PathBuf> {
+pub(super) fn desktop() -> Result<PathBuf> {
     // The shell allocates this path with CoTaskMemAlloc.
     unsafe {
         let path = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), None)?;

@@ -16,6 +16,7 @@ use crate::utils::{require, which};
 use crate::{error::SkipStep, steps::git::RepoStep};
 
 pub(crate) mod dotnetup;
+pub(crate) mod profile;
 mod scoop;
 mod winget;
 mod wsl_update;

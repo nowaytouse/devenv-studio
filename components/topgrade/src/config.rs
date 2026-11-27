@@ -113,6 +113,7 @@ pub enum UpdatesAutoReboot {
 #[derive(Deserialize, Default, Debug, Merge)]
 #[serde(deny_unknown_fields)]
 pub struct Windows {
+    profile_steps: Option<Vec<Step>>,
     dotnet_daily: Option<bool>,
     dotnetup_preview: Option<bool>,
     accept_all_updates: Option<bool>,
@@ -948,6 +949,11 @@ pub struct CommandLineArgs {
     #[arg(long, requires = "only")]
     dotnet_daily_check_only: bool,
 
+    /// Inspect selected Windows profile steps without installing or repairing anything
+    #[cfg(windows)]
+    #[arg(long, requires = "only")]
+    windows_profile_check_only: bool,
+
     /// Run only specific custom commands
     #[arg(long = "custom-commands", value_name = "NAME", num_args = 1..)]
     custom_commands: Vec<String>,
@@ -1274,7 +1280,23 @@ impl Config {
             config_file,
             &config_directory(),
         );
+        let profile = config_file.windows.as_ref().and_then(|w| w.profile_steps.as_ref());
+        enabled_steps.retain(|s| {
+            !s.is_windows_profile()
+                || opt.only.contains(s)
+                || config_file
+                    .misc
+                    .as_ref()
+                    .and_then(|m| m.only.as_ref())
+                    .is_some_and(|steps| steps.contains(s))
+                || profile.is_some_and(|steps| steps.contains(s))
+        });
         enabled_steps
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn windows_profile_check_only(&self) -> bool {
+        self.opt.windows_profile_check_only
     }
 
     #[cfg(windows)]
@@ -1341,7 +1363,7 @@ impl Config {
 
     /// Get the auto retry count for failed steps
     pub fn auto_retry(&self, step: Step, name: &str) -> u16 {
-        if matches!(step, Step::DotnetDaily | Step::DotnetupPreview) {
+        if step.is_windows_profile() || matches!(step, Step::DotnetDaily | Step::DotnetupPreview) {
             return 0;
         }
         if step == Step::CustomCommands
@@ -2689,6 +2711,21 @@ mod test {
         let mut config = config();
         config.opt = CommandLineArgs::parse_from(["topgrade", "--remote-host-limit", "other_hostname"]);
         assert!(!config.should_execute_remote(Ok("hostname".to_string()), "user@remote_hostname"));
+    }
+
+    #[test]
+    fn windows_profiles_are_opt_in_and_obey_step_filters() {
+        let step = Step::WindowsPythonLauncher;
+        let file = ConfigFile::default();
+        let args = |extra: &[&str]| CommandLineArgs::parse_from(["topgrade"].into_iter().chain(extra.iter().copied()));
+        assert!(!Config::allowed_steps(&args(&[]), &file).contains(&step));
+        let file: ConfigFile = toml::from_str("[windows]\nprofile_steps=['windows_python_launcher']").unwrap();
+        assert!(Config::allowed_steps(&args(&[]), &file).contains(&step));
+        assert!(!Config::allowed_steps(&args(&["--disable", "windows_python_launcher"]), &file).contains(&step));
+        assert_eq!(
+            Config::allowed_steps(&args(&["--only", "windows_python_preview"]), &file),
+            [Step::WindowsPythonPreview]
+        );
     }
 
     #[test]
