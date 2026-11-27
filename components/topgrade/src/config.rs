@@ -423,6 +423,9 @@ pub struct Misc {
 
     auto_retry: Option<u16>,
 
+    #[merge(strategy = crate::utils::merge_strategies::vec_prepend_opt)]
+    no_auto_retry_commands: Option<Vec<String>>,
+
     /// TODO: Remove this in favor of ask_retry = false
     no_retry: Option<bool>,
 
@@ -1309,7 +1312,17 @@ impl Config {
     }
 
     /// Get the auto retry count for failed steps
-    pub fn auto_retry(&self) -> u16 {
+    pub fn auto_retry(&self, step: Step, name: &str) -> u16 {
+        if step == Step::CustomCommands
+            && self
+                .config_file
+                .misc
+                .as_ref()
+                .and_then(|misc| misc.no_auto_retry_commands.as_ref())
+                .is_some_and(|commands| commands.iter().any(|command| command == name))
+        {
+            return 0;
+        }
         self.opt
             .auto_retry
             .or_else(|| self.config_file.misc.as_ref().and_then(|misc| misc.auto_retry))
@@ -2645,6 +2658,18 @@ mod test {
         let mut config = config();
         config.opt = CommandLineArgs::parse_from(["topgrade", "--remote-host-limit", "other_hostname"]);
         assert!(!config.should_execute_remote(Ok("hostname".to_string()), "user@remote_hostname"));
+    }
+
+    #[test]
+    fn custom_commands_can_own_their_retry_budget() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("topgrade.toml");
+        std::fs::write(&path, "[misc]\nno_auto_retry_commands = ['self-managed']\n").unwrap();
+        let args = CommandLineArgs::parse_from(["topgrade", "--config", path.to_str().unwrap(), "--auto-retry", "2"]);
+        let config = Config::load(args).unwrap();
+        assert_eq!(config.auto_retry(Step::CustomCommands, "self-managed"), 0);
+        assert_eq!(config.auto_retry(Step::CustomCommands, "other"), 2);
+        assert_eq!(config.auto_retry(Step::Gcloud, "self-managed"), 2);
     }
 
     /// Ensure that custom commands are stored in insertion order.

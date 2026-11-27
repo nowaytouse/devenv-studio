@@ -6,7 +6,7 @@ use crate::{
     terminal::print_separator,
     utils::require,
 };
-use color_eyre::eyre::{Result, WrapErr, bail};
+use color_eyre::eyre::{Result, WrapErr};
 use std::{thread, time::Duration};
 
 const GCLOUD_WORKAROUND: &str = "WARNING: Known issue encountered updating Python modules.";
@@ -42,15 +42,16 @@ fn manifest_transport_failure(output: &str) -> bool {
 }
 
 pub(super) fn update(mode: RunType) -> Result<()> {
-    update_at(mode, &require("gcloud")?)
+    update_at(mode, &require("gcloud")?, thread::sleep)
 }
 
-fn update_at(mode: RunType, gcloud: &std::path::Path) -> Result<()> {
+fn update_at(mode: RunType, gcloud: &std::path::Path, mut wait: impl FnMut(Duration)) -> Result<()> {
     if gcloud.starts_with("/snap") {
         return Err(SkipStep("gcloud is managed by Snap".into()).into());
     }
     print_separator("gcloud");
-    for attempt in 1..=2 {
+    let mut delays = [2, 8].into_iter();
+    loop {
         let ExecutorOutput::Wet(output) = mode
             .execute(gcloud)
             .args(["components", "update", "--quiet"])
@@ -80,13 +81,17 @@ fn update_at(mode: RunType, gcloud: &std::path::Path) -> Result<()> {
         if output.status.success() {
             return Ok(());
         }
-        if attempt == 2 || !manifest_transport_failure(&format!("{stdout}\n{stderr}")) {
+        if !manifest_transport_failure(&format!("{stdout}\n{stderr}")) {
             return Err(NoAutomaticRetry(format!("gcloud component update failed ({})", output.status)).into());
         }
-        eprintln!("Official gcloud manifest transport failed before component operations; retrying once");
-        thread::sleep(Duration::from_secs(2));
+        let Some(seconds) = delays.next() else {
+            return Err(NoAutomaticRetry(format!(
+                "gcloud could not fetch the official manifest after three attempts ({}). Check this process's proxy settings and connectivity to dl.google.com.", output.status
+            )).into());
+        };
+        eprintln!("Official gcloud manifest connection failed before updates began. Retrying in {seconds}s.");
+        wait(Duration::from_secs(seconds));
     }
-    bail!("gcloud did not finish")
 }
 
 #[cfg(test)]
@@ -126,8 +131,14 @@ mod tests {
             &distribution,
         );
         let manifest = "ERROR: gcloud crashed (SSLError): HTTPSConnectionPool(host='dl.google.com', port=443): Max retries exceeded with url: /dl/cloudsdk/channels/rapid/components-2.json (SSLEOFError: UNEXPECTED_EOF_WHILE_READING)";
+        let executable = directory.path().join("gcloud");
+        fs::write(&executable, format!(
+            "#!/bin/sh\necho call >> \"$0.calls\"\n[ \"$(wc -l < \"$0.calls\")\" -ge 3 ] && exit 0\necho '{START}'\ncat >&2 <<'ERROR'\n{manifest}\nERROR\nexit 1\n"
+        )).unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        update_at(RunType::Wet, &executable, |_| {}).unwrap();
         for (stderr, status, expected_calls) in [
-            (manifest, 1, 2),
+            (manifest, 1, 3),
             (GCLOUD_WORKAROUND, 0, 1),
             (
                 "ERROR: (gcloud.components.update) The component [gsutil] failed to download.",
@@ -145,7 +156,17 @@ mod tests {
             fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
             let mut runner = Runner::new(&ctx);
             runner
-                .execute(Step::Gcloud, "gcloud", || update_at(ctx.run_type(), &executable))
+                .execute(Step::Gcloud, "gcloud", || {
+                    let mut delays = Vec::new();
+                    let result = update_at(ctx.run_type(), &executable, |d| delays.push(d.as_secs()));
+                    if stderr == manifest {
+                        assert_eq!(delays, [2, 8]);
+                        assert!(result.as_ref().unwrap_err().to_string().contains("three attempts"));
+                    } else {
+                        assert!(delays.is_empty());
+                    }
+                    result
+                })
                 .unwrap();
             assert!(matches!(runner.report().as_slice(), [(_, StepResult::Failure)]));
             assert_eq!(

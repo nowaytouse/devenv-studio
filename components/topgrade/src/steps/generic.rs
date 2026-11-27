@@ -2013,7 +2013,7 @@ fn update_github_cli_skills(run_type: RunType, gh: &Path, updater: Option<&Path>
     // infer a repository or inject metadata into copies managed by another tool.
     let ExecutorOutput::Wet(inventory) = run_type
         .execute(gh)
-        .args(["skill", "list", "--json", "sourceURL,pinned"])
+        .args(["skill", "list", "--json", "skillName,sourceURL,pinned"])
         .output()?
     else {
         return Ok(());
@@ -2035,6 +2035,12 @@ fn update_github_cli_skills(run_type: RunType, gh: &Path, updater: Option<&Path>
                 (missing, tracked + 1)
             }
         });
+    for skill in skills
+        .iter()
+        .filter(|skill| !skill.pinned && skill.source_url.trim().is_empty())
+    {
+        println!("Unverified skill: {}", skill.name.escape_debug());
+    }
     let inventory_warnings = github_cli_skills_warning_count(&inventory.stderr);
     if tracked == 0 {
         verify_github_cli_skills_coverage(untracked, inventory_warnings)?;
@@ -2052,6 +2058,8 @@ fn update_github_cli_skills(run_type: RunType, gh: &Path, updater: Option<&Path>
 
 #[derive(Deserialize)]
 struct GithubCliSkillTracking {
+    #[serde(rename = "skillName")]
+    name: String,
     #[serde(rename = "sourceURL")]
     source_url: String,
     pinned: bool,
@@ -2104,9 +2112,15 @@ fn verify_github_cli_skills_output(
 
 fn verify_github_cli_skills_coverage(untracked: usize, warnings: usize) -> Result<()> {
     if untracked > 0 || warnings > 0 {
+        let guidance = if untracked > 0 {
+            " Run `gh skill list --json skillName,path,sourceURL,pinned` to identify affected unpinned entries \
+             and verify which tool manages each before updating it."
+        } else {
+            ""
+        };
         return Err(PartialStep(format!(
             "GitHub CLI skills update is incomplete: {untracked} unpinned skill(s) without GitHub metadata remain unverified; \
-             {warnings} warning line(s) were reported."
+             {warnings} warning line(s) were reported.{guidance}"
         ))
         .into());
     }
@@ -2150,17 +2164,25 @@ mod github_cli_skills_output_tests {
         assert!(error.downcast_ref::<PartialStep>().is_some());
         assert!(error.to_string().contains("56 unpinned skill(s)"));
         assert!(error.to_string().contains("1 warning line(s)"));
+        assert!(
+            error
+                .to_string()
+                .contains("gh skill list --json skillName,path,sourceURL,pinned")
+        );
+        assert!(error.to_string().contains("verify which tool manages each"));
     }
 
     #[test]
     fn json_tracking_gaps_are_partial_even_without_a_text_warning() {
         let skills: Vec<GithubCliSkillTracking> =
-            serde_json::from_str(r#"[{"sourceURL":"","pinned":false},{"sourceURL":"","pinned":true}]"#).unwrap();
+            serde_json::from_str(r#"[{"skillName":"unknown-owner","sourceURL":"","pinned":false},{"skillName":"pinned","sourceURL":"","pinned":true}]"#).unwrap();
         let untracked = skills
             .iter()
             .filter(|skill| !skill.pinned && skill.source_url.trim().is_empty())
             .count();
         assert_eq!(untracked, 1);
+        assert_eq!(skills[0].name, "unknown-owner");
+        assert_eq!(skills[1].name, "pinned");
         assert!(
             verify_github_cli_skills_output(&output(0, "", "All skills are up to date.\n"), untracked, 0)
                 .unwrap_err()
@@ -2320,8 +2342,8 @@ mod helm_tests {
             r#"test "$1" = skill || exit 99
 case "$2" in
 list)
-  test "$#" = 4 && test "$3" = --json && test "$4" = sourceURL,pinned || exit 99
-  printf '[{"sourceURL":"https://github.com/example/skills","pinned":false}]\n'
+  test "$#" = 4 && test "$3" = --json && test "$4" = skillName,sourceURL,pinned || exit 99
+  printf '[{"skillName":"example","sourceURL":"https://github.com/example/skills","pinned":false}]\n'
   ;;
 update)
   test "$#" = 3 && test "$3" = --all || exit 99
@@ -2339,10 +2361,10 @@ esac"#,
         for (inventory, partial) in [
             (r#"[]"#, false),
             (
-                r#"[{"sourceURL":"https://github.com/example/skills","pinned":true}]"#,
+                r#"[{"skillName":"example","sourceURL":"https://github.com/example/skills","pinned":true}]"#,
                 false,
             ),
-            (r#"[{"sourceURL":"","pinned":false}]"#, true),
+            (r#"[{"skillName":"unknown-owner","sourceURL":"","pinned":false}]"#, true),
         ] {
             let script = format!("test \"$2\" = list || exit 99\nprintf '%s\\n' '{inventory}'");
             let (_dir, gh, calls) = fake_helm(&script);

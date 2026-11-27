@@ -23,31 +23,33 @@ pub(super) fn verify_exact_after_upgrade(ctx: &ExecutionContext, winget: &Path, 
 }
 
 fn verify_exact_with_run_type(run_type: RunType, winget: &Path, id: &str) -> Result<()> {
-    // `upgrade --id` would execute another upgrade. `list --upgrade-available`
-    // is the read-only equivalent, limited to the package just maintained.
-    let ExecutorOutput::Wet(output) = run_type
-        .execute(winget)
-        .args([
-            "list",
-            "--id",
-            id,
-            "--exact",
-            "--source",
-            "winget",
-            "--upgrade-available",
-            "--disable-interactivity",
-        ])
-        .output()?
-    else {
+    let command = format!("winget list --id {id} --exact --source winget");
+    let mut query = run_type.execute(winget);
+    query.args([
+        "list",
+        "--id",
+        id,
+        "--exact",
+        "--source",
+        "winget",
+        "--disable-interactivity",
+    ]);
+    let ExecutorOutput::Wet(installed) = query.output()? else {
         return Ok(());
     };
-    std::io::stdout().lock().write_all(&output.stdout)?;
-    std::io::stderr().lock().write_all(&output.stderr)?;
-    verify_query_output(
-        &output,
-        &format!("winget list --id {id} --exact --source winget (verification)"),
-        false,
-    )
+    std::io::stderr().lock().write_all(&installed.stderr)?;
+    verify_installed(&installed, id, &command)?;
+    // An empty upgrade-filtered list is meaningful only after confirming installation.
+    let ExecutorOutput::Wet(pending) = query.arg("--upgrade-available").output()? else {
+        unreachable!("a dry run returns before checking upgrades")
+    };
+    std::io::stderr().lock().write_all(&pending.stderr)?;
+    if let Err(error) = verify_query_output(&pending, &format!("{command} --upgrade-available")) {
+        std::io::stdout().lock().write_all(&pending.stdout)?;
+        return Err(error);
+    }
+    println!("{id} is installed and WinGet lists no available upgrade.");
+    Ok(())
 }
 
 fn verify_with_run_type(run_type: RunType, winget: &Path) -> Result<()> {
@@ -132,7 +134,7 @@ fn verify_sources(sources: &[WinGetSource], mut query: impl FnMut(&str) -> Resul
         );
         let result = query(&source.name)
             .wrap_err_with(|| command.clone())
-            .and_then(|output| verify_query_output(&output, &command, true));
+            .and_then(|output| verify_query_output(&output, &command));
         if let Err(error) = result {
             if error.downcast_ref::<PartialStep>().is_some() {
                 pending.push(source.name.as_str());
@@ -156,22 +158,58 @@ fn verify_sources(sources: &[WinGetSource], mut query: impl FnMut(&str) -> Resul
     Ok(())
 }
 
-fn verify_query_output(output: &Output, command: &str, allow_no_applications: bool) -> Result<()> {
-    let no_candidates =
-        output.status.code().map(|code| code as u32).is_some_and(|code| {
-            code == UPDATE_NOT_APPLICABLE || (allow_no_applications && code == NO_APPLICATIONS_FOUND)
-        });
+fn query_error(output: &Output, command: &str) -> color_eyre::eyre::Report {
+    TopgradeError::ProcessFailedWithOutput(
+        command.into(),
+        output.status,
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    )
+    .into()
+}
+
+fn verify_installed(output: &Output, id: &str, command: &str) -> Result<()> {
+    if !output.status.success() && output.status.code().map(|code| code as u32) != Some(NO_APPLICATIONS_FOUND) {
+        return Err(query_error(output, command));
+    }
+    let decoded = String::from_utf8_lossy(&output.stdout);
+    let plain = console::strip_ansi_codes(&decoded);
+    let mut rows = plain.lines().skip_while(|line| !table_separator(line));
+    rows.next();
+    if output.status.success()
+        && rows.any(|row| {
+            let mut fields = row.split_whitespace();
+            fields.any(|field| field.eq_ignore_ascii_case(id))
+                && fields.next().is_some_and(|version| {
+                    version
+                        .split('.')
+                        .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+                })
+        })
+    {
+        return Ok(());
+    }
+    Err(PartialStep(format!(
+        "WinGet could not verify the installed version of {id} in its exact package list"
+    ))
+    .into())
+}
+
+fn table_separator(line: &str) -> bool {
+    let line = line.trim();
+    line.len() >= 8 && line.bytes().all(|byte| byte == b'-')
+}
+
+fn verify_query_output(output: &Output, command: &str) -> Result<()> {
+    let no_candidates = matches!(
+        output.status.code().map(|code| code as u32),
+        Some(UPDATE_NOT_APPLICABLE | NO_APPLICATIONS_FOUND)
+    );
     if !output.status.success() && !no_candidates {
-        return Err(TopgradeError::ProcessFailedWithOutput(
-            command.into(),
-            output.status,
-            format!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        )
-        .into());
+        return Err(query_error(output, command));
     }
 
     if contains_upgrade_table(&output.stdout) {
@@ -195,7 +233,7 @@ fn contains_upgrade_table(output: &[u8]) -> bool {
         // WinGet's candidate table uses a full-width ASCII separator below its
         // four/five column headings. Detect the layout, not translated headings,
         // warning text, package names, or localized "unknown version" labels.
-        if line.len() >= 8 && line.bytes().all(|byte| byte == b'-') && previous.split_whitespace().count() >= 4 {
+        if table_separator(line) && previous.split_whitespace().count() >= 4 {
             return true;
         }
         if !line.is_empty() {
@@ -226,7 +264,7 @@ mod tests {
     }
 
     fn verify_query_output(output: &Output) -> color_eyre::eyre::Result<()> {
-        super::verify_query_output(output, "test source verification", true)
+        super::verify_query_output(output, "test source verification")
     }
 
     #[test]
@@ -340,10 +378,35 @@ mod tests {
     #[test]
     fn exact_query_requires_an_installed_match() {
         let command = "winget list --id Microsoft.WSL --exact --source winget (verification)";
-        let error = super::verify_query_output(&output(NO_APPLICATIONS_FOUND, "", ""), command, false).unwrap_err();
-        assert!(error.downcast_ref::<TopgradeError>().is_some());
-        assert!(error.to_string().contains("Microsoft.WSL"));
-        assert!(super::verify_query_output(&output(0, "", ""), command, false).is_ok());
+        let id = "Microsoft.WSL";
+        let table = "名称 标识符 版本 源\n-----------------------------------\n";
+        for (code, row) in [
+            (0, "No installed package found matching input criteria."),
+            (0, "WSL Microsoft.WSL.Preview 2.6.2 winget"),
+            (0, "WSL Microsoft.WSL Unknown winget"),
+            (NO_APPLICATIONS_FOUND, ""),
+        ] {
+            let error = super::verify_installed(&output(code, &format!("{table}{row}"), ""), id, command).unwrap_err();
+            assert!(error.downcast_ref::<PartialStep>().is_some());
+        }
+        assert!(
+            super::verify_installed(
+                &output(
+                    0,
+                    &format!("{table}Windows Subsystem for Linux Microsoft.WSL 2.6.2.0 winget"),
+                    ""
+                ),
+                id,
+                command
+            )
+            .is_ok()
+        );
+        assert!(
+            super::verify_installed(&output(5, "", "source unavailable"), id, command)
+                .unwrap_err()
+                .downcast_ref::<TopgradeError>()
+                .is_some()
+        );
     }
 
     #[test]

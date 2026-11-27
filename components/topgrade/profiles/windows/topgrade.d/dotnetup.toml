@@ -1,0 +1,2 @@
+[misc]
+no_auto_retry_commands = [".NET daily SDK", "dotnetup preview manager"]

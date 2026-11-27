@@ -31,6 +31,10 @@ jobs:
         run: cargo test --workspace --locked --no-fail-fast
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Windows dotnetup recovery tests
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./components/topgrade/profiles/windows/tests/Dotnetup-NetworkRecovery.Tests.ps1
       - name: Topgrade profile
         if: runner.os == 'macOS'
         working-directory: components/topgrade

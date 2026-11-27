@@ -97,7 +97,7 @@ impl<'a> Runner<'a> {
         };
 
         // Total max attempts = 1 (initial) + auto_retry count
-        let max_attempts = self.ctx.config().auto_retry().saturating_add(1);
+        let max_attempts = self.ctx.config().auto_retry(step, &key).saturating_add(1);
 
         let mut attempt = 1;
 
